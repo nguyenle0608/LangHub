@@ -13,7 +13,6 @@
     "jsx": "preserve",
     "incremental": true,
     "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
     "plugins": [
       {
         "name": "next"
