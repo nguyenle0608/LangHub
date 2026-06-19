@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useMemo, useCallback, Fragment } from 'react'
+import { useState, useRef, useMemo, useCallback, Fragment, useEffect } from 'react'
 import Link from 'next/link'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
@@ -162,6 +162,26 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
 
   useRealtime({ keyIds, onUpdate: handleRealtimeUpdate })
   const { presences, trackCell } = usePresence(project.id, user)
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault()
+        setShowAddKey(true)
+      }
+      if (e.key === 'Escape') {
+        if (editingCell) {
+          setEditingCell(null)
+          setEditValue('')
+        } else {
+          setSelectedKeyId(null)
+        }
+      }
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [editingCell])
 
   // Virtualizer
   const virtualizer = useVirtualizer({
@@ -607,20 +627,31 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
             {/* Empty state */}
             {filteredKeys.length === 0 && (
               <div className="flex flex-col items-center justify-center py-24 text-zinc-600">
-                <p className="text-sm">
-                  {keys.length === 0
-                    ? 'No keys yet — add your first key'
-                    : 'No keys match your filters'}
-                </p>
-                {keys.length === 0 && (
-                  <Button
-                    size="sm"
-                    className="mt-4 gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
-                    onClick={() => setShowAddKey(true)}
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Add Key
-                  </Button>
+                {keys.length === 0 ? (
+                  <>
+                    <Upload className="h-8 w-8 mb-3 opacity-20" />
+                    <p className="text-sm font-medium text-zinc-400 mb-1">No keys yet</p>
+                    <p className="text-xs text-zinc-600 mb-4">Import a file or add your first key manually</p>
+                    <div className="flex gap-2">
+                      <Link href={`/${project.id}/import`}>
+                        <Button size="sm" variant="outline" className="border-zinc-700 gap-1.5">
+                          <Upload className="h-3.5 w-3.5" />
+                          Import File
+                        </Button>
+                      </Link>
+                      <Button
+                        size="sm"
+                        className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
+                        onClick={() => setShowAddKey(true)}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Add Key
+                        <span className="text-blue-200/60 text-[10px] ml-1">⌘K</span>
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm">No keys match your filters</p>
                 )}
               </div>
             )}

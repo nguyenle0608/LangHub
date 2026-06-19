@@ -259,9 +259,21 @@ export function VersionsPage({ project, initialVersions }: Props) {
         {/* Version list */}
         <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {filtered.length === 0 ? (
-            <p className="text-center py-8 text-zinc-600 text-xs">
-              {versions.length === 0 ? 'No versions yet. Create one to start tracking.' : 'No results'}
-            </p>
+            <div className="flex flex-col items-center py-10 px-4 text-center">
+              {versions.length === 0 ? (
+                <>
+                  <GitBranch className="h-7 w-7 text-zinc-700 mb-3" />
+                  <p className="text-xs font-medium text-zinc-400 mb-1">No snapshots yet</p>
+                  <p className="text-[11px] text-zinc-600 mb-3">Create one before your next import to track changes</p>
+                  <Button size="sm" className="h-6 text-xs gap-1" onClick={() => setShowCreate(true)}>
+                    <Plus className="h-3 w-3" />
+                    New Snapshot
+                  </Button>
+                </>
+              ) : (
+                <p className="text-xs text-zinc-600">No results</p>
+              )}
+            </div>
           ) : (
             <div className="group space-y-2">
               {filtered.map((v) => (
@@ -290,7 +302,7 @@ export function VersionsPage({ project, initialVersions }: Props) {
         <div className="flex-1 flex items-center justify-center text-zinc-600">
           <div className="text-center space-y-2">
             <RotateCcw className="h-8 w-8 mx-auto opacity-20" />
-            <p className="text-sm">Select a version to compare</p>
+            <p className="text-sm">{versions.length === 0 ? 'Create a snapshot to start tracking' : 'Select a version to compare'}</p>
           </div>
         </div>
       )}

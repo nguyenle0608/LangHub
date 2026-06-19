@@ -1,36 +1,121 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LangHub
 
-## Getting Started
+Web-based localization management for mobile and web developers. Import, translate, review, and export strings across multiple locales — similar to Lokalise and Gridly.
 
-First, run the development server:
+## Features
+
+- **Translation Editor** — virtualized table with inline editing, status tracking (empty / pending / reviewed / approved), and real-time collaboration
+- **Key Management** — add, rename, tag keys; duplicate detection with merge/link actions; comment threads; full edit history
+- **Version Snapshots** — point-in-time snapshots with diff viewer; auto-snapshot before every destructive operation
+- **Import** — JSON, ARB, CSV, YAML with 5-step wizard, preview, and namespace prefixing
+- **Export** — JSON (nested or flat), ARB, CSV, YAML; single locale → direct download, multi-locale → ZIP
+- **Keyboard shortcuts** — `⌘K` / `Ctrl+K` to add key, `Esc` to close panels
+
+## Tech Stack
+
+- Next.js 14 (App Router, TypeScript strict)
+- Supabase (PostgreSQL, Auth, Realtime)
+- Tailwind CSS + shadcn/ui (dark theme, zinc base)
+- Deployed on Vercel
+
+## Local Development
+
+### Prerequisites
+
+- Node.js 18+
+- pnpm
+- Supabase account (or local Supabase CLI)
+
+### Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+# Clone and install
+git clone <repo-url>
+cd lang_hub
+pnpm install
+
+# Environment variables
+cp .env.example .env.local
+# Fill in NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
+
+# Push database schema
+pnpm db:push
+
+# Start dev server
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Commands
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Command | Description |
+|---|---|
+| `pnpm dev` | Start dev server (localhost:3000) |
+| `pnpm build` | Production build |
+| `pnpm typecheck` | TypeScript check |
+| `pnpm lint` | ESLint |
+| `pnpm test` | Vitest unit tests |
+| `pnpm db:push` | Apply Supabase migrations |
+| `pnpm db:types` | Regenerate TypeScript types from DB schema |
 
-## Learn More
+## Deployment (Vercel)
 
-To learn more about Next.js, take a look at the following resources:
+1. Push to GitHub and import the repo in Vercel
+2. Set environment variables in Vercel dashboard:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `NEXT_PUBLIC_APP_URL` (your Vercel URL)
+3. Deploy — Vercel auto-detects Next.js
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Database Migrations
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Migrations live in `supabase/migrations/`. Apply with:
 
-## Deploy on Vercel
+```bash
+# Remote (Supabase dashboard)
+pnpm db:push
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+# Local Supabase CLI
+supabase db reset
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Project Structure
+
+```
+src/
+  app/
+    (auth)/          # Login / signup pages
+    (dashboard)/     # Protected app routes
+      projects/      # Project list
+      [projectId]/
+        editor/      # Main translation table
+        keys/        # Key management + duplicate finder
+        versions/    # Snapshot history + diff viewer
+        import/      # Import wizard
+        export/      # Export sheet
+        settings/    # Project settings
+    api/             # Route handlers (auth-gated)
+  components/
+    editor/          # TranslationTable, AddKeySheet, KeyDetailPanel, …
+    keys/            # DuplicateFinder
+    versions/        # VersionsPage, VersionDiffView
+    import/          # ImportWizard
+    export/          # ExportSheet
+  lib/
+    supabase/
+      queries/       # All DB queries (server-only)
+    parsers/         # Pure parse functions (JSON/ARB/CSV/YAML)
+    exporters/       # Pure export functions
+    versions/        # Snapshot + diff logic
+  hooks/             # useRealtime, usePresence
+  types/             # Shared TypeScript types
+```
+
+## Architecture Notes
+
+- **Admin client** (`createAdminClient` with service role key) is used for all server-side mutations — bypasses RLS safely because auth is validated at the API route level before any DB operation
+- **Read-only client** (`createClient` with anon key) is used for auth checks only
+- All DB queries are in `lib/supabase/queries/` — components never call Supabase directly
+- Auto-snapshot fires before every destructive operation (import, bulk delete, restore) — rollback is always one click away
