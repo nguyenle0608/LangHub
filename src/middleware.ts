@@ -1,6 +1,8 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+const PUBLIC_ROUTES = ['/login', '/signup', '/auth/callback']
+
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
@@ -27,7 +29,23 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
+  const path = request.nextUrl.pathname
+
+  const isPublicRoute = PUBLIC_ROUTES.some((r) => path.startsWith(r))
+  const isApiRoute = path.startsWith('/api/')
+  const isStaticRoute = path.startsWith('/_next/')
+
+  if (!isStaticRoute && !isApiRoute && !isPublicRoute && !user) {
+    const loginUrl = new URL('/login', request.url)
+    loginUrl.searchParams.set('next', path)
+    return NextResponse.redirect(loginUrl)
+  }
+
+  if (isPublicRoute && user && !path.startsWith('/auth/callback')) {
+    return NextResponse.redirect(new URL('/projects', request.url))
+  }
+
   return supabaseResponse
 }
 
