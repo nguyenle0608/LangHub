@@ -358,6 +358,16 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         </div>
 
         <div className="flex items-center gap-1.5">
+          <Link href={`/${project.id}/keys`}>
+            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-zinc-400 hover:text-zinc-100">
+              <span className="hidden md:inline">Duplicates</span>
+            </Button>
+          </Link>
+          <Link href={`/${project.id}/versions`}>
+            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-zinc-400 hover:text-zinc-100">
+              <span className="hidden md:inline">Versions</span>
+            </Button>
+          </Link>
           <Link href={`/${project.id}/import`}>
             <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-zinc-400 hover:text-zinc-100">
               <Upload className="h-3.5 w-3.5" />
@@ -725,6 +735,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
       {selectedRows.size > 0 && (
         <BulkActionBar
           selectedCount={selectedRows.size}
+          projectId={project.id}
           onClear={() => setSelectedRows(new Set())}
           onDelete={handleBulkDelete}
           onApprove={handleBulkApprove}
