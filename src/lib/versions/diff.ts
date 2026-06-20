@@ -20,6 +20,47 @@ function snapshotKey(keyName: string, localeCode: string): SnapshotKey {
   return `${keyName}::${localeCode}`
 }
 
+type DiffCell = { value: string | null; status: string | null }
+
+/**
+ * Pure diff classifier over two cell maps keyed by "key_name::locale_code".
+ *  A absent, B present → added · A present, B absent → removed
+ *  both present, value/status differ → changed · else unchanged
+ * Sorted: changed, added, removed, unchanged; then by key name.
+ */
+export function diffMaps(
+  mapA: Map<SnapshotKey, DiffCell>,
+  mapB: Map<SnapshotKey, DiffCell>
+): DiffEntry[] {
+  const allKeys = new Set([...Array.from(mapA.keys()), ...Array.from(mapB.keys())])
+  const entries: DiffEntry[] = []
+
+  for (const k of Array.from(allKeys)) {
+    const [key_name, locale_code] = k.split('::') as [string, string]
+    const a = mapA.get(k) ?? null
+    const b = mapB.get(k) ?? null
+
+    let type: DiffType
+    if (!a && b) type = 'added'
+    else if (a && !b) type = 'removed'
+    else if (a && b && (a.value !== b.value || a.status !== b.status)) type = 'changed'
+    else type = 'unchanged'
+
+    entries.push({
+      key_name, locale_code, type,
+      valueA: a?.value ?? null, valueB: b?.value ?? null,
+      statusA: a?.status ?? null, statusB: b?.status ?? null,
+    })
+  }
+
+  const order: Record<DiffType, number> = { changed: 0, added: 1, removed: 2, unchanged: 3 }
+  entries.sort((a, b) => {
+    const d = order[a.type] - order[b.type]
+    return d !== 0 ? d : a.key_name.localeCompare(b.key_name)
+  })
+  return entries
+}
+
 export async function diffVersions(
   projectId: string,
   versionIdA: string,
@@ -81,45 +122,5 @@ export async function diffVersions(
     }
   }
 
-  // Union of all keys
-  const allKeys = new Set([...Array.from(mapA.keys()), ...Array.from(mapB.keys())])
-
-  const entries: DiffEntry[] = []
-
-  for (const k of Array.from(allKeys)) {
-    const [key_name, locale_code] = k.split('::') as [string, string]
-    const a = mapA.get(k) ?? null
-    const b = mapB.get(k) ?? null
-
-    let type: DiffType
-    if (!a && b) {
-      type = 'added'
-    } else if (a && !b) {
-      type = 'removed'
-    } else if (a && b && (a.value !== b.value || a.status !== b.status)) {
-      type = 'changed'
-    } else {
-      type = 'unchanged'
-    }
-
-    entries.push({
-      key_name,
-      locale_code,
-      type,
-      valueA: a?.value ?? null,
-      valueB: b?.value ?? null,
-      statusA: a?.status ?? null,
-      statusB: b?.status ?? null,
-    })
-  }
-
-  // Sort: changed first, then added, then removed, then unchanged
-  const order: Record<DiffType, number> = { changed: 0, added: 1, removed: 2, unchanged: 3 }
-  entries.sort((a, b) => {
-    const diff = order[a.type] - order[b.type]
-    if (diff !== 0) return diff
-    return a.key_name.localeCompare(b.key_name)
-  })
-
-  return entries
+  return diffMaps(mapA, mapB)
 }

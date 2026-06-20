@@ -3,12 +3,12 @@ import { createSnapshot } from '@/lib/versions/snapshot'
 import { fetchBranchTranslations } from '@/lib/branches/fetch'
 
 // A cell identity that survives rename/delete: "key_name::locale_code"
-type CellKey = string
-function cellKey(keyName: string, localeCode: string): CellKey {
+export type CellKey = string
+export function cellKey(keyName: string, localeCode: string): CellKey {
   return `${keyName}::${localeCode}`
 }
 
-type Cell = { value: string | null; status: string | null }
+export type Cell = { value: string | null; status: string | null }
 
 export type MergeConflict = {
   keyName: string
@@ -106,10 +106,25 @@ export async function computeMerge(
     fetchBranchCells(admin, projectId, sourceBranchId),
   ])
 
+  return planMerge(base, ours, theirs)
+}
+
+/**
+ * Pure 3-way merge classifier. Given the fork-point `base`, the target branch
+ * (`ours`) and the source branch (`theirs`) as cell maps, decide per cell:
+ *  - source unchanged vs base → skip
+ *  - target unchanged vs base → auto-take source's change
+ *  - both changed to the same value → skip
+ *  - both changed differently → conflict
+ */
+export function planMerge(
+  base: Map<CellKey, Cell>,
+  ours: Map<CellKey, Cell>,
+  theirs: Map<CellKey, Cell>
+): MergePlan {
   const auto: AutoMerge[] = []
   const conflicts: MergeConflict[] = []
 
-  // Only cells that changed on the source side relative to base are candidates.
   for (const [ck, theirCell] of Array.from(theirs.entries())) {
     const baseCell = base.get(ck) ?? null
     if (sameCell(theirCell, baseCell)) continue // source didn't change this cell
@@ -118,13 +133,10 @@ export async function computeMerge(
     const [keyName, localeCode] = ck.split('::') as [string, string]
 
     if (sameCell(ourCell, baseCell)) {
-      // target untouched since fork → take source's change
       auto.push({ keyName, localeCode, value: theirCell.value, status: theirCell.status, ours: ourCell })
     } else if (sameCell(ourCell, theirCell)) {
-      // both sides made the same change → nothing to do
       continue
     } else {
-      // both changed differently → conflict
       conflicts.push({ keyName, localeCode, base: baseCell, ours: ourCell, theirs: theirCell })
     }
   }
