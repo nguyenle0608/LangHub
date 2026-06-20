@@ -27,44 +27,99 @@ export function usePresence(
   projectId: string,
   user: { id: string; email?: string | undefined }
 ) {
-  const [presences, setPresences] = useState<PresenceUser[]>([])
+  const [presences, setPresences] = useState<Map<string, PresenceUser>>(new Map())
   const channelRef = useRef<RealtimeChannel | null>(null)
+  const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const supabase = createClient()
-    const channel = supabase.channel(`presence:${projectId}`, {
-      config: { presence: { key: user.id } },
+    const channel = supabase.channel(`editing:${projectId}`, {
+      config: { broadcast: { self: false, ack: false } },
     })
 
     channel
-      .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState<PresenceUser>()
-        const all = Object.values(state).flat()
-        setPresences(all.filter((p) => p.userId !== user.id))
-      })
+      .on(
+        'broadcast',
+        { event: 'cell' },
+        ({ payload }: { payload: PresenceUser }) => {
+          setPresences((prev) => {
+            const next = new Map(prev)
+            if (!payload.keyId) {
+              next.delete(payload.userId)
+            } else {
+              next.set(payload.userId, payload)
+            }
+            return next
+          })
+        }
+      )
       .subscribe()
 
     channelRef.current = channel
 
     return () => {
+      if (clearTimerRef.current) clearTimeout(clearTimerRef.current)
       void supabase.removeChannel(channel)
     }
   }, [projectId, user.id])
 
-  const trackCell = useCallback(
-    async (keyId: string | null, localeId: string | null) => {
+  const sendBroadcast = useCallback(
+    (keyId: string | null, localeId: string | null) => {
       const ch = channelRef.current
       if (!ch) return
-      await ch.track({
-        userId: user.id,
-        email: user.email ?? '',
-        keyId,
-        localeId,
-        color: colorForId(user.id),
+      void ch.send({
+        type: 'broadcast',
+        event: 'cell',
+        payload: {
+          userId: user.id,
+          email: user.email ?? '',
+          keyId,
+          localeId,
+          color: colorForId(user.id),
+        } satisfies PresenceUser,
       })
     },
     [user.id, user.email]
   )
 
-  return { presences, trackCell }
+  // Track a specific cell — cancels any pending clear
+  const trackCell = useCallback(
+    (keyId: string, localeId: string) => {
+      if (clearTimerRef.current) {
+        clearTimeout(clearTimerRef.current)
+        clearTimerRef.current = null
+      }
+      sendBroadcast(keyId, localeId)
+    },
+    [sendBroadcast]
+  )
+
+  // Schedule clearing — delayed so blur→focus across cells fires only one broadcast
+  const clearCell = useCallback(() => {
+    if (clearTimerRef.current) clearTimeout(clearTimerRef.current)
+    clearTimerRef.current = setTimeout(() => {
+      clearTimerRef.current = null
+      sendBroadcast(null, null)
+    }, 150)
+  }, [sendBroadcast])
+
+  // Clear on tab switch
+  useEffect(() => {
+    const handleHide = () => {
+      if (!document.hidden) return
+      if (clearTimerRef.current) {
+        clearTimeout(clearTimerRef.current)
+        clearTimerRef.current = null
+      }
+      sendBroadcast(null, null)
+    }
+    document.addEventListener('visibilitychange', handleHide)
+    return () => document.removeEventListener('visibilitychange', handleHide)
+  }, [sendBroadcast])
+
+  return {
+    presences: Array.from(presences.values()),
+    trackCell,
+    clearCell,
+  }
 }

@@ -14,6 +14,8 @@ interface Props {
   presenceColor?: string
   isReadonly?: boolean
   onEditValueChange: (v: string) => void
+  onFocused: () => void
+  onBlurred: () => void
   onSave: () => void
   onCancel: () => void
 }
@@ -35,6 +37,8 @@ export function TranslationCell({
   presenceColor,
   isReadonly,
   onEditValueChange,
+  onFocused,
+  onBlurred,
   onSave,
   onCancel,
 }: Props) {
@@ -56,6 +60,7 @@ export function TranslationCell({
           ref={textareaRef}
           value={editValue}
           onChange={(e) => onEditValueChange(e.target.value)}
+          onFocus={onFocused}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
               e.preventDefault()
@@ -64,6 +69,7 @@ export function TranslationCell({
             if (e.key === 'Escape') onCancel()
           }}
           onBlur={() => {
+            onBlurred()
             if (editValue !== (value ?? '')) {
               onSave()
             } else {
