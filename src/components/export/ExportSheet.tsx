@@ -1,9 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { Download } from 'lucide-react'
+import { Download, X } from 'lucide-react'
 import { toast } from 'sonner'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import type { ProjectWithStats } from '@/types'
 
@@ -88,11 +88,12 @@ export function ExportSheet({ open, project, onClose }: Props) {
   }
 
   return (
-    <Sheet open={open} onOpenChange={(v) => { if (!v) onClose() }}>
-      <SheetContent side="right" className="w-full max-w-md p-0 bg-zinc-950 border-zinc-800 flex flex-col">
-        <SheetHeader className="px-6 py-4 border-b border-zinc-800 flex-shrink-0">
-          <SheetTitle className="text-zinc-100 text-base">Export Translations</SheetTitle>
-        </SheetHeader>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
+      <DialogContent className="max-w-md p-0 bg-zinc-950 border-zinc-800 flex flex-col max-h-[90vh] [&>button]:hidden">
+        <DialogHeader className="px-6 py-4 border-b border-zinc-800 flex-shrink-0 flex flex-row items-center justify-between">
+          <DialogTitle className="text-zinc-100 text-base">Export Translations</DialogTitle>
+          <button type="button" onClick={onClose} className="text-zinc-500 hover:text-zinc-300"><X className="h-4 w-4" /></button>
+        </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
           {/* Section 1: Locales */}
@@ -200,7 +201,7 @@ export function ExportSheet({ open, project, onClose }: Props) {
             {exporting ? 'Exporting…' : `Export ${previewText}`}
           </Button>
         </div>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   )
 }

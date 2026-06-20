@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react'
 import { X, Plus, Minus } from 'lucide-react'
 import { toast } from 'sonner'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Slider } from '@/components/ui/slider'
@@ -132,11 +132,12 @@ export function AddKeySheet({ open, projectId, locales, existingKeys, onClose, o
   const jsonPreview = getJsonPreview(keyName, baseValue)
 
   return (
-    <Sheet open={open} onOpenChange={(v) => { if (!v) handleClose() }}>
-      <SheetContent side="right" className="w-full max-w-2xl p-0 bg-zinc-950 border-zinc-800 flex flex-col">
-        <SheetHeader className="px-6 py-4 border-b border-zinc-800 flex-shrink-0">
-          <SheetTitle className="text-zinc-100 text-base">Add Translation Key</SheetTitle>
-        </SheetHeader>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose() }}>
+      <DialogContent className="max-w-3xl p-0 bg-zinc-950 border-zinc-800 flex flex-col max-h-[90vh] [&>button]:hidden">
+        <DialogHeader className="px-6 py-4 border-b border-zinc-800 flex-shrink-0 flex flex-row items-center justify-between">
+          <DialogTitle className="text-zinc-100 text-base">Add Translation Key</DialogTitle>
+          <button type="button" onClick={handleClose} className="text-zinc-500 hover:text-zinc-300"><X className="h-4 w-4" /></button>
+        </DialogHeader>
 
         <div className="flex flex-1 overflow-hidden">
           {/* Left: form */}
@@ -349,7 +350,7 @@ export function AddKeySheet({ open, projectId, locales, existingKeys, onClose, o
             </div>
           </div>
         </div>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   )
 }

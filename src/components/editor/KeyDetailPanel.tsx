@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { StatusBadge } from './StatusBadge'
 import { cn } from '@/lib/utils'
 import type { KeyWithTranslations } from '@/lib/supabase/queries/translations'
@@ -188,6 +189,30 @@ interface InfoTabProps {
 }
 
 function InfoTab({ keyItem, locales, onUpdated, onDeleted }: InfoTabProps) {
+  const [approvingLocale, setApprovingLocale] = useState<string | null>(null)
+
+  const approveTranslation = async (localeId: string, value: string) => {
+    setApprovingLocale(localeId)
+    try {
+      const resp = await fetch('/api/translations', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyId: keyItem.id, localeId, value, status: 'approved' }),
+      })
+      if (!resp.ok) { toast.error('Failed to approve'); return }
+      onUpdated({
+        translations: keyItem.translations.map((t) =>
+          t.locale_id === localeId ? { ...t, status: 'approved' } : t
+        ),
+      })
+      toast.success('Translation approved')
+    } catch {
+      toast.error('Network error')
+    } finally {
+      setApprovingLocale(null)
+    }
+  }
+
   const [editingKey, setEditingKey] = useState(false)
   const [keyDraft, setKeyDraft] = useState(keyItem.key)
   const [editingDesc, setEditingDesc] = useState(false)
@@ -382,8 +407,10 @@ function InfoTab({ keyItem, locales, onUpdated, onDeleted }: InfoTabProps) {
         <div className="space-y-1">
           {locales.map((locale) => {
             const t = keyItem.translations.find((tr) => tr.locale_id === locale.id)
+            const canApprove = !!t?.value && t.status !== 'approved'
+            const isApproving = approvingLocale === locale.id
             return (
-              <div key={locale.id} className="flex items-start gap-2">
+              <div key={locale.id} className="flex items-start gap-2 group/tr rounded-md hover:bg-zinc-900/60 px-1.5 py-1 -mx-1.5 transition-colors">
                 <span className="text-sm mt-0.5">{getFlag(locale.code)}</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 mb-0.5">
@@ -394,6 +421,27 @@ function InfoTab({ keyItem, locales, onUpdated, onDeleted }: InfoTabProps) {
                     {t?.value ?? <span className="text-zinc-600 italic">No translation</span>}
                   </p>
                 </div>
+                {canApprove && (
+                  <button
+                    type="button"
+                    disabled={isApproving}
+                    onClick={() => void approveTranslation(locale.id, t.value!)}
+                    className="opacity-0 group-hover/tr:opacity-100 flex-shrink-0 mt-0.5 flex items-center gap-1 text-[10px] text-emerald-500 hover:text-emerald-400 border border-emerald-800/50 hover:border-emerald-600/50 rounded px-1.5 py-0.5 transition-all disabled:opacity-40"
+                    title="Approve this translation"
+                  >
+                    {isApproving ? (
+                      <span className="w-3 h-3 border border-emerald-500 border-t-transparent rounded-full animate-spin inline-block" />
+                    ) : (
+                      <Check className="h-3 w-3" />
+                    )}
+                    Approve
+                  </button>
+                )}
+                {t?.status === 'approved' && (
+                  <span className="flex-shrink-0 mt-0.5 text-[10px] text-emerald-600 flex items-center gap-0.5">
+                    <Check className="h-3 w-3" />
+                  </span>
+                )}
               </div>
             )
           })}
@@ -463,50 +511,51 @@ interface Props {
 export function KeyDetailPanel({ keyItem, locales, userId, onClose, onKeyUpdated, onKeyDeleted }: Props) {
   const [tab, setTab] = useState<'info' | 'history' | 'comments'>('info')
 
-  if (!keyItem) return null
-
   return (
-    <div className="w-72 border-l border-zinc-800 flex flex-col bg-zinc-950 overflow-hidden flex-shrink-0">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
-        <span className="font-mono text-xs text-zinc-300 truncate">{keyItem.key}</span>
-        <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 ml-2 flex-shrink-0">
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex border-b border-zinc-800">
-        {(['info', 'history', 'comments'] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={cn(
-              'flex-1 py-2 text-xs font-medium capitalize transition-colors',
-              tab === t
-                ? 'text-zinc-100 border-b-2 border-blue-500'
-                : 'text-zinc-500 hover:text-zinc-300'
-            )}
-          >
-            {t}
+    <Dialog open={!!keyItem} onOpenChange={(v) => { if (!v) onClose() }}>
+      <DialogContent className="max-w-lg p-0 bg-zinc-950 border-zinc-800 flex flex-col max-h-[90vh] [&>button]:hidden">
+        <DialogHeader className="px-4 py-3 border-b border-zinc-800 flex-shrink-0 flex flex-row items-center justify-between space-y-0">
+          <DialogTitle className="font-mono text-xs text-zinc-300 truncate">
+            {keyItem?.key ?? ''}
+          </DialogTitle>
+          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 flex-shrink-0">
+            <X className="h-4 w-4" />
           </button>
-        ))}
-      </div>
+        </DialogHeader>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4">
-        {tab === 'info' && (
-          <InfoTab
-            key={keyItem.id}
-            keyItem={keyItem}
-            locales={locales}
-            onUpdated={(patch) => onKeyUpdated(patch)}
-            onDeleted={() => { onClose(); onKeyDeleted(keyItem.id) }}
-          />
-        )}
-        {tab === 'history' && <HistoryTab key={keyItem.id} keyId={keyItem.id} />}
-        {tab === 'comments' && <CommentsTab key={keyItem.id} keyId={keyItem.id} userId={userId} />}
-      </div>
-    </div>
+        {/* Tabs */}
+        <div className="flex border-b border-zinc-800 flex-shrink-0">
+          {(['info', 'history', 'comments'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={cn(
+                'flex-1 py-2 text-xs font-medium capitalize transition-colors',
+                tab === t
+                  ? 'text-zinc-100 border-b-2 border-blue-500'
+                  : 'text-zinc-500 hover:text-zinc-300'
+              )}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {keyItem && tab === 'info' && (
+            <InfoTab
+              key={keyItem.id}
+              keyItem={keyItem}
+              locales={locales}
+              onUpdated={(patch) => onKeyUpdated(patch)}
+              onDeleted={() => { onClose(); onKeyDeleted(keyItem.id) }}
+            />
+          )}
+          {keyItem && tab === 'history' && <HistoryTab key={keyItem.id} keyId={keyItem.id} />}
+          {keyItem && tab === 'comments' && <CommentsTab key={keyItem.id} keyId={keyItem.id} userId={userId} />}
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }

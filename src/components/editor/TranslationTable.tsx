@@ -578,7 +578,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         </aside>
 
         {/* Table */}
-        <div className={cn('flex flex-1 overflow-hidden', selectedKeyId && 'mr-0')}>
+        <div className="flex flex-1 overflow-hidden">
           <div ref={scrollRef} className="flex-1 overflow-auto">
             {/* Sticky header */}
             <div
@@ -747,20 +747,17 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
               </div>
             )}
           </div>
-
-          {/* Right panel */}
-          {selectedKeyId && (
-            <KeyDetailPanel
-              keyItem={selectedKey}
-              locales={locales}
-              userId={user.id}
-              onClose={() => setSelectedKeyId(null)}
-              onKeyUpdated={(patch) => handleKeyUpdated(selectedKeyId, patch)}
-              onKeyDeleted={handleKeyDeleted}
-            />
-          )}
         </div>
       </div>
+
+      <KeyDetailPanel
+        keyItem={selectedKey}
+        locales={locales}
+        userId={user.id}
+        onClose={() => setSelectedKeyId(null)}
+        onKeyUpdated={(patch) => handleKeyUpdated(selectedKeyId!, patch)}
+        onKeyDeleted={handleKeyDeleted}
+      />
 
       {/* Bulk action bar */}
       {selectedRows.size > 0 && (
