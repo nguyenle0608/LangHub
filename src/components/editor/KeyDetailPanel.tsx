@@ -410,7 +410,7 @@ function InfoTab({ keyItem, locales, onUpdated, onDeleted }: InfoTabProps) {
             const canApprove = !!t?.value && t.status !== 'approved'
             const isApproving = approvingLocale === locale.id
             return (
-              <div key={locale.id} className="flex items-start gap-2 group/tr rounded-md hover:bg-zinc-900/60 px-1.5 py-1 -mx-1.5 transition-colors">
+              <div key={locale.id} className="flex items-start gap-2 py-1">
                 <span className="text-sm mt-0.5">{getFlag(locale.code)}</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 mb-0.5">
@@ -421,27 +421,6 @@ function InfoTab({ keyItem, locales, onUpdated, onDeleted }: InfoTabProps) {
                     {t?.value ?? <span className="text-zinc-600 italic">No translation</span>}
                   </p>
                 </div>
-                {canApprove && (
-                  <button
-                    type="button"
-                    disabled={isApproving}
-                    onClick={() => void approveTranslation(locale.id, t.value!)}
-                    className="opacity-0 group-hover/tr:opacity-100 flex-shrink-0 mt-0.5 flex items-center gap-1 text-[10px] text-emerald-500 hover:text-emerald-400 border border-emerald-800/50 hover:border-emerald-600/50 rounded px-1.5 py-0.5 transition-all disabled:opacity-40"
-                    title="Approve this translation"
-                  >
-                    {isApproving ? (
-                      <span className="w-3 h-3 border border-emerald-500 border-t-transparent rounded-full animate-spin inline-block" />
-                    ) : (
-                      <Check className="h-3 w-3" />
-                    )}
-                    Approve
-                  </button>
-                )}
-                {t?.status === 'approved' && (
-                  <span className="flex-shrink-0 mt-0.5 text-[10px] text-emerald-600 flex items-center gap-0.5">
-                    <Check className="h-3 w-3" />
-                  </span>
-                )}
               </div>
             )
           })}
@@ -456,8 +435,41 @@ function InfoTab({ keyItem, locales, onUpdated, onDeleted }: InfoTabProps) {
         </div>
       )}
 
-      {/* Delete */}
-      <div className="pt-2 border-t border-zinc-800">
+      {/* Approve + Delete */}
+      <div className="pt-2 border-t border-zinc-800 space-y-2">
+        {locales.some((locale) => {
+          const t = keyItem.translations.find((tr) => tr.locale_id === locale.id)
+          return !!t?.value && t.status !== 'approved'
+        }) && (
+          <div className="space-y-1.5">
+            <p className="text-[11px] text-zinc-500">Approve translations</p>
+            <div className="flex flex-wrap gap-1.5">
+              {locales.map((locale) => {
+                const t = keyItem.translations.find((tr) => tr.locale_id === locale.id)
+                const canApprove = !!t?.value && t.status !== 'approved'
+                const isApproving = approvingLocale === locale.id
+                if (!canApprove) return null
+                return (
+                  <button
+                    key={locale.id}
+                    type="button"
+                    disabled={isApproving}
+                    onClick={() => void approveTranslation(locale.id, t!.value!)}
+                    className="flex items-center gap-1 text-[11px] text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-800/60 hover:border-emerald-600/60 rounded px-2 py-1 transition-colors disabled:opacity-40"
+                  >
+                    {isApproving
+                      ? <span className="w-3 h-3 border border-emerald-500 border-t-transparent rounded-full animate-spin inline-block" />
+                      : <Check className="h-3 w-3" />}
+                    {getFlag(locale.code)} {locale.code.toUpperCase()}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="border-t border-zinc-800">
         {confirmDelete ? (
           <div className="space-y-2">
             <p className="text-xs text-red-400">Are you sure? This cannot be undone.</p>
