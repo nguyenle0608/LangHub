@@ -2021,7 +2021,11 @@ export function TranslationTable({ project, initialKeys, branches: initialBranch
             sourceBranch={source}
             targetBranch={target}
             onClose={() => setMergeSourceId(null)}
-            onMerged={() => { setMergeSourceId(null); void reloadActiveBranch() }}
+            onMerged={({ deletedSourceId }) => {
+              setMergeSourceId(null)
+              if (deletedSourceId) setBranches((prev) => prev.filter((b) => b.id !== deletedSourceId))
+              void reloadActiveBranch()
+            }}
           />
         )
       })()}

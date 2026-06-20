@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { getUserOrgRole } from '@/lib/supabase/queries/organizations'
 import { computeMerge, applyMerge } from '@/lib/branches/merge'
+import { deleteBranch } from '@/lib/branches/queries'
 
 const CellSchema = z.object({
   keyName: z.string(),
@@ -16,6 +17,7 @@ const Schema = z.object({
   sourceBranchId: z.string().uuid(),
   targetBranchId: z.string().uuid(),
   apply: z.boolean().default(false),
+  deleteSource: z.boolean().default(false),
   resolutions: z.array(CellSchema).optional(),
 })
 
@@ -35,7 +37,7 @@ export async function POST(req: NextRequest) {
   const parsed = Schema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
-  const { projectId, sourceBranchId, targetBranchId, apply, resolutions } = parsed.data
+  const { projectId, sourceBranchId, targetBranchId, apply, deleteSource, resolutions } = parsed.data
   if (sourceBranchId === targetBranchId) {
     return NextResponse.json({ error: 'Source and target branches must differ' }, { status: 400 })
   }
@@ -48,10 +50,10 @@ export async function POST(req: NextRequest) {
   const plan = await computeMerge(projectId, sourceBranchId, targetBranchId)
   if ('error' in plan) return NextResponse.json({ error: plan.error }, { status: 400 })
 
-  // Preview mode — return the plan for the conflict UI
+  // Preview mode — return the full plan for the review UI
   if (!apply) {
     return NextResponse.json({
-      data: { auto: plan.auto.length, conflicts: plan.conflicts },
+      data: { auto: plan.auto, conflicts: plan.conflicts },
     })
   }
 
@@ -76,5 +78,13 @@ export async function POST(req: NextRequest) {
     resolutions: resolutions ?? [],
   })
   if ('error' in result) return NextResponse.json({ error: result.error }, { status: 500 })
-  return NextResponse.json({ data: result })
+
+  // Optionally delete the source branch after a successful merge
+  let deletedSource = false
+  if (deleteSource) {
+    const del = await deleteBranch(sourceBranchId)
+    deletedSource = !('error' in del)
+  }
+
+  return NextResponse.json({ data: { ...result, deletedSource } })
 }

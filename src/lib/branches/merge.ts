@@ -21,8 +21,9 @@ export type MergeConflict = {
 export type AutoMerge = {
   keyName: string
   localeCode: string
-  value: string | null
+  value: string | null   // incoming (source) value to apply
   status: string | null
+  ours: Cell | null      // current target value (for before→after preview)
 }
 
 export type MergePlan = {
@@ -118,7 +119,7 @@ export async function computeMerge(
 
     if (sameCell(ourCell, baseCell)) {
       // target untouched since fork → take source's change
-      auto.push({ keyName, localeCode, value: theirCell.value, status: theirCell.status })
+      auto.push({ keyName, localeCode, value: theirCell.value, status: theirCell.status, ours: ourCell })
     } else if (sameCell(ourCell, theirCell)) {
       // both sides made the same change → nothing to do
       continue
