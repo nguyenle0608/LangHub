@@ -724,7 +724,6 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
                               presenceColor={presenceColor}
                               onEditValueChange={setEditValue}
                               onStartEdit={() => {
-                                setSelectedKeyId(keyItem.id)
                                 startEdit(keyItem.id, locale.id, t?.value ?? '')
                               }}
                               onSave={() => void saveCell(keyItem.id, locale.id)}
