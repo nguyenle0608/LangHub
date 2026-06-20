@@ -189,3 +189,14 @@ export async function removeMember(memberId: string): Promise<{ success: true } 
   const { error } = await admin.from('members').delete().eq('id', memberId)
   return error ? { error: error.message } : { success: true }
 }
+
+export async function getUserOrgRole(orgId: string, userId: string): Promise<MemberRole | null> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('members')
+    .select('role')
+    .eq('org_id', orgId)
+    .eq('user_id', userId)
+    .single()
+  return data?.role ? (data.role as MemberRole) : null
+}

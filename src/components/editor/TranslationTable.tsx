@@ -23,9 +23,10 @@ import { ManageLocalesDialog } from './ManageLocalesDialog'
 import { ExportSheet } from '@/components/export/ExportSheet'
 import { useRealtime } from '@/hooks/useRealtime'
 import { usePresence } from '@/hooks/usePresence'
-import type { ProjectWithStats } from '@/types'
+import type { ProjectWithStats, MemberRole } from '@/types'
 import type { KeyWithTranslations } from '@/lib/supabase/queries/translations'
 import { localeFlag as getFlag } from '@/lib/locale-flag'
+import { signOut } from '@/lib/supabase/auth'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -34,7 +35,7 @@ import { localeFlag as getFlag } from '@/lib/locale-flag'
 interface Props {
   project: ProjectWithStats
   initialKeys: KeyWithTranslations[]
-  user: { id: string; email?: string | undefined }
+  user: { id: string; email?: string | undefined; role: MemberRole }
 }
 
 type FilterStatus = 'all' | 'empty' | 'pending' | 'reviewed' | 'approved'
@@ -99,6 +100,14 @@ function parseClipboardTable(text: string): string[][] {
   const last = rows[rows.length - 1]
   if (last && last.length === 1 && last[0] === '') rows.pop()
   return rows
+}
+
+// Generate a deterministic HSL color from a string (for user avatars).
+function stringToColor(str: string): string {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash)
+  const h = Math.abs(hash) % 360
+  return `hsl(${h}, 55%, 40%)`
 }
 
 // Serialize a 2D grid to TSV, quoting cells that contain tab/newline/quote.
@@ -1188,12 +1197,53 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
 
         <div className="w-px h-4 bg-zinc-800" />
 
-        {/* Back to projects */}
-        <Link href="/projects">
-          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-400 hover:text-zinc-100" title="Back to projects">
-            <LogOut className="h-3.5 w-3.5" />
-          </Button>
-        </Link>
+        {/* User avatar */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0 hover:ring-2 hover:ring-blue-500/50 transition-all"
+              style={{ backgroundColor: stringToColor(user.email ?? user.id) }}
+              title={user.email}
+            >
+              {(user.email?.[0] ?? '?').toUpperCase()}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-56 p-3 bg-zinc-900 border-zinc-800" align="end">
+            {/* Email */}
+            <div className="flex items-center gap-2.5 mb-3">
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
+                style={{ backgroundColor: stringToColor(user.email ?? user.id) }}
+              >
+                {(user.email?.[0] ?? '?').toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-zinc-100 truncate font-medium">{user.email ?? 'Unknown'}</p>
+                <span className={cn(
+                  'inline-block text-[10px] px-1.5 py-0.5 rounded-full font-medium mt-0.5',
+                  user.role === 'owner'      ? 'bg-purple-950 text-purple-300' :
+                  user.role === 'admin'      ? 'bg-blue-950 text-blue-300' :
+                  user.role === 'translator' ? 'bg-amber-950 text-amber-300' :
+                                               'bg-zinc-800 text-zinc-400'
+                )}>
+                  {user.role}
+                </span>
+              </div>
+            </div>
+            <div className="border-t border-zinc-800 -mx-3 mb-2" />
+            <Link href="/projects" className="flex items-center gap-2 text-xs text-zinc-400 hover:text-zinc-100 px-1 py-1 rounded hover:bg-zinc-800/60 transition-colors">
+              <LogOut className="h-3.5 w-3.5" />
+              Back to projects
+            </Link>
+            <button
+              onClick={() => void signOut()}
+              className="w-full text-left flex items-center gap-2 text-xs text-red-400 hover:text-red-300 px-1 py-1 rounded hover:bg-zinc-800/60 transition-colors mt-0.5"
+            >
+              <LogOut className="h-3.5 w-3.5 rotate-180" />
+              Sign out
+            </button>
+          </PopoverContent>
+        </Popover>
       </header>
 
       {/* ── Toolbar ── */}

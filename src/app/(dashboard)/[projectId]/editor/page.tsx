@@ -2,6 +2,7 @@ import { redirect, notFound } from 'next/navigation'
 import { getUser } from '@/lib/supabase/auth'
 import { getProject } from '@/lib/supabase/queries/projects'
 import { getTranslationKeys } from '@/lib/supabase/queries/translations'
+import { getUserOrgRole } from '@/lib/supabase/queries/organizations'
 import { TranslationTable } from '@/components/editor/TranslationTable'
 
 interface Props {
@@ -20,11 +21,15 @@ export default async function EditorPage({ params }: Props) {
 
   if (!project) notFound()
 
+  const role = project.org_id
+    ? await getUserOrgRole(project.org_id, user.id)
+    : null
+
   return (
     <TranslationTable
       project={project}
       initialKeys={keys}
-      user={{ id: user.id, email: user.email ?? undefined }}
+      user={{ id: user.id, email: user.email ?? undefined, role: role ?? 'viewer' }}
     />
   )
 }
