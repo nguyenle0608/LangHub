@@ -1,27 +1,16 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { Plus } from 'lucide-react'
 import type { ProjectWithStats } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-
-const COMMON_LOCALES = [
-  { code: 'en', name: 'English', flag: '🇺🇸' },
-  { code: 'vi', name: 'Tiếng Việt', flag: '🇻🇳' },
-  { code: 'ja', name: '日本語', flag: '🇯🇵' },
-  { code: 'ko', name: '한국어', flag: '🇰🇷' },
-  { code: 'zh', name: '中文', flag: '🇨🇳' },
-  { code: 'fr', name: 'Français', flag: '🇫🇷' },
-  { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
-  { code: 'es', name: 'Español', flag: '🇪🇸' },
-  { code: 'pt', name: 'Português', flag: '🇧🇷' },
-  { code: 'th', name: 'ภาษาไทย', flag: '🇹🇭' },
-  { code: 'id', name: 'Bahasa Indonesia', flag: '🇮🇩' },
-]
+import { LocaleCombobox } from '@/components/ui/LocaleCombobox'
+import type { LocaleOption } from '@/app/api/locales-list/route'
 
 export function ProjectSettingsClient({ project }: { project: ProjectWithStats }) {
   const router = useRouter()
@@ -31,6 +20,25 @@ export function ProjectSettingsClient({ project }: { project: ProjectWithStats }
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [localeError, setLocaleError] = useState<string | null>(null)
+
+  // For adding a new locale
+  const [addLocaleCode, setAddLocaleCode] = useState('')
+  const [addLocaleName, setAddLocaleName] = useState('')
+  const [addingLocale, setAddingLocale] = useState(false)
+
+  // Flags for existing locales loaded from API
+  const [flagMap, setFlagMap] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    fetch('/api/locales-list')
+      .then((r) => r.json())
+      .then((data: LocaleOption[]) => {
+        const map: Record<string, string> = {}
+        for (const l of data) map[l.code] = l.flag
+        setFlagMap(map)
+      })
+      .catch(() => {})
+  }, [])
 
   const existingLocaleCodes = new Set(project.locales.map((l) => l.code))
 
@@ -51,17 +59,22 @@ export function ProjectSettingsClient({ project }: { project: ProjectWithStats }
     })
   }
 
-  async function handleAddLocale(code: string, localeName: string) {
+  async function handleAddLocale() {
+    if (!addLocaleCode || !addLocaleName) return
     setLocaleError(null)
+    setAddingLocale(true)
     const res = await fetch(`/api/projects/${project.id}/locales`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, name: localeName }),
+      body: JSON.stringify({ code: addLocaleCode, name: addLocaleName }),
     })
+    setAddingLocale(false)
     if (!res.ok) {
       const json = await res.json() as { error?: string }
       setLocaleError(json.error ?? 'Failed to add locale')
     } else {
+      setAddLocaleCode('')
+      setAddLocaleName('')
       router.refresh()
     }
   }
@@ -137,21 +150,21 @@ export function ProjectSettingsClient({ project }: { project: ProjectWithStats }
           <h2 className="text-lg font-semibold text-zinc-100 mb-1">Languages</h2>
           <p className="text-zinc-500 text-sm mb-4">Add or remove languages for this project.</p>
 
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-5">
             {/* Current locales */}
-            <div className="space-y-2">
+            <div className="space-y-1">
               {project.locales.map((locale) => {
-                const meta = COMMON_LOCALES.find((l) => l.code === locale.code)
+                const flag = flagMap[locale.code] ?? '🌐'
                 const percent = locale.percent
                 const percentColor =
                   percent >= 80 ? 'text-green-400' : percent >= 50 ? 'text-yellow-400' : 'text-zinc-500'
                 return (
-                  <div key={locale.id} className="flex items-center justify-between py-2 border-b border-zinc-800 last:border-0">
+                  <div key={locale.id} className="flex items-center justify-between py-2.5 border-b border-zinc-800 last:border-0">
                     <div className="flex items-center gap-3">
-                      <span className="text-xl">{meta?.flag ?? '🌐'}</span>
+                      <span className="text-xl">{flag}</span>
                       <div>
                         <span className="text-zinc-200 text-sm font-medium">{locale.name}</span>
-                        <span className="text-zinc-600 text-xs ml-2">{locale.code}</span>
+                        <span className="text-zinc-600 text-xs ml-2 font-mono">{locale.code}</span>
                       </div>
                       {locale.is_base && (
                         <Badge variant="secondary" className="text-xs bg-zinc-800 text-zinc-400 border-zinc-700">
@@ -179,22 +192,35 @@ export function ProjectSettingsClient({ project }: { project: ProjectWithStats }
             </div>
 
             {/* Add locale */}
-            <div>
-              <p className="text-xs text-zinc-500 mb-2 uppercase tracking-wider">Add language</p>
-              <div className="flex flex-wrap gap-2">
-                {COMMON_LOCALES.filter((l) => !existingLocaleCodes.has(l.code)).map((locale) => (
-                  <button
-                    key={locale.code}
-                    onClick={() => handleAddLocale(locale.code, locale.name)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 text-sm hover:border-zinc-500 hover:text-zinc-100 transition-all"
-                  >
-                    <span>{locale.flag}</span>
-                    <span>{locale.name}</span>
-                  </button>
-                ))}
+            <div className="space-y-2 pt-1">
+              <p className="text-xs text-zinc-500 uppercase tracking-wider">Add language</p>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <LocaleCombobox
+                    value={addLocaleCode}
+                    onChange={(code, locale) => {
+                      setAddLocaleCode(code)
+                      setAddLocaleName(locale.name)
+                      setLocaleError(null)
+                    }}
+                    placeholder="Search language or country…"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  onClick={handleAddLocale}
+                  disabled={!addLocaleCode || existingLocaleCodes.has(addLocaleCode) || addingLocale}
+                  className="bg-blue-600 hover:bg-blue-500 text-white gap-1.5 flex-shrink-0"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add
+                </Button>
               </div>
+              {existingLocaleCodes.has(addLocaleCode) && addLocaleCode && (
+                <p className="text-xs text-amber-400">This language is already added.</p>
+              )}
               {localeError && (
-                <p className="text-sm text-red-400 mt-2">{localeError}</p>
+                <p className="text-sm text-red-400">{localeError}</p>
               )}
             </div>
           </div>

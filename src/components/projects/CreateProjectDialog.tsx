@@ -8,17 +8,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-
-const COMMON_LOCALES = [
-  { code: 'en', name: 'English', flag: '🇺🇸' },
-  { code: 'vi', name: 'Tiếng Việt', flag: '🇻🇳' },
-  { code: 'ja', name: '日本語', flag: '🇯🇵' },
-  { code: 'ko', name: '한국어', flag: '🇰🇷' },
-  { code: 'zh', name: '中文', flag: '🇨🇳' },
-  { code: 'fr', name: 'Français', flag: '🇫🇷' },
-  { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
-  { code: 'es', name: 'Español', flag: '🇪🇸' },
-]
+import { LocaleCombobox } from '@/components/ui/LocaleCombobox'
+import type { LocaleOption } from '@/app/api/locales-list/route'
 
 export function CreateProjectDialog({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -27,7 +18,13 @@ export function CreateProjectDialog({ children }: { children: React.ReactNode })
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [baseLocale, setBaseLocale] = useState('en')
+  const [baseLocaleName, setBaseLocaleName] = useState('English')
   const [error, setError] = useState<string | null>(null)
+
+  function handleLocaleChange(code: string, locale: LocaleOption) {
+    setBaseLocale(code)
+    setBaseLocaleName(locale.name)
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -37,7 +34,7 @@ export function CreateProjectDialog({ children }: { children: React.ReactNode })
       const res = await fetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, description, baseLocale }),
+        body: JSON.stringify({ name, description, baseLocale, baseLocaleName }),
       })
       const json = await res.json() as { data?: { id: string }; error?: string }
 
@@ -50,6 +47,7 @@ export function CreateProjectDialog({ children }: { children: React.ReactNode })
       setName('')
       setDescription('')
       setBaseLocale('en')
+      setBaseLocaleName('English')
       router.refresh()
     })
   }
@@ -90,23 +88,12 @@ export function CreateProjectDialog({ children }: { children: React.ReactNode })
           </div>
           <div className="space-y-1.5">
             <Label className="text-zinc-300">Base language</Label>
-            <div className="grid grid-cols-4 gap-2">
-              {COMMON_LOCALES.map((locale) => (
-                <button
-                  key={locale.code}
-                  type="button"
-                  onClick={() => setBaseLocale(locale.code)}
-                  className={`flex flex-col items-center gap-1 rounded-lg border p-2.5 text-xs transition-all ${
-                    baseLocale === locale.code
-                      ? 'border-blue-600 bg-blue-600/10 text-blue-400'
-                      : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300'
-                  }`}
-                >
-                  <span className="text-xl">{locale.flag}</span>
-                  <span className="truncate w-full text-center">{locale.name}</span>
-                </button>
-              ))}
-            </div>
+            <LocaleCombobox
+              value={baseLocale}
+              onChange={handleLocaleChange}
+              placeholder="Select base language…"
+            />
+            <p className="text-[11px] text-zinc-600">This is your source language — all other languages are translated from it.</p>
           </div>
 
           {error && (

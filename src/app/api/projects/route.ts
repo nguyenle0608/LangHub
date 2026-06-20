@@ -7,6 +7,7 @@ const CreateProjectSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
   baseLocale: z.string().min(2).max(10).default('en'),
+  baseLocaleName: z.string().max(100).optional(),
 })
 
 export async function GET() {
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
     name: parsed.data.name,
     baseLocale: parsed.data.baseLocale,
     ...(parsed.data.description ? { description: parsed.data.description } : {}),
+    ...(parsed.data.baseLocaleName ? { baseLocaleName: parsed.data.baseLocaleName } : {}),
   })
   if ('error' in result) {
     return NextResponse.json({ error: result.error }, { status: 500 })
