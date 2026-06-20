@@ -127,6 +127,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
   // Role-based permissions
   const canEdit = user.role !== 'viewer'
   const canManage = user.role === 'owner' || user.role === 'admin'
+  const canEditKeys = user.role === 'owner'   // only owner can rename/delete keys
 
   // State
   const [keys, setKeys] = useState(initialKeys)
@@ -1902,6 +1903,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         userId={user.id}
         canEdit={canEdit}
         canManage={canManage}
+        canEditKeys={canEditKeys}
         onClose={() => setSelectedKeyId(null)}
         onKeyUpdated={(patch) => handleKeyUpdated(selectedKeyId!, patch)}
         onKeyDeleted={handleKeyDeleted}
@@ -1912,6 +1914,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         <BulkActionBar
           selectedCount={selectedRows.size}
           projectId={project.id}
+          canDelete={canEditKeys}
           onClear={() => setSelectedRows(new Set())}
           onDelete={handleBulkDelete}
           onReview={handleBulkReview}

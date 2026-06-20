@@ -8,13 +8,14 @@ import { Button } from '@/components/ui/button'
 interface Props {
   selectedCount: number
   projectId: string
+  canDelete: boolean
   onClear: () => void
   onDelete: () => void
   onReview: () => void
   onApprove: () => void
 }
 
-export function BulkActionBar({ selectedCount, projectId, onClear, onDelete, onReview, onApprove }: Props) {
+export function BulkActionBar({ selectedCount, projectId, canDelete, onClear, onDelete, onReview, onApprove }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [snapshotting, setSnapshotting] = useState(false)
 
@@ -91,7 +92,7 @@ export function BulkActionBar({ selectedCount, projectId, onClear, onDelete, onR
         Approve all
       </Button>
 
-      {confirmDelete ? (
+      {canDelete && (confirmDelete ? (
         <>
           <Button
             size="sm"
@@ -122,7 +123,7 @@ export function BulkActionBar({ selectedCount, projectId, onClear, onDelete, onR
           <Trash2 className="h-3.5 w-3.5" />
           Delete
         </Button>
-      )}
+      ))}
     </div>
   )
 }

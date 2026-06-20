@@ -269,12 +269,14 @@ function DetailsPane({
   userId,
   onUpdated,
   onDeleted,
+  canEditKeys,
 }: {
   keyItem: KeyWithTranslations
   locales: LocaleWithStats[]
   userId: string
   onUpdated: (patch: Partial<KeyWithTranslations>) => void
   onDeleted: () => void
+  canEditKeys: boolean
 }) {
   // key meta state
   const [editingKey, setEditingKey] = useState(false)
@@ -378,7 +380,7 @@ function DetailsPane({
           <div>
             <div className="flex items-center justify-between text-[10px] text-zinc-600 mb-1">
               <span>Name</span>
-              <button onClick={() => { setEditingKey(true); setKeyDraft(keyItem.key) }} className="hover:text-zinc-300"><Pencil className="h-2.5 w-2.5" /></button>
+              {canEditKeys && <button onClick={() => { setEditingKey(true); setKeyDraft(keyItem.key) }} className="hover:text-zinc-300"><Pencil className="h-2.5 w-2.5" /></button>}
             </div>
             {editingKey ? (
               <div className="flex gap-1">
@@ -395,7 +397,7 @@ function DetailsPane({
           <div>
             <div className="flex items-center justify-between text-[10px] text-zinc-600 mb-1">
               <span>Description</span>
-              {!editingDesc && <button onClick={() => setEditingDesc(true)} className="hover:text-zinc-300"><Pencil className="h-2.5 w-2.5" /></button>}
+              {canEditKeys && !editingDesc && <button onClick={() => setEditingDesc(true)} className="hover:text-zinc-300"><Pencil className="h-2.5 w-2.5" /></button>}
             </div>
             {editingDesc ? (
               <div className="space-y-1.5">
@@ -417,11 +419,11 @@ function DetailsPane({
               {(keyItem.tags ?? []).map((tag) => (
                 <Badge key={tag} variant="secondary" className="text-[10px] pr-1 gap-1">
                   {tag}
-                  <button onClick={() => void patchMeta({ tags: (keyItem.tags ?? []).filter((t) => t !== tag) })}><X className="h-2 w-2" /></button>
+                  {canEditKeys && <button onClick={() => void patchMeta({ tags: (keyItem.tags ?? []).filter((t) => t !== tag) })}><X className="h-2 w-2" /></button>}
                 </Badge>
               ))}
             </div>
-            <Input value={tagInput} onChange={(e) => setTagInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const t = tagInput.trim().toLowerCase(); if (t && !(keyItem.tags ?? []).includes(t)) { void patchMeta({ tags: [...(keyItem.tags ?? []), t] }); setTagInput('') } } }} placeholder="Add tag…" className="text-[11px] h-6 bg-zinc-950 border-zinc-700 px-2" />
+            {canEditKeys && <Input value={tagInput} onChange={(e) => setTagInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const t = tagInput.trim().toLowerCase(); if (t && !(keyItem.tags ?? []).includes(t)) { void patchMeta({ tags: [...(keyItem.tags ?? []), t] }); setTagInput('') } } }} placeholder="Add tag…" className="text-[11px] h-6 bg-zinc-950 border-zinc-700 px-2" />}
           </div>
 
           {/* Misc */}
@@ -511,22 +513,24 @@ function DetailsPane({
         )}
       </div>
 
-      {/* Delete */}
-      <div className="px-4 py-3">
-        {confirmDelete ? (
-          <div className="space-y-2">
-            <p className="text-xs text-red-400">Delete this key and all its translations?</p>
-            <div className="flex gap-2">
-              <Button size="sm" variant="destructive" className="h-7 text-xs flex-1" onClick={handleDelete} disabled={deleting}>{deleting ? 'Deleting…' : 'Confirm Delete'}</Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs border-zinc-700" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+      {/* Delete — owner only */}
+      {canEditKeys && (
+        <div className="px-4 py-3">
+          {confirmDelete ? (
+            <div className="space-y-2">
+              <p className="text-xs text-red-400">Delete this key and all its translations?</p>
+              <div className="flex gap-2">
+                <Button size="sm" variant="destructive" className="h-7 text-xs flex-1" onClick={handleDelete} disabled={deleting}>{deleting ? 'Deleting…' : 'Confirm Delete'}</Button>
+                <Button size="sm" variant="outline" className="h-7 text-xs border-zinc-700" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+              </div>
             </div>
-          </div>
-        ) : (
-          <Button size="sm" className="h-7 text-xs bg-red-600 hover:bg-red-500 text-white w-full" onClick={handleDelete}>
-            <Trash2 className="h-3 w-3 mr-1.5" />Delete Key
-          </Button>
-        )}
-      </div>
+          ) : (
+            <Button size="sm" className="h-7 text-xs bg-red-600 hover:bg-red-500 text-white w-full" onClick={handleDelete}>
+              <Trash2 className="h-3 w-3 mr-1.5" />Delete Key
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -539,12 +543,13 @@ interface Props {
   userId: string
   canEdit: boolean
   canManage: boolean
+  canEditKeys: boolean
   onClose: () => void
   onKeyUpdated: (patch: Partial<KeyWithTranslations>) => void
   onKeyDeleted: (keyId: string) => void
 }
 
-export function KeyDetailPanel({ keyItem, locales, userId, canEdit, canManage, onClose, onKeyUpdated, onKeyDeleted }: Props) {
+export function KeyDetailPanel({ keyItem, locales, userId, canEdit, canManage, canEditKeys, onClose, onKeyUpdated, onKeyDeleted }: Props) {
   return (
     <Dialog open={!!keyItem} onOpenChange={(v) => { if (!v) onClose() }}>
       <DialogContent className="max-w-4xl p-0 bg-zinc-950 border-zinc-800 flex flex-col max-h-[88vh] [&>button]:hidden">
@@ -581,6 +586,7 @@ export function KeyDetailPanel({ keyItem, locales, userId, canEdit, canManage, o
                 keyItem={keyItem}
                 locales={locales}
                 userId={userId}
+                canEditKeys={canEditKeys}
                 onUpdated={onKeyUpdated}
                 onDeleted={() => { onClose(); onKeyDeleted(keyItem.id) }}
               />
