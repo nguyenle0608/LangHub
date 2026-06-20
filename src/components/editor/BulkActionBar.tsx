@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Trash2, CheckCircle, AlertTriangle } from 'lucide-react'
+import { X, Trash2, CheckCircle, Eye, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 
@@ -10,10 +10,11 @@ interface Props {
   projectId: string
   onClear: () => void
   onDelete: () => void
+  onReview: () => void
   onApprove: () => void
 }
 
-export function BulkActionBar({ selectedCount, projectId, onClear, onDelete, onApprove }: Props) {
+export function BulkActionBar({ selectedCount, projectId, onClear, onDelete, onReview, onApprove }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [snapshotting, setSnapshotting] = useState(false)
 
@@ -67,6 +68,17 @@ export function BulkActionBar({ selectedCount, projectId, onClear, onDelete, onA
           A snapshot will be created first. Confirm?
         </div>
       )}
+
+      <Button
+        size="sm"
+        variant="outline"
+        className="gap-1.5 h-8 text-xs border-zinc-700 text-blue-400 hover:text-blue-300 hover:bg-blue-950/40"
+        onClick={onReview}
+        disabled={confirmDelete}
+      >
+        <Eye className="h-3.5 w-3.5" />
+        Review all
+      </Button>
 
       <Button
         size="sm"

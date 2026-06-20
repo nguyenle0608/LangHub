@@ -21,8 +21,15 @@ function computeLocaleStats(
     const localeTrans = translations.filter((t) => t.locale_id === locale.id)
     const approved = localeTrans.filter((t) => t.status === 'approved').length
     const percent = totalKeys > 0 ? Math.round((approved / totalKeys) * 100) : 0
-    return { id: locale.id, code: locale.code, name: locale.name, is_base: locale.is_base, total: totalKeys, approved, percent }
+    return { id: locale.id, code: locale.code, name: locale.name, is_base: locale.is_base ?? false, total: totalKeys, approved, percent }
   })
+}
+
+function computeOverallPercent(localesWithStats: LocaleWithStats[], totalKeys: number): number {
+  const nonBase = localesWithStats.filter((l) => !l.is_base)
+  const overallApproved = nonBase.reduce((sum, l) => sum + l.approved, 0)
+  const overallTotal = totalKeys * nonBase.length
+  return overallTotal > 0 ? Math.round((overallApproved / overallTotal) * 100) : 0
 }
 
 async function getProjectTranslations(
@@ -79,9 +86,40 @@ export async function getProjects(userId: string): Promise<ProjectWithStats[]> {
       const locales = localesByProject[project.id] ?? []
       const { totalKeys, translations } = await getProjectTranslations(supabase, project.id)
       const localesWithStats = computeLocaleStats(locales, translations, totalKeys)
-      const overallApproved = localesWithStats.reduce((sum, l) => sum + l.approved, 0)
-      const overallTotal = totalKeys * locales.length
-      const overallPercent = overallTotal > 0 ? Math.round((overallApproved / overallTotal) * 100) : 0
+      const overallPercent = computeOverallPercent(localesWithStats, totalKeys)
+      return { ...project, key_count: totalKeys, locale_count: locales.length, overall_percent: overallPercent, locales: localesWithStats } satisfies ProjectWithStats
+    })
+  )
+}
+
+export async function getProjectsByOrg(orgId: string): Promise<ProjectWithStats[]> {
+  const supabase = await createClient()
+
+  const { data: projectRows } = await supabase
+    .from('projects')
+    .select('*')
+    .eq('org_id', orgId)
+    .order('created_at', { ascending: false })
+
+  if (!projectRows?.length) return []
+
+  const { data: localeRows } = await supabase
+    .from('locales')
+    .select('*')
+    .in('project_id', projectRows.map((p) => p.id))
+
+  const localesByProject = (localeRows ?? []).reduce<Record<string, LocaleRow[]>>((acc, l) => {
+    const pid = l.project_id ?? ''
+    if (pid) acc[pid] = [...(acc[pid] ?? []), l]
+    return acc
+  }, {})
+
+  return Promise.all(
+    projectRows.map(async (project) => {
+      const locales = localesByProject[project.id] ?? []
+      const { totalKeys, translations } = await getProjectTranslations(supabase, project.id)
+      const localesWithStats = computeLocaleStats(locales, translations, totalKeys)
+      const overallPercent = computeOverallPercent(localesWithStats, totalKeys)
       return { ...project, key_count: totalKeys, locale_count: locales.length, overall_percent: overallPercent, locales: localesWithStats } satisfies ProjectWithStats
     })
   )
@@ -111,24 +149,15 @@ export async function getProject(projectId: string): Promise<ProjectWithStats | 
 // but project INSERT policy requires membership).
 
 export async function createProject(data: {
-  userId: string; name: string; description?: string; baseLocale: string; baseLocaleName?: string
+  orgId: string; userId: string; name: string; description?: string; baseLocale: string; baseLocaleName?: string
 }): Promise<{ id: string; slug: string } | { error: string }> {
   const admin = createAdminClient()
   const slug = data.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
 
-  const { data: org, error: orgError } = await admin
-    .from('organizations')
-    .insert({ name: data.name, slug: `${slug}-${Date.now()}`, plan: 'free' })
-    .select('id').single()
-
-  if (orgError || !org) return { error: orgError?.message ?? 'Failed to create org' }
-
-  await admin.from('members').insert({ org_id: org.id, user_id: data.userId, role: 'owner' })
-
   const { data: project, error: projectError } = await admin
     .from('projects')
     .insert({
-      org_id: org.id, name: data.name, slug, base_locale: data.baseLocale,
+      org_id: data.orgId, name: data.name, slug, base_locale: data.baseLocale,
       ...(data.description ? { description: data.description } : {}),
     })
     .select('id, slug').single()
@@ -156,17 +185,20 @@ export async function updateProject(
 
 export async function deleteProject(projectId: string): Promise<{ success: true }> {
   const admin = createAdminClient()
-  const { data: project } = await admin.from('projects').select('org_id').eq('id', projectId).single()
-  if (project?.org_id) await admin.from('organizations').delete().eq('id', project.org_id)
+  await admin.from('projects').delete().eq('id', projectId)
   return { success: true }
 }
 
 export async function addLocale(
   projectId: string, code: string, name: string
-): Promise<{ error?: string }> {
+): Promise<{ locale?: { id: string; code: string; name: string; is_base: boolean }; error?: string }> {
   const admin = createAdminClient()
-  const { error } = await admin.from('locales').insert({ project_id: projectId, code, name, is_base: false })
-  return error ? { error: error.message } : {}
+  const { data, error } = await admin
+    .from('locales')
+    .insert({ project_id: projectId, code, name, is_base: false })
+    .select('id, code, name, is_base')
+    .single()
+  return error ? { error: error.message } : { locale: data ? { ...data, is_base: data.is_base ?? false } : undefined }
 }
 
 export async function removeLocale(localeId: string): Promise<{ error?: string }> {

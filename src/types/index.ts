@@ -1,3 +1,5 @@
+import type { Database } from './database'
+
 export type TranslationStatus = 'empty' | 'pending' | 'reviewed' | 'approved'
 
 export type MemberRole = 'owner' | 'admin' | 'translator' | 'viewer'
@@ -8,7 +10,7 @@ export type LocaleWithStats = {
   id: string
   code: string
   name: string
-  is_base: boolean | null
+  is_base: boolean
   total: number
   approved: number
   percent: number
@@ -26,4 +28,38 @@ export type ProjectWithStats = {
   locale_count: number
   overall_percent: number
   locales: LocaleWithStats[]
+}
+
+type TranslationRow = Database['public']['Tables']['translations']['Row']
+type KeyRow = Database['public']['Tables']['translation_keys']['Row']
+
+export type Translation = TranslationRow
+
+export type TranslationKey = KeyRow & { translations: Translation[] }
+
+export type FilterState = {
+  search: string
+  status: TranslationStatus | 'all'
+  tags: string[]
+  localeId: string | null
+}
+
+export type OrgWithStats = {
+  id: string
+  name: string
+  slug: string
+  plan: string
+  created_at: string | null
+  role: MemberRole
+  member_count: number
+  project_count: number
+}
+
+export type OrgMember = {
+  id: string
+  org_id: string
+  user_id: string
+  role: MemberRole
+  created_at: string | null
+  email: string | null
 }

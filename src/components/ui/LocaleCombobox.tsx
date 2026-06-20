@@ -24,9 +24,10 @@ interface Props {
   onChange: (code: string, locale: LocaleOption) => void
   placeholder?: string
   disabled?: boolean
+  excludeCodes?: Set<string>
 }
 
-export function LocaleCombobox({ value, onChange, placeholder = 'Select language…', disabled }: Props) {
+export function LocaleCombobox({ value, onChange, placeholder = 'Select language…', disabled, excludeCodes }: Props) {
   const [open, setOpen] = useState(false)
   const [locales, setLocales] = useState<LocaleOption[]>([])
   const [loading, setLoading] = useState(true)
@@ -82,7 +83,7 @@ export function LocaleCombobox({ value, onChange, placeholder = 'Select language
               No language found.
             </CommandEmpty>
             <CommandGroup>
-              {locales.map((locale) => (
+              {locales.filter((l) => !excludeCodes?.has(l.code)).map((locale) => (
                 <CommandItem
                   key={locale.code}
                   value={`${locale.name} ${locale.country} ${locale.code}`}

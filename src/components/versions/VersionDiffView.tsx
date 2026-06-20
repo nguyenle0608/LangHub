@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { VersionWithStats } from '@/lib/versions/snapshot'
 import type { DiffEntry, DiffType } from '@/lib/versions/diff'
+import { localeFlag } from '@/lib/locale-flag'
 
 interface Props {
   projectId: string
@@ -22,10 +23,6 @@ const TYPE_STYLES: Record<DiffType, { row: string; label: string; dot: string }>
   unchanged: { row: '',                                               label: 'same',    dot: 'bg-zinc-600'   },
 }
 
-const LOCALE_FLAGS: Record<string, string> = {
-  en: '🇺🇸', vi: '🇻🇳', ja: '🇯🇵', ko: '🇰🇷', zh: '🇨🇳',
-  fr: '🇫🇷', de: '🇩🇪', es: '🇪🇸', pt: '🇧🇷', th: '🇹🇭', id: '🇮🇩',
-}
 
 function RestoreDialog({
   version,
@@ -341,7 +338,7 @@ function DiffRow({ entry }: { entry: DiffEntry }) {
     <div className={['grid grid-cols-[1fr_160px_1fr_1fr] gap-3 px-5 py-2.5 border-b border-zinc-800/60', style.row].join(' ')}>
       <div className="font-mono text-xs text-zinc-200 truncate self-center">{entry.key_name}</div>
       <div className="flex items-center gap-1.5 self-center">
-        <span className="text-base">{LOCALE_FLAGS[entry.locale_code] ?? '🌐'}</span>
+        <span className="text-base">{localeFlag(entry.locale_code)}</span>
         <span className="text-[11px] font-medium text-zinc-400 uppercase">{entry.locale_code}</span>
       </div>
       <div className="text-xs self-center">

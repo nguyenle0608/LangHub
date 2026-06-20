@@ -1,5 +1,71 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { updateTranslation } from '@/lib/supabase/queries/translations'
 
-export async function PATCH() {
-  return NextResponse.json({ error: 'Not implemented' }, { status: 501 })
+const PatchSchema = z.object({
+  keyId: z.string().uuid(),
+  localeId: z.string().uuid(),
+  value: z.string(),
+  status: z.enum(['empty', 'pending', 'reviewed', 'approved']),
+})
+
+// Single translation update
+export async function PATCH(req: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = await req.json() as unknown
+  const parsed = PatchSchema.safeParse(body)
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  }
+
+  const { keyId, localeId, value, status } = parsed.data
+  const result = await updateTranslation(keyId, localeId, value, status, user.id)
+  if ('error' in result) return NextResponse.json({ error: result.error }, { status: 500 })
+  return NextResponse.json(result)
+}
+
+const BulkUpsertSchema = z.object({
+  status: z.enum(['reviewed', 'approved']).default('approved'),
+  items: z.array(z.object({
+    keyId: z.string().uuid(),
+    localeId: z.string().uuid(),
+    value: z.string(),
+  })).min(1).max(5000),
+})
+
+// Bulk upsert — single DB upsert for all items with given status
+export async function POST(req: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = await req.json() as unknown
+  const parsed = BulkUpsertSchema.safeParse(body)
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+
+  const admin = createAdminClient()
+  const now = new Date().toISOString()
+
+  const rows = parsed.data.items.map((item) => ({
+    key_id: item.keyId,
+    locale_id: item.localeId,
+    value: item.value,
+    status: parsed.data.status,
+    updated_at: now,
+  }))
+
+  const CHUNK = 500
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const { error } = await admin
+      .from('translations')
+      .upsert(rows.slice(i, i + CHUNK), { onConflict: 'key_id,locale_id' })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  return NextResponse.json({ updated: rows.length })
 }

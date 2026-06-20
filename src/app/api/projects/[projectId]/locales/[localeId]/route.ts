@@ -10,7 +10,6 @@ export async function DELETE(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Prevent deleting base locale
   const { data: locale } = await supabase
     .from('locales')
     .select('is_base')
@@ -18,7 +17,7 @@ export async function DELETE(
     .eq('project_id', params.projectId)
     .single()
 
-  if (locale && 'is_base' in locale && locale.is_base) {
+  if (locale?.is_base) {
     return NextResponse.json({ error: 'Cannot delete base locale' }, { status: 400 })
   }
 

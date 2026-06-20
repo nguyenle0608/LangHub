@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createTranslationKey } from '@/lib/supabase/queries/translations'
 
 const PostSchema = z.object({
@@ -57,16 +58,25 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(result, { status: 201 })
 }
 
+const DeleteSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(1000),
+})
+
 export async function DELETE(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { searchParams } = new URL(req.url)
-  const keyId = searchParams.get('keyId')
-  if (!keyId) return NextResponse.json({ error: 'keyId required' }, { status: 400 })
+  const body = await req.json() as unknown
+  const parsed = DeleteSchema.safeParse(body)
+  if (!parsed.success) return NextResponse.json({ error: 'ids[] required' }, { status: 400 })
 
-  const { error } = await supabase.from('translation_keys').delete().eq('id', keyId)
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('translation_keys')
+    .delete()
+    .in('id', parsed.data.ids)
+
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ success: true })
+  return NextResponse.json({ success: true, deleted: parsed.data.ids.length })
 }

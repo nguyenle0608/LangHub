@@ -6,14 +6,10 @@ import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import type { ProjectWithStats } from '@/types'
+import { localeFlag } from '@/lib/locale-flag'
 
 type Format = 'json' | 'arb' | 'csv' | 'yaml'
 type Filter = 'all' | 'approved' | 'reviewed_approved'
-
-const LOCALE_FLAGS: Record<string, string> = {
-  en: '🇺🇸', vi: '🇻🇳', ja: '🇯🇵', ko: '🇰🇷', zh: '🇨🇳',
-  fr: '🇫🇷', de: '🇩🇪', es: '🇪🇸', pt: '🇧🇷', th: '🇹🇭', id: '🇮🇩',
-}
 
 interface Props {
   open: boolean
@@ -108,7 +104,7 @@ export function ExportSheet({ open, project, onClose }: Props) {
                     onChange={() => toggleLocale(locale.id)}
                     className="rounded border-zinc-600"
                   />
-                  <span className="text-base">{LOCALE_FLAGS[locale.code] ?? '🌐'}</span>
+                  <span className="text-base">{localeFlag(locale.code)}</span>
                   <div className="flex-1 min-w-0">
                     <span className="text-sm text-zinc-200">{locale.name}</span>
                     <span className="ml-2 text-xs text-zinc-500 uppercase">{locale.code}</span>
