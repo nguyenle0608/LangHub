@@ -4,9 +4,10 @@ import { useState, useRef, useMemo, useCallback, Fragment, useEffect } from 'rea
 import Link from 'next/link'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
-  Search, Plus, Download, Upload, ChevronRight,
+  Search, Plus, Download, Upload,
   Sparkles, LogOut, ListFilter, Layers2, ChevronDown,
   Columns3, Eye, EyeOff, Pin, PinOff, Lock, Unlock, GripVertical, Undo2, Redo2,
+  MoreHorizontal, Copy, History, Globe2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -1102,18 +1103,26 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
     <div className="flex flex-col h-screen bg-[#0d1117] text-zinc-100 overflow-hidden">
       {/* ── TopNav ── */}
       <header className="h-12 border-b border-zinc-800 flex items-center px-4 gap-3 flex-shrink-0 bg-[#0d1117]">
-        <Link href="/projects" className="flex items-center gap-1.5 text-zinc-400 hover:text-zinc-200 transition-colors">
-          <span className="font-bold text-blue-500 text-sm">LH</span>
+        {/* Logo + breadcrumb */}
+        <Link href="/projects" className="flex items-center gap-2 shrink-0 group">
+          <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center">
+            <Globe2 className="h-3.5 w-3.5 text-white" />
+          </div>
+          <span className="font-semibold text-sm text-zinc-100 group-hover:text-white transition-colors hidden lg:block">
+            LangHub
+          </span>
         </Link>
-        <ChevronRight className="h-3.5 w-3.5 text-zinc-700" />
-        <span className="text-sm text-zinc-400 truncate max-w-[140px]">{project.name}</span>
-        <ChevronRight className="h-3.5 w-3.5 text-zinc-700" />
-        <span className="text-sm text-zinc-200">Editor</span>
+        <span className="text-zinc-700 text-sm select-none px-0.5">/</span>
+        <span className="text-sm text-zinc-400 truncate max-w-[160px]" title={project.name}>
+          {project.name}
+        </span>
+        <span className="text-zinc-700 text-sm select-none px-0.5">/</span>
+        <span className="text-sm text-zinc-200 font-medium">Editor</span>
 
         <div className="flex-1" />
 
         {/* Progress */}
-        <div className="hidden sm:flex items-center gap-2 text-xs text-zinc-400">
+        <div className="hidden sm:flex items-center gap-2 text-xs text-zinc-400 mr-1">
           <div className="w-24 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
             <div
               className="h-full bg-emerald-500 transition-all"
@@ -1123,38 +1132,10 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
           <span>{overallPercent}%</span>
         </div>
 
-        <div className="flex items-center gap-1.5">
-          <div className="flex items-center">
-            <Button
-              variant="ghost" size="sm"
-              className="h-7 w-7 p-0 text-zinc-400 hover:text-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed"
-              onClick={() => undo()}
-              disabled={undoRef.current.length === 0}
-              title="Undo (Ctrl/Cmd+Z)"
-            >
-              <Undo2 className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost" size="sm"
-              className="h-7 w-7 p-0 text-zinc-400 hover:text-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed"
-              onClick={() => redo()}
-              disabled={redoRef.current.length === 0}
-              title="Redo (Ctrl/Cmd+Shift+Z)"
-            >
-              <Redo2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-          <ManageLocalesDialog project={project} onLocalesChanged={() => {}} />
-          <Link href={`/${project.id}/keys`}>
-            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-zinc-400 hover:text-zinc-100">
-              <span className="hidden md:inline">Duplicates</span>
-            </Button>
-          </Link>
-          <Link href={`/${project.id}/versions`}>
-            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-zinc-400 hover:text-zinc-100">
-              <span className="hidden md:inline">Versions</span>
-            </Button>
-          </Link>
+        <div className="w-px h-4 bg-zinc-800" />
+
+        {/* Data operations */}
+        <div className="flex items-center">
           <Link href={`/${project.id}/import`}>
             <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-zinc-400 hover:text-zinc-100">
               <Upload className="h-3.5 w-3.5" />
@@ -1165,21 +1146,54 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
             <Download className="h-3.5 w-3.5" />
             <span className="hidden md:inline">Export</span>
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs gap-1.5 text-zinc-600 cursor-not-allowed"
-            onClick={() => toast.info('AI Translation — Coming Soon')}
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            <span className="hidden md:inline">AI Translate</span>
-          </Button>
-          <Link href="/projects">
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-400 hover:text-zinc-100">
-              <LogOut className="h-3.5 w-3.5" />
-            </Button>
-          </Link>
         </div>
+
+        <div className="w-px h-4 bg-zinc-800" />
+
+        {/* Languages config */}
+        <ManageLocalesDialog project={project} onLocalesChanged={() => {}} />
+
+        {/* Overflow menu: Duplicates, Versions, AI Translate */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-400 hover:text-zinc-100" title="More options">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-48 p-1 bg-zinc-900 border-zinc-800" align="end">
+            <p className="text-[10px] uppercase tracking-wider text-zinc-600 px-2 py-1.5">Navigate</p>
+            <Link href={`/${project.id}/keys`}>
+              <button className="w-full text-left text-xs text-zinc-300 hover:text-zinc-100 px-2 py-1.5 rounded hover:bg-zinc-800/60 flex items-center gap-2">
+                <Copy className="h-3.5 w-3.5 text-zinc-500" />
+                Duplicates
+              </button>
+            </Link>
+            <Link href={`/${project.id}/versions`}>
+              <button className="w-full text-left text-xs text-zinc-300 hover:text-zinc-100 px-2 py-1.5 rounded hover:bg-zinc-800/60 flex items-center gap-2">
+                <History className="h-3.5 w-3.5 text-zinc-500" />
+                Versions
+              </button>
+            </Link>
+            <div className="border-t border-zinc-800 my-1" />
+            <button
+              className="w-full text-left text-xs text-zinc-600 cursor-not-allowed px-2 py-1.5 rounded flex items-center gap-2"
+              onClick={() => toast.info('AI Translation — Coming Soon')}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              AI Translate
+              <span className="ml-auto text-[10px] bg-zinc-800 text-zinc-500 rounded px-1">Soon</span>
+            </button>
+          </PopoverContent>
+        </Popover>
+
+        <div className="w-px h-4 bg-zinc-800" />
+
+        {/* Back to projects */}
+        <Link href="/projects">
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-400 hover:text-zinc-100" title="Back to projects">
+            <LogOut className="h-3.5 w-3.5" />
+          </Button>
+        </Link>
       </header>
 
       {/* ── Toolbar ── */}
@@ -1195,6 +1209,30 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         </div>
 
         <div className="flex-1" />
+
+        {/* Undo / Redo */}
+        <div className="flex items-center">
+          <Button
+            variant="ghost" size="sm"
+            className="h-7 w-7 p-0 text-zinc-400 hover:text-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed"
+            onClick={() => undo()}
+            disabled={undoRef.current.length === 0}
+            title="Undo (Ctrl/Cmd+Z)"
+          >
+            <Undo2 className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost" size="sm"
+            className="h-7 w-7 p-0 text-zinc-400 hover:text-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed"
+            onClick={() => redo()}
+            disabled={redoRef.current.length === 0}
+            title="Redo (Ctrl/Cmd+Shift+Z)"
+          >
+            <Redo2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+
+        <div className="w-px h-4 bg-zinc-800" />
 
         <Popover>
           <PopoverTrigger asChild>
@@ -1315,6 +1353,9 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
           <Layers2 className="h-3.5 w-3.5" />
           Group
         </Button>
+
+        <div className="w-px h-4 bg-zinc-800" />
+
         <Button
           size="sm"
           className="h-7 text-xs gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
