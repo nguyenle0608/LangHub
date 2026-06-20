@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createSnapshot } from '@/lib/versions/snapshot'
+import { resolveBranchId } from '@/lib/branches/queries'
 import { parseJSON } from '@/lib/parsers/json'
 import { parseARB } from '@/lib/parsers/arb'
 import { parseCSV } from '@/lib/parsers/csv'
@@ -20,10 +21,14 @@ export async function POST(req: NextRequest) {
   const localeId = formData.get('localeId') as string | null
   const format = formData.get('format') as string | null
   const snapshotName = formData.get('snapshotName') as string | null
+  const branchParam = formData.get('branchId') as string | null
 
   if (!file || !projectId || !localeId || !format) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
+
+  const branchId = await resolveBranchId(projectId, branchParam)
+  if (!branchId) return NextResponse.json({ error: 'No branch found for project' }, { status: 400 })
   if (!SUPPORTED_FORMATS.includes(format as typeof SUPPORTED_FORMATS[number])) {
     return NextResponse.json({ error: `Unsupported format: ${format}` }, { status: 400 })
   }
@@ -60,21 +65,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No valid keys found in file' }, { status: 400 })
   }
 
-  // 2. Auto-snapshot before import
+  // 2. Auto-snapshot before import (active branch)
   const snapshotResult = await createSnapshot(projectId, user.id, {
     name: snapshotName ?? `Auto: Before import "${file.name}"`,
     tag: 'auto_import',
+    branchId,
   })
   const snapshotId = 'error' in snapshotResult ? undefined : snapshotResult.id
 
-  // 3. Fetch existing keys + all locales in parallel
-  const [{ data: existingKeys }, { data: allLocales }] = await Promise.all([
+  // 3. Fetch existing keys + all locales + all branches in parallel
+  const [{ data: existingKeys }, { data: allLocales }, { data: allBranches }] = await Promise.all([
     admin.from('translation_keys').select('id, key').eq('project_id', projectId),
     admin.from('locales').select('id').eq('project_id', projectId),
+    admin.from('branches').select('id').eq('project_id', projectId),
   ])
 
   const keyMap = new Map<string, string>((existingKeys ?? []).map((k) => [k.key, k.id]))
   const localeIds = (allLocales ?? []).map((l) => l.id)
+  const branchIds = (allBranches ?? []).map((b) => b.id)
 
   // 4. Separate new vs existing keys
   const newDotKeys = entries.filter(([k]) => !keyMap.has(k)).map(([k]) => k)
@@ -92,11 +100,14 @@ export async function POST(req: NextRequest) {
       for (const row of inserted ?? []) keyMap.set(row.key, row.id)
     }
 
-    // 6. Batch insert empty translations for all locales × new keys
+    // 6. Batch insert empty translations for all branches × locales × new keys
+    //    (keys are global — show up empty on every branch)
     const emptyRows = newDotKeys.flatMap((k) => {
       const keyId = keyMap.get(k)
       if (!keyId) return []
-      return localeIds.map((lid) => ({ key_id: keyId, locale_id: lid, value: null, status: 'empty' as const }))
+      return branchIds.flatMap((bid) =>
+        localeIds.map((lid) => ({ branch_id: bid, key_id: keyId, locale_id: lid, value: null, status: 'empty' as const }))
+      )
     })
     const TCHUNK = 500
     for (let i = 0; i < emptyRows.length; i += TCHUNK) {
@@ -104,8 +115,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 7. Batch upsert translations for the imported locale
+  // 7. Batch upsert translations for the imported locale (active branch only)
   const upsertRows = entries.map(([dotKey, value]) => ({
+    branch_id: branchId,
     key_id: keyMap.get(dotKey)!,
     locale_id: localeId,
     value,
@@ -118,7 +130,7 @@ export async function POST(req: NextRequest) {
   for (let i = 0; i < upsertRows.length; i += UCHUNK) {
     const { data } = await admin
       .from('translations')
-      .upsert(upsertRows.slice(i, i + UCHUNK), { onConflict: 'key_id,locale_id' })
+      .upsert(upsertRows.slice(i, i + UCHUNK), { onConflict: 'branch_id,key_id,locale_id' })
       .select('id')
     for (const row of data ?? []) upsertedIds.push(row.id)
   }

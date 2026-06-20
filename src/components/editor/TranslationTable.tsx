@@ -2,6 +2,7 @@
 
 import { useState, useRef, useMemo, useCallback, Fragment, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   Search, Plus, Download, Upload,
@@ -17,6 +18,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { TranslationCell } from './TranslationCell'
 import { StatusBadge } from './StatusBadge'
 import { BulkActionBar } from './BulkActionBar'
+import { BranchSwitcher } from './BranchSwitcher'
+import { MergeDialog } from './MergeDialog'
 import { AddKeySheet } from './AddKeySheet'
 import { KeyDetailPanel } from './KeyDetailPanel'
 import { ManageLocalesDialog } from './ManageLocalesDialog'
@@ -25,6 +28,7 @@ import { useRealtime } from '@/hooks/useRealtime'
 import { usePresence } from '@/hooks/usePresence'
 import type { ProjectWithStats, MemberRole } from '@/types'
 import type { KeyWithTranslations } from '@/lib/supabase/queries/translations'
+import type { Branch } from '@/lib/branches/queries'
 import { localeFlag as getFlag } from '@/lib/locale-flag'
 import { signOut } from '@/lib/supabase/auth'
 
@@ -35,6 +39,8 @@ import { signOut } from '@/lib/supabase/auth'
 interface Props {
   project: ProjectWithStats
   initialKeys: KeyWithTranslations[]
+  branches: Branch[]
+  activeBranchId: string
   user: { id: string; email?: string | undefined; role: MemberRole }
 }
 
@@ -121,7 +127,7 @@ function serializeClipboardTable(grid: string[][]): string {
 // Main TranslationTable
 // ---------------------------------------------------------------------------
 
-export function TranslationTable({ project, initialKeys, user }: Props) {
+export function TranslationTable({ project, initialKeys, branches, activeBranchId, user }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Role-based permissions
@@ -130,6 +136,8 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
   const canReview = user.role !== 'viewer'       // can review / approve translations
   const canManage = user.role === 'owner' || user.role === 'admin'  // import, add key, manage locales
   const canEditKeys = user.role === 'owner'      // rename / delete keys
+
+  const router = useRouter()
 
   // State
   const [keys, setKeys] = useState(initialKeys)
@@ -142,6 +150,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
   const [showAddKey, setShowAddKey] = useState(false)
   const [showExport, setShowExport] = useState(false)
+  const [mergeSourceId, setMergeSourceId] = useState<string | null>(null)
   const [columnFilters, setColumnFilters] = useState<Map<string, FilterStatus>>(new Map())
   const [groupBy, setGroupBy] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
@@ -349,6 +358,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
   const handleRealtimeUpdate = useCallback(
     (update: {
       id: string
+      branch_id: string | null
       key_id: string | null
       locale_id: string | null
       value: string | null
@@ -388,7 +398,8 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
             translations: [
               ...k.translations,
               {
-                id: update.id, key_id: update.key_id, locale_id: update.locale_id,
+                id: update.id, branch_id: update.branch_id ?? activeBranchId,
+                key_id: update.key_id, locale_id: update.locale_id,
                 value: update.value, status: update.status, updated_at: update.updated_at,
                 translated_by: null, reviewed_by: null,
                 ai_model: null, ai_suggested_at: null, ai_suggestion: null,
@@ -398,11 +409,11 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         })
       )
     },
-    []
+    [activeBranchId]
   )
 
-  useRealtime({ keyIds, onUpdate: handleRealtimeUpdate })
-  const { presences, trackCell, clearCell } = usePresence(project.id, user)
+  useRealtime({ keyIds, branchId: activeBranchId, onUpdate: handleRealtimeUpdate })
+  const { presences, trackCell, clearCell } = usePresence(`${project.id}:${activeBranchId}`, user)
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -479,6 +490,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
               ...updatedTranslations,
               {
                 id: `optimistic-${localeId}`,
+                branch_id: activeBranchId,
                 key_id: keyId, locale_id: localeId, value, status,
                 updated_at: new Date().toISOString(),
                 translated_by: null, reviewed_by: null,
@@ -494,7 +506,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         const resp = await fetch('/api/translations', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ keyId, localeId, value, status }),
+          body: JSON.stringify({ branchId: activeBranchId, keyId, localeId, value, status }),
         })
         if (!resp.ok) {
           toast.error('Failed to save translation')
@@ -528,7 +540,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
             await fetch('/api/translations/invalidate', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ items: targetItems }),
+              body: JSON.stringify({ branchId: activeBranchId, items: targetItems }),
             })
           }
         }
@@ -539,7 +551,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         // trackCell(null) fires via textarea onBlur — no need to call here
       }
     },
-    [editValue, locales, keys, pushUndo]
+    [editValue, locales, keys, pushUndo, activeBranchId]
   )
 
   const cancelEdit = useCallback(() => {
@@ -621,7 +633,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
     const res = await fetch('/api/translations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'approved', items }),
+      body: JSON.stringify({ branchId: activeBranchId, status: 'approved', items }),
     })
     if (!res.ok) {
       const json = await res.json() as { error?: string }
@@ -641,7 +653,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
     )
     setSelectedRows(new Set())
     toast.success(`Approved ${ids.length} key${ids.length > 1 ? 's' : ''}`)
-  }, [canReview, selectedRows, locales, keys])
+  }, [canReview, selectedRows, locales, keys, activeBranchId])
 
   const handleBulkReview = useCallback(async () => {
     if (!canReview) return
@@ -660,7 +672,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
     const res = await fetch('/api/translations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'reviewed', items }),
+      body: JSON.stringify({ branchId: activeBranchId, status: 'reviewed', items }),
     })
     if (!res.ok) {
       const json = await res.json() as { error?: string }
@@ -682,7 +694,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
     )
     setSelectedRows(new Set())
     toast.success(`Marked ${ids.length} key${ids.length > 1 ? 's' : ''} as reviewed`)
-  }, [canReview, selectedRows, locales, keys])
+  }, [canReview, selectedRows, locales, keys, activeBranchId])
 
   // Column layout
   const COLS = { check: 40, key: 224, locale: 200, status: 88 }
@@ -819,6 +831,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
           } else {
             trans.push({
               id: `optimistic-${it.localeId}`,
+              branch_id: activeBranchId,
               key_id: k.id, locale_id: it.localeId, value: it.value, status: it.status,
               updated_at: new Date().toISOString(),
               translated_by: null, reviewed_by: null,
@@ -834,7 +847,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
     void fetch('/api/translations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items }),
+      body: JSON.stringify({ branchId: activeBranchId, items }),
     })
       .then(async (res) => {
         if (!res.ok) {
@@ -848,7 +861,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         }
       })
       .catch(() => toast.error('Network error'))
-  }, [pushUndo])
+  }, [pushUndo, canEdit, activeBranchId])
 
   // Clear the contents of every non-empty, non-locked cell in the selection
   const clearSelection = useCallback(() => {
@@ -899,7 +912,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
     void fetch('/api/translations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items }),
+      body: JSON.stringify({ branchId: activeBranchId, items }),
     })
       .then(async (res) => {
         if (!res.ok) {
@@ -910,7 +923,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         }
       })
       .catch(() => toast.error('Network error'))
-  }, [pushUndo])
+  }, [pushUndo, canEdit, activeBranchId])
 
   // Apply a set of cell states (optimistic + persist) — used by undo/redo
   const commitCells = useCallback((cells: { keyId: string; localeId: string; value: string; status: string }[]) => {
@@ -934,6 +947,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
           } else {
             trans.push({
               id: `optimistic-${it.localeId}`,
+              branch_id: activeBranchId,
               key_id: k.id, locale_id: it.localeId, value: it.value, status: it.status,
               updated_at: new Date().toISOString(),
               translated_by: null, reviewed_by: null,
@@ -947,7 +961,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
     void fetch('/api/translations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: cells }),
+      body: JSON.stringify({ branchId: activeBranchId, items: cells }),
     })
       .then(async (res) => {
         if (!res.ok) {
@@ -956,7 +970,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         }
       })
       .catch(() => toast.error('Network error'))
-  }, [])
+  }, [activeBranchId])
 
   const undo = useCallback(() => {
     const changes = undoRef.current.pop()
@@ -1141,6 +1155,16 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         <span className="text-zinc-700 text-sm select-none px-0.5">/</span>
         <span className="text-sm text-zinc-200 font-medium">Editor</span>
 
+        <div className="ml-2">
+          <BranchSwitcher
+            projectId={project.id}
+            branches={branches}
+            activeBranchId={activeBranchId}
+            canManage={canManage}
+            onMerge={(sourceBranchId) => setMergeSourceId(sourceBranchId)}
+          />
+        </div>
+
         <div className="flex-1" />
 
         {/* Progress */}
@@ -1159,7 +1183,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         {/* Data operations */}
         <div className="flex items-center">
           {canManage && (
-            <Link href={`/${project.id}/import`}>
+            <Link href={`/${project.id}/import?branch=${activeBranchId}`}>
               <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-zinc-400 hover:text-zinc-100">
                 <Upload className="h-3.5 w-3.5" />
                 <span className="hidden md:inline">Import</span>
@@ -1707,7 +1731,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
                     <p className="text-sm font-medium text-zinc-400 mb-1">No keys yet</p>
                     <p className="text-xs text-zinc-600 mb-4">Import a file or add your first key manually</p>
                     <div className="flex gap-2">
-                      <Link href={`/${project.id}/import`}>
+                      <Link href={`/${project.id}/import?branch=${activeBranchId}`}>
                         <Button size="sm" variant="outline" className="border-zinc-700 gap-1.5">
                           <Upload className="h-3.5 w-3.5" />
                           Import File
@@ -1921,6 +1945,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         keyItem={selectedKey}
         locales={locales}
         userId={user.id}
+        branchId={activeBranchId}
         canEdit={canEdit}
         canManage={canManage}
         canEditKeys={canEditKeys}
@@ -1928,6 +1953,22 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         onKeyUpdated={(patch) => handleKeyUpdated(selectedKeyId!, patch)}
         onKeyDeleted={handleKeyDeleted}
       />
+
+      {/* Merge dialog */}
+      {mergeSourceId && (() => {
+        const source = branches.find((b) => b.id === mergeSourceId)
+        const target = branches.find((b) => b.id === activeBranchId)
+        if (!source || !target) return null
+        return (
+          <MergeDialog
+            projectId={project.id}
+            sourceBranch={source}
+            targetBranch={target}
+            onClose={() => setMergeSourceId(null)}
+            onMerged={() => { setMergeSourceId(null); router.refresh() }}
+          />
+        )
+      })()}
 
       {/* Bulk action bar — translators+ see count/clear; review/approve/delete gated inside */}
       {canSelect && selectedRows.size > 0 && (
@@ -1957,6 +1998,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
       <ExportSheet
         open={showExport}
         project={project}
+        branchId={activeBranchId}
         onClose={() => setShowExport(false)}
       />
     </div>

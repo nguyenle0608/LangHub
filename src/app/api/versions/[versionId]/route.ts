@@ -15,13 +15,14 @@ export async function GET(
   const { searchParams } = new URL(req.url)
   const compareWith = searchParams.get('compareWith') // versionId or 'current'
   const projectId = searchParams.get('projectId')
+  const branchId = searchParams.get('branchId') ?? undefined
 
   const version = await getVersion(versionId)
   if (!version) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   // If diff requested
   if (compareWith && projectId) {
-    const diff = await diffVersions(projectId, versionId, compareWith)
+    const diff = await diffVersions(projectId, versionId, compareWith, branchId)
     return NextResponse.json({ data: { version, diff } })
   }
 

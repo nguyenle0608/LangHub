@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { updateTranslation } from '@/lib/supabase/queries/translations'
 
 const PatchSchema = z.object({
+  branchId: z.string().uuid(),
   keyId: z.string().uuid(),
   localeId: z.string().uuid(),
   value: z.string(),
@@ -23,8 +24,8 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   }
 
-  const { keyId, localeId, value, status } = parsed.data
-  const result = await updateTranslation(keyId, localeId, value, status, user.id)
+  const { branchId, keyId, localeId, value, status } = parsed.data
+  const result = await updateTranslation(branchId, keyId, localeId, value, status, user.id)
   if ('error' in result) return NextResponse.json({ error: result.error }, { status: 500 })
   return NextResponse.json(result)
 }
@@ -32,6 +33,7 @@ export async function PATCH(req: NextRequest) {
 const STATUS_ENUM = z.enum(['empty', 'pending', 'reviewed', 'approved'])
 
 const BulkUpsertSchema = z.object({
+  branchId: z.string().uuid(),
   // Default status applied to items that don't specify their own
   status: STATUS_ENUM.default('approved'),
   items: z.array(z.object({
@@ -57,6 +59,7 @@ export async function POST(req: NextRequest) {
   const now = new Date().toISOString()
 
   const rows = parsed.data.items.map((item) => ({
+    branch_id: parsed.data.branchId,
     key_id: item.keyId,
     locale_id: item.localeId,
     value: item.value,
@@ -68,7 +71,7 @@ export async function POST(req: NextRequest) {
   for (let i = 0; i < rows.length; i += CHUNK) {
     const { error } = await admin
       .from('translations')
-      .upsert(rows.slice(i, i + CHUNK), { onConflict: 'key_id,locale_id' })
+      .upsert(rows.slice(i, i + CHUNK), { onConflict: 'branch_id,key_id,locale_id' })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
 

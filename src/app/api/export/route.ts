@@ -6,8 +6,9 @@ import { exportARB } from '@/lib/exporters/arb'
 import { exportCSV } from '@/lib/exporters/csv'
 import { exportYAML } from '@/lib/exporters/yaml'
 import { exportZIP } from '@/lib/exporters/zip'
+import { resolveBranchId } from '@/lib/branches/queries'
 
-// POST body: { projectId, localeIds[], format, filter, nested? }
+// POST body: { projectId, branchId?, localeIds[], format, filter, nested? }
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -15,6 +16,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json() as {
     projectId: string
+    branchId?: string
     localeIds: string[]
     format: 'json' | 'arb' | 'csv' | 'yaml'
     filter: 'all' | 'approved' | 'reviewed_approved'
@@ -25,6 +27,9 @@ export async function POST(req: NextRequest) {
   if (!projectId || !localeIds?.length || !format) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
+
+  const branchId = await resolveBranchId(projectId, body.branchId)
+  if (!branchId) return NextResponse.json({ error: 'No branch found for project' }, { status: 400 })
 
   const admin = createAdminClient()
 
@@ -54,6 +59,7 @@ export async function POST(req: NextRequest) {
   const { data: translations } = await admin
     .from('translations')
     .select('key_id, locale_id, value, status')
+    .eq('branch_id', branchId)
     .in('key_id', keyIds)
     .in('locale_id', localeIds)
 

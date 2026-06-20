@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 const Schema = z.object({
+  branchId: z.string().uuid(),
   items: z.array(z.object({
     keyId: z.string().uuid(),
     localeId: z.string().uuid(),
@@ -25,6 +26,7 @@ export async function POST(req: NextRequest) {
   const now = new Date().toISOString()
 
   const rows = parsed.data.items.map((item) => ({
+    branch_id: parsed.data.branchId,
     key_id: item.keyId,
     locale_id: item.localeId,
     value: item.value,
@@ -36,7 +38,7 @@ export async function POST(req: NextRequest) {
   for (let i = 0; i < rows.length; i += CHUNK) {
     const { error } = await admin
       .from('translations')
-      .upsert(rows.slice(i, i + CHUNK), { onConflict: 'key_id,locale_id' })
+      .upsert(rows.slice(i, i + CHUNK), { onConflict: 'branch_id,key_id,locale_id' })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
 

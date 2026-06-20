@@ -14,10 +14,11 @@ type Filter = 'all' | 'approved' | 'reviewed_approved'
 interface Props {
   open: boolean
   project: ProjectWithStats
+  branchId?: string
   onClose: () => void
 }
 
-export function ExportSheet({ open, project, onClose }: Props) {
+export function ExportSheet({ open, project, branchId, onClose }: Props) {
   const [selectedLocales, setSelectedLocales] = useState<Set<string>>(
     new Set(project.locales.map((l) => l.id))
   )
@@ -48,6 +49,7 @@ export function ExportSheet({ open, project, onClose }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           projectId: project.id,
+          branchId,
           localeIds: Array.from(selectedLocales),
           format,
           filter,

@@ -5,15 +5,18 @@ import { ImportWizard } from '@/components/import/ImportWizard'
 
 export default async function ImportPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ projectId: string }>
+  searchParams: Promise<{ branch?: string }>
 }) {
   const { projectId } = await params
+  const { branch } = await searchParams
   const user = await getUser()
   if (!user) redirect('/login')
 
   const project = await getProject(projectId)
   if (!project) notFound()
 
-  return <ImportWizard project={project} />
+  return <ImportWizard project={project} branchId={branch} />
 }

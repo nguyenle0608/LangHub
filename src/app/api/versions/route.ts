@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createSnapshot, getVersions } from '@/lib/versions/snapshot'
+import { resolveBranchId } from '@/lib/branches/queries'
 
 const PostSchema = z.object({
   projectId: z.string().uuid(),
+  branchId: z.string().uuid().optional(),
   name: z.string().min(1).max(200),
   description: z.string().max(1000).optional(),
 })
@@ -31,10 +33,14 @@ export async function POST(req: NextRequest) {
   const parsed = PostSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
+  const branchId = await resolveBranchId(parsed.data.projectId, parsed.data.branchId)
+  if (!branchId) return NextResponse.json({ error: 'No branch found for project' }, { status: 400 })
+
   const result = await createSnapshot(parsed.data.projectId, user.id, {
     name: parsed.data.name,
     description: parsed.data.description,
     tag: 'manual',
+    branchId,
   })
 
   if ('error' in result) return NextResponse.json({ error: result.error }, { status: 500 })

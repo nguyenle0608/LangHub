@@ -66,12 +66,14 @@ function Section({ title, icon: Icon, collapsible, defaultOpen = true, children 
 function TranslationsPane({
   keyItem,
   locales,
+  branchId,
   onUpdated,
   canEdit,
   canManage,
 }: {
   keyItem: KeyWithTranslations
   locales: LocaleWithStats[]
+  branchId: string
   onUpdated: (patch: Partial<KeyWithTranslations>) => void
   canEdit: boolean
   canManage: boolean
@@ -109,7 +111,7 @@ function TranslationsPane({
       const resp = await fetch('/api/translations', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keyId: keyItem.id, localeId, value, status }),
+        body: JSON.stringify({ branchId, keyId: keyItem.id, localeId, value, status }),
       })
       if (!resp.ok) { toast.error('Failed to save'); return }
       const result = await resp.json() as { id?: string }
@@ -122,6 +124,7 @@ function TranslationsPane({
             ...keyItem.translations,
             {
               id: result.id ?? `optimistic-${localeId}`,
+              branch_id: branchId,
               key_id: keyItem.id, locale_id: localeId, value, status,
               updated_at: new Date().toISOString(),
               translated_by: null, reviewed_by: null,
@@ -144,7 +147,7 @@ function TranslationsPane({
       const resp = await fetch('/api/translations', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keyId: keyItem.id, localeId, value, status: 'approved' }),
+        body: JSON.stringify({ branchId, keyId: keyItem.id, localeId, value, status: 'approved' }),
       })
       if (!resp.ok) { toast.error('Failed to approve'); return }
       onUpdated({ translations: keyItem.translations.map((t) => t.locale_id === localeId ? { ...t, value, status: 'approved' } : t) })
@@ -163,7 +166,7 @@ function TranslationsPane({
       const resp = await fetch('/api/translations', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keyId: keyItem.id, localeId, value, status: 'reviewed' }),
+        body: JSON.stringify({ branchId, keyId: keyItem.id, localeId, value, status: 'reviewed' }),
       })
       if (!resp.ok) { toast.error('Failed to mark as reviewed'); return }
       onUpdated({ translations: keyItem.translations.map((t) => t.locale_id === localeId ? { ...t, value, status: 'reviewed' } : t) })
@@ -541,6 +544,7 @@ interface Props {
   keyItem: KeyWithTranslations | undefined
   locales: LocaleWithStats[]
   userId: string
+  branchId: string
   canEdit: boolean
   canManage: boolean
   canEditKeys: boolean
@@ -549,7 +553,7 @@ interface Props {
   onKeyDeleted: (keyId: string) => void
 }
 
-export function KeyDetailPanel({ keyItem, locales, userId, canEdit, canManage, canEditKeys, onClose, onKeyUpdated, onKeyDeleted }: Props) {
+export function KeyDetailPanel({ keyItem, locales, userId, branchId, canEdit, canManage, canEditKeys, onClose, onKeyUpdated, onKeyDeleted }: Props) {
   return (
     <Dialog open={!!keyItem} onOpenChange={(v) => { if (!v) onClose() }}>
       <DialogContent className="max-w-4xl p-0 bg-zinc-950 border-zinc-800 flex flex-col max-h-[88vh] [&>button]:hidden">
@@ -573,6 +577,7 @@ export function KeyDetailPanel({ keyItem, locales, userId, canEdit, canManage, c
                 key={keyItem.id}
                 keyItem={keyItem}
                 locales={locales}
+                branchId={branchId}
                 onUpdated={onKeyUpdated}
                 canEdit={canEdit}
                 canManage={canManage}

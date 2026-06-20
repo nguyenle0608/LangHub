@@ -23,6 +23,7 @@ interface PreviewRow {
 
 interface Props {
   project: ProjectWithStats
+  branchId?: string
 }
 
 const FORMAT_LABELS: Record<Format, string> = { json: 'JSON', arb: 'ARB', csv: 'CSV', yaml: 'YAML' }
@@ -65,7 +66,7 @@ function StepIndicator({ step }: { step: number }) {
   )
 }
 
-export function ImportWizard({ project }: Props) {
+export function ImportWizard({ project, branchId }: Props) {
   const [step, setStep] = useState(0)
   const [file, setFile] = useState<File | null>(null)
   const [format, setFormat] = useState<Format | null>(null)
@@ -136,6 +137,7 @@ export function ImportWizard({ project }: Props) {
       fd.append('projectId', project.id)
       fd.append('localeId', localeId)
       fd.append('format', format)
+      if (branchId) fd.append('branchId', branchId)
       if (createNamedSnapshot && snapshotName) {
         fd.append('snapshotName', snapshotName)
       }
