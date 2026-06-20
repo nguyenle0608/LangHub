@@ -1,6 +1,6 @@
 # 🌿 Branching — Git-style branches for translations
 
-> Status: **M1 in progress**. M2 is a planned future extension (see §5).
+> Status: **M1 + M2 implemented**. Keys are now per-branch (see §5 for what M2 added).
 > Last updated: Jun 2026
 
 ---
@@ -21,16 +21,16 @@ out on different branches at the same time (active branch is per-user, via URL p
 
 ## 2. Two models
 
-| | **M1 — value-level (BUILDING NOW)** | **M2 — structural (FUTURE)** |
+| | **M1 — value-level (DONE)** | **M2 — structural (DONE)** |
 |---|---|---|
-| Keys & locales | Project-global (shared by all branches) | Per-branch (keys carry `branch_id`) |
+| Locales | Project-global | Project-global (unchanged) |
+| Keys | Project-global | **Per-branch** (`translation_keys.branch_id`) |
 | Translation `value`/`status` | Per-branch | Per-branch |
-| "Add a key on a feature branch" | Appears on all branches (empty value) | Stays on that branch until merge |
-| Merge conflict scope | Per (key, locale) **value** | Value **+ key added/removed/renamed** |
-| Effort / risk | Moderate | ~2× (every key query becomes branch-scoped) |
+| "Add a key on a feature branch" | Appeared on all branches | **Stays on that branch until merge** |
+| Merge conflict scope | Per (key, locale) **value** | Value + **key add** (delete/rename: see §5 limits) |
 
-**Decision:** ship **M1** first. It fully satisfies "switch back and forth + merge values
-with per-cell conflict resolution". M2 is purely additive later (see §5) — no rewrite.
+**Decision (history):** M1 shipped first (value-level), then M2 was added on top
+(per-branch keys) as an additive migration — no rewrite, ~80% of the code carried over.
 
 ---
 
@@ -55,7 +55,9 @@ versions  (existing table, additive)
   + branch_id → branches   -- which branch this snapshot froze (nullable, legacy = null)
 ```
 
-`translation_keys` and `locales` are **unchanged** — global per project.
+In M1 `translation_keys` and `locales` were global per project. **M2 (migration 006)
+added `branch_id` to `translation_keys`** (unique `(branch_id, key)`); `locales` remain
+global. See §5.
 
 ### Why `base_snapshot_id` reuses the snapshot system
 
@@ -105,59 +107,53 @@ leaks data across branches. Audit list: `getTranslationKeys`, `updateTranslation
 
 ---
 
-## 4b. Applying M1 + known limitations
+## 4b. Migrations & known limitations
 
-### Apply the migration
-The migration `supabase/migrations/005_branches_schema.sql` touches real data
-(adds `branch_id`, backfills a `main` branch per project, swaps the unique
-constraint). Apply it with:
+### Migrations
+- `005_branches_schema.sql` — branches table; `branch_id` on translations (+ versions);
+  backfill a `main` branch per project; swap unique to `(branch_id, key_id, locale_id)`.
+- `006_branch_keys.sql` — `branch_id` on `translation_keys`; backfill keys to `main`;
+  swap unique `(project_id, key)` → `(branch_id, key)`. **Drops pre-existing non-default
+  branches** (M1 branches shared the project's keys and would be orphaned under M2).
 
 ```bash
-pnpm db:push       # pushes to the linked Supabase project
-pnpm db:types      # regenerate types (needs local Docker; types were hand-mirrored meanwhile)
+pnpm db:push                          # apply to the linked Supabase project
+supabase gen types typescript --linked > src/types/database.ts   # regen types from remote
 ```
+(`pnpm db:types` uses `--local`, which needs Docker; use `--linked` against remote.)
 
-`src/types/database.ts` was hand-edited to match what `db:types` will generate
-(branches table + `branch_id` on translations/versions), so the app type-checks
-before the migration is pushed.
+### Known limitations (acceptable for v1)
+- **Merge propagates key ADDS, not deletes/renames.** A key present on the source but not
+  the target is created in the target during merge. A key deleted or renamed on the source
+  is NOT propagated — the target keeps its version. (Rename = delete+add, so it surfaces as
+  a new key.)
+- **Snapshots/Versions page operates on `main`.** `createSnapshot`/`restoreSnapshot` are
+  branch-aware; the standalone Versions page UI defaults to `main`. Import auto-snapshots
+  and merge backups target the correct branch.
+- **Branch creation copies all keys + translation rows** (full copy, not delta). Fine for
+  typical project sizes.
 
-### M1 known limitations (acceptable for v1)
-- **Snapshots/Versions page operates on `main`.** `createSnapshot`/`restoreSnapshot`
-  are branch-aware (take a `branchId`), but the standalone Versions page UI does
-  not yet pass the active branch, so it defaults to `main`. Import auto-snapshots
-  and merge backups DO target the correct branch.
-- **Branch creation copies all translation rows** (full copy, not delta). Fine for
-  typical project sizes; revisit if projects grow very large.
-- **Merge re-bases the source branch** onto the post-merge target, so repeated
-  merges stay clean. Deleting a branch cascade-deletes its translation rows.
+## 5. M2 — structural branching (implemented)
 
-## 5. M2 — future extension (structural branching)
+Keys are per-branch: `translation_keys.branch_id`, unique `(branch_id, key)`. Adding a key
+on a branch no longer touches other branches until merge. Locales stay project-global.
 
-Goal: keys (and optionally locales) also branch, so adding/removing keys on a branch does
-not affect others until merge.
+### What M2 changed on top of M1
+- **Migration 006** — see §4b.
+- `createTranslationKey` creates the key on the **active branch only** (no cross-branch
+  fan-out); `getTranslationKeys` filters keys by `branch_id`.
+- `createBranch` now **copies keys** (new ids) and remaps each copied translation's
+  `key_id` to the new key.
+- **Merge** (`applyMerge`) auto-creates keys that exist on the source but not the target
+  before applying their translations (`createdKeys` in the result).
+- Branch-scoped: import (keys created on active branch), export, duplicate-finder,
+  snapshot/restore name→id mapping, and project stats (key count on `main`).
 
-### Migration shape (same pattern as M1, additive)
-```sql
-alter table translation_keys add column branch_id uuid references branches(id);
-update translation_keys set branch_id = <project main branch>;   -- backfill
--- swap unique (project_id, key) → (branch_id, key)
-alter table translation_keys alter column branch_id set not null;
-```
-Locales *may* stay global (branching locales is rarely needed); decide at M2 time.
+### Reused unchanged from M1 (~80%)
+`branches` table, branch switcher UI, `/api/branches`, the 3-way merge engine (matches by
+`key_name::locale_code`, so it already tolerated per-branch key ids), and the snapshot system.
 
-### What carries over from M1 (≈80% reuse)
-- `branches` table, branch switcher UI, `/api/branches` — **unchanged**
-- `branchId` threading — extend to key queries (additive)
-- **Merge engine — unchanged**: already matches by `key_name::locale_code` string, so it
-  inherently tolerates keys differing across branches. M2 only *adds* "key added / removed
-  / renamed" cases to the conflict classifier + UI.
-- Snapshot system — unchanged
-
-### What M2 adds
-- `branch_id` filter in every `translation_keys` query + copy keys on branch create
-- Key-level diff (added/removed/renamed) in merge classifier
-- Conflict UI rows for structural changes, not just value changes
-
-### Cost of "M1 first" vs "M2 now"
-One extra small, additive migration in the future — in exchange for shipping sooner and
-validating the branch UX before taking on structural complexity. No teardown, no rewrite.
+### Future (not done)
+- Propagate key **delete/rename** through merge (currently add-only).
+- Make the standalone Versions page branch-aware.
+- Per-branch locales (rarely needed).
