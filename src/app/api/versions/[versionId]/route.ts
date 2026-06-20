@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getVersion, deleteVersion } from '@/lib/versions/snapshot'
 import { diffVersions } from '@/lib/versions/diff'
+import { resolveBranchId } from '@/lib/branches/queries'
 
 export async function GET(
   req: NextRequest,
@@ -15,14 +16,15 @@ export async function GET(
   const { searchParams } = new URL(req.url)
   const compareWith = searchParams.get('compareWith') // versionId or 'current'
   const projectId = searchParams.get('projectId')
-  const branchId = searchParams.get('branchId') ?? undefined
 
   const version = await getVersion(versionId)
   if (!version) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   // If diff requested
   if (compareWith && projectId) {
-    const diff = await diffVersions(projectId, versionId, compareWith, branchId)
+    // Default to the snapshot's own branch, then the project's main branch
+    const branchId = await resolveBranchId(projectId, searchParams.get('branchId') ?? version.branch_id)
+    const diff = await diffVersions(projectId, versionId, compareWith, branchId ?? undefined)
     return NextResponse.json({ data: { version, diff } })
   }
 

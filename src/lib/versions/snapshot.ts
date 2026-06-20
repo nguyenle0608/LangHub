@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { fetchBranchTranslations } from '@/lib/branches/fetch'
 import type { Database } from '@/types/database'
 
 type VersionRow = Database['public']['Tables']['versions']['Row']
@@ -55,7 +56,6 @@ export async function createSnapshot(
     return { ...version, stats: { version_id: version.id, total_keys: 0, total_locales: 0, approved_count: 0, pending_count: 0, empty_count: 0 } }
   }
 
-  const keyIds = keys.map((k) => k.id)
   const keyNameById = Object.fromEntries(keys.map((k) => [k.id, k.key]))
 
   // 3. Fetch all locales
@@ -66,13 +66,11 @@ export async function createSnapshot(
 
   const localeCodeById = Object.fromEntries((locales ?? []).map((l) => [l.id, l.code]))
 
-  // 4. Fetch all translations (scoped to the branch being snapshotted)
-  let transQuery = admin
-    .from('translations')
-    .select('key_id, locale_id, value, status')
-    .in('key_id', keyIds)
-  if (meta.branchId) transQuery = transQuery.eq('branch_id', meta.branchId)
-  const { data: translations } = await transQuery
+  // 4. Fetch all translations for the branch (paginated; scoped by branch_id
+  //    to avoid over-long .in(keyIds) URLs and the 1000-row cap)
+  const translations = meta.branchId
+    ? await fetchBranchTranslations(admin, meta.branchId)
+    : []
 
   if (!translations?.length) {
     await admin.from('version_stats').insert({

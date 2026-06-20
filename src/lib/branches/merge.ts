@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createSnapshot } from '@/lib/versions/snapshot'
+import { fetchBranchTranslations } from '@/lib/branches/fetch'
 
 // A cell identity that survives rename/delete: "key_name::locale_code"
 type CellKey = string
@@ -54,16 +55,9 @@ async function fetchBranchCells(
   const localeCode = Object.fromEntries((locales ?? []).map((l) => [l.id, l.code]))
 
   const map = new Map<CellKey, Cell>()
-  const keyIds = (keys ?? []).map((k) => k.id)
-  if (keyIds.length === 0) return map
+  const trans = await fetchBranchTranslations(admin, branchId)
 
-  const { data: trans } = await admin
-    .from('translations')
-    .select('key_id, locale_id, value, status')
-    .eq('branch_id', branchId)
-    .in('key_id', keyIds)
-
-  for (const t of trans ?? []) {
+  for (const t of trans) {
     const kn = keyName[t.key_id ?? '']
     const lc = localeCode[t.locale_id ?? '']
     if (kn && lc) map.set(cellKey(kn, lc), { value: t.value, status: t.status })

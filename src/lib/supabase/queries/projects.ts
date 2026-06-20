@@ -1,5 +1,6 @@
 import { createClient } from '../server'
 import { createAdminClient } from '../admin'
+import { fetchBranchTranslations } from '@/lib/branches/fetch'
 import type { Database } from '@/types/database'
 import type { LocaleWithStats, ProjectWithStats } from '@/types'
 
@@ -44,22 +45,13 @@ async function getProjectTranslations(
   const totalKeys = count ?? 0
   if (totalKeys === 0) return { totalKeys: 0, translations: [] }
 
-  const { data: keyRows } = await supabase
-    .from('translation_keys').select('id').eq('project_id', projectId)
-
-  const keyIds = (keyRows ?? []).map((k) => k.id)
-  if (keyIds.length === 0) return { totalKeys, translations: [] }
-
   // Project-level stats reflect the default (main) branch only.
   const { data: mainBranch } = await supabase
     .from('branches').select('id').eq('project_id', projectId).eq('is_default', true).maybeSingle()
   if (!mainBranch) return { totalKeys, translations: [] }
 
-  const { data: translations } = await supabase
-    .from('translations').select('locale_id, status')
-    .eq('branch_id', mainBranch.id).in('key_id', keyIds)
-
-  return { totalKeys, translations: translations ?? [] }
+  const translations = await fetchBranchTranslations(supabase, mainBranch.id)
+  return { totalKeys, translations }
 }
 
 // ── Reads: user-scoped client (RLS applies) ───────────────────────────────

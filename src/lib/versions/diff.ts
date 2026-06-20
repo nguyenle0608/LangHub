@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { fetchBranchTranslations } from '@/lib/branches/fetch'
 
 export type DiffType = 'added' | 'removed' | 'changed' | 'unchanged'
 
@@ -49,8 +50,7 @@ export async function diffVersions(
       .select('id, key')
       .eq('project_id', projectId)
 
-    if (keys?.length) {
-      const keyIds = keys.map((k) => k.id)
+    if (keys?.length && branchId) {
       const keyNameById = Object.fromEntries(keys.map((k) => [k.id, k.key]))
 
       const { data: locales } = await supabase
@@ -60,14 +60,9 @@ export async function diffVersions(
 
       const localeCodeById = Object.fromEntries((locales ?? []).map((l) => [l.id, l.code]))
 
-      let transQuery = supabase
-        .from('translations')
-        .select('key_id, locale_id, value, status')
-        .in('key_id', keyIds)
-      if (branchId) transQuery = transQuery.eq('branch_id', branchId)
-      const { data: translations } = await transQuery
+      const translations = await fetchBranchTranslations(supabase, branchId)
 
-      for (const t of translations ?? []) {
+      for (const t of translations) {
         const kName = keyNameById[t.key_id ?? '']
         const lCode = localeCodeById[t.locale_id ?? '']
         if (kName && lCode) {
