@@ -22,12 +22,12 @@ export async function getTranslationKeys(
   const all: KeyWithTranslations[] = []
   let offset = 0
   while (true) {
-    // Embedded translations filtered to the active branch — keys are global,
-    // values diverge per branch.
+    // Keys are per-branch (M2); translations are embedded and also branch-scoped.
     const { data, error } = await supabase
       .from('translation_keys')
       .select('*, translations(*)')
       .eq('project_id', projectId)
+      .eq('branch_id', branchId)
       .eq('translations.branch_id', branchId)
       .order('key', { ascending: true })
       .range(offset, offset + PAGE_SIZE - 1)
@@ -135,39 +135,35 @@ export async function updateTranslation(
 }
 
 export async function createTranslationKey(data: {
-  projectId: string; key: string; description?: string
+  projectId: string; branchId: string; key: string; description?: string
   tags?: string[]; platforms?: string[]; charLimit?: number | null
   localeIds: string[]; userId: string
 }): Promise<{ id: string } | { error: string }> {
   const admin = createAdminClient()
 
+  // Keys are per-branch (M2): the key is created on the active branch only.
   const { data: keyRow, error } = await admin
     .from('translation_keys')
     .insert({
-      project_id: data.projectId, key: data.key,
+      project_id: data.projectId, branch_id: data.branchId, key: data.key,
       description: data.description ?? null, tags: data.tags ?? [],
       platforms: data.platforms ?? [], char_limit: data.charLimit ?? null,
       is_plural: false, created_by: data.userId,
     })
     .select('id').single()
 
-  if (error || !keyRow) return { error: error?.message ?? 'Failed to create key' }
+  if (error || !keyRow) {
+    const dup = error?.code === '23505'
+    return { error: dup ? `Key "${data.key}" already exists on this branch` : (error?.message ?? 'Failed to create key') }
+  }
 
-  // Keys are global; create an empty translation per branch × locale so the
-  // new key shows up (empty) on every branch.
+  // Empty translation per locale on this branch
   if (data.localeIds.length > 0) {
-    const { data: branches } = await admin
-      .from('branches').select('id').eq('project_id', data.projectId)
-    const branchIds = (branches ?? []).map((b) => b.id)
-
-    const rows = branchIds.flatMap((branchId) =>
+    await admin.from('translations').insert(
       data.localeIds.map((localeId) => ({
-        branch_id: branchId, key_id: keyRow.id, locale_id: localeId, value: null, status: 'empty' as const,
+        branch_id: data.branchId, key_id: keyRow.id, locale_id: localeId, value: null, status: 'empty' as const,
       }))
     )
-    for (let i = 0; i < rows.length; i += 500) {
-      await admin.from('translations').insert(rows.slice(i, i + 500))
-    }
   }
 
   return { id: keyRow.id }

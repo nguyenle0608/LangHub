@@ -37,18 +37,19 @@ async function getProjectTranslations(
   supabase: Awaited<ReturnType<typeof createClient>>,
   projectId: string
 ): Promise<{ totalKeys: number; translations: Pick<TranslationRow, 'locale_id' | 'status'>[] }> {
+  // Project-level stats reflect the default (main) branch only. Keys are
+  // per-branch (M2), so both the key count and translations are scoped to main.
+  const { data: mainBranch } = await supabase
+    .from('branches').select('id').eq('project_id', projectId).eq('is_default', true).maybeSingle()
+  if (!mainBranch) return { totalKeys: 0, translations: [] }
+
   const { count } = await supabase
     .from('translation_keys')
     .select('*', { count: 'exact', head: true })
-    .eq('project_id', projectId)
+    .eq('branch_id', mainBranch.id)
 
   const totalKeys = count ?? 0
   if (totalKeys === 0) return { totalKeys: 0, translations: [] }
-
-  // Project-level stats reflect the default (main) branch only.
-  const { data: mainBranch } = await supabase
-    .from('branches').select('id').eq('project_id', projectId).eq('is_default', true).maybeSingle()
-  if (!mainBranch) return { totalKeys, translations: [] }
 
   const translations = await fetchBranchTranslations(supabase, mainBranch.id)
   return { totalKeys, translations }

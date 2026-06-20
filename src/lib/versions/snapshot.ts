@@ -197,11 +197,11 @@ export async function restoreSnapshot(
   const { data: snapshots } = await query
   if (!snapshots?.length) return { restored: 0, skipped: 0, backupVersionId }
 
-  // 3. Fetch current keys and locales (need IDs)
+  // 3. Fetch current keys (on the target branch — keys are per-branch) and locales
   const { data: keys } = await admin
     .from('translation_keys')
     .select('id, key')
-    .eq('project_id', projectId)
+    .eq('branch_id', branchId)
 
   const { data: locales } = await admin
     .from('locales')

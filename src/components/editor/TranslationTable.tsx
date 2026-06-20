@@ -2048,6 +2048,7 @@ export function TranslationTable({ project, initialKeys, branches: initialBranch
       <AddKeySheet
         open={showAddKey}
         projectId={project.id}
+        branchId={activeBranchId}
         locales={locales}
         existingKeys={keys.map((k) => k.key)}
         onClose={() => setShowAddKey(false)}

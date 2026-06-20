@@ -96,20 +96,55 @@ export async function createBranch(args: {
     branch.base_snapshot_id = base.id
   }
 
-  // Copy the source branch's translation rows into the new branch
+  // Copy the source branch's KEYS into the new branch (M2: keys are per-branch),
+  // building an old→new key id map so translations can be remapped.
+  const { data: srcKeys } = await admin
+    .from('translation_keys')
+    .select('id, key, description, tags, platforms, char_limit, is_plural, plural_forms')
+    .eq('branch_id', sourceBranchId)
+
+  const newKeyIdByOld = new Map<string, string>()
+  if (srcKeys?.length) {
+    for (let i = 0; i < srcKeys.length; i += 200) {
+      const chunk = srcKeys.slice(i, i + 200)
+      const { data: inserted } = await admin
+        .from('translation_keys')
+        .insert(chunk.map((k) => ({
+          project_id: projectId,
+          branch_id: branch.id,
+          key: k.key,
+          description: k.description,
+          tags: k.tags,
+          platforms: k.platforms,
+          char_limit: k.char_limit,
+          is_plural: k.is_plural,
+          plural_forms: k.plural_forms,
+          created_by: userId,
+        })))
+        .select('id, key')
+      // Map by key name (stable within a branch)
+      const newIdByName = Object.fromEntries((inserted ?? []).map((r) => [r.key, r.id]))
+      for (const k of chunk) {
+        const newId = newIdByName[k.key]
+        if (newId) newKeyIdByOld.set(k.id, newId)
+      }
+    }
+  }
+
+  // Copy the source branch's translation rows, remapping key_id to the new keys
   const { data: srcRows } = await admin
     .from('translations')
     .select('key_id, locale_id, value, status')
     .eq('branch_id', sourceBranchId)
 
   if (srcRows?.length) {
-    const copies = srcRows.map((r) => ({
-      branch_id: branch.id,
-      key_id: r.key_id,
-      locale_id: r.locale_id,
-      value: r.value,
-      status: r.status,
-    }))
+    const copies = srcRows
+      .map((r) => {
+        const newKeyId = r.key_id ? newKeyIdByOld.get(r.key_id) : undefined
+        if (!newKeyId) return null
+        return { branch_id: branch.id, key_id: newKeyId, locale_id: r.locale_id, value: r.value, status: r.status }
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null)
     for (let i = 0; i < copies.length; i += 500) {
       await admin.from('translations').insert(copies.slice(i, i + 500))
     }

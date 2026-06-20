@@ -32,13 +32,14 @@ function getJsonPreview(keyName: string, baseValue: string): string {
 interface Props {
   open: boolean
   projectId: string
+  branchId: string
   locales: LocaleWithStats[]
   existingKeys: string[]
   onClose: () => void
   onCreated: (key: KeyWithTranslations) => void
 }
 
-export function AddKeySheet({ open, projectId, locales, existingKeys, onClose, onCreated }: Props) {
+export function AddKeySheet({ open, projectId, branchId, locales, existingKeys, onClose, onCreated }: Props) {
   const [keyName, setKeyName] = useState('')
   const [description, setDescription] = useState('')
   const [baseValue, setBaseValue] = useState('')
@@ -88,6 +89,7 @@ export function AddKeySheet({ open, projectId, locales, existingKeys, onClose, o
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           projectId,
+          branchId,
           key: keyName.trim(),
           description: description.trim() || undefined,
           tags: tags.length ? tags : undefined,
@@ -107,6 +109,7 @@ export function AddKeySheet({ open, projectId, locales, existingKeys, onClose, o
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            branchId,
             keyId: data.id,
             localeId: baseLocale.id,
             value: baseValue.trim(),
@@ -116,7 +119,7 @@ export function AddKeySheet({ open, projectId, locales, existingKeys, onClose, o
         if (!t.ok) console.warn('Failed to save base value')
       }
       // Fetch the full key with translations
-      const keyResp = await fetch(`/api/keys?projectId=${projectId}`)
+      const keyResp = await fetch(`/api/keys?projectId=${projectId}&branch=${branchId}`)
       const keyData = await keyResp.json() as { data?: KeyWithTranslations[] }
       const newKey = (keyData.data ?? []).find((k) => k.id === data.id)
       if (newKey) onCreated(newKey)

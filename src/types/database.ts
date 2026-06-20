@@ -301,6 +301,7 @@ export type Database = {
       }
       translation_keys: {
         Row: {
+          branch_id: string
           char_limit: number | null
           created_at: string | null
           created_by: string | null
@@ -315,6 +316,7 @@ export type Database = {
           tags: string[] | null
         }
         Insert: {
+          branch_id: string
           char_limit?: number | null
           created_at?: string | null
           created_by?: string | null
@@ -329,6 +331,7 @@ export type Database = {
           tags?: string[] | null
         }
         Update: {
+          branch_id?: string
           char_limit?: number | null
           created_at?: string | null
           created_by?: string | null
@@ -343,6 +346,13 @@ export type Database = {
           tags?: string[] | null
         }
         Relationships: [
+          {
+            foreignKeyName: "translation_keys_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "translation_keys_project_id_fkey"
             columns: ["project_id"]

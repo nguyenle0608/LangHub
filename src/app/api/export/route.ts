@@ -33,11 +33,11 @@ export async function POST(req: NextRequest) {
 
   const admin = createAdminClient()
 
-  // Fetch keys
+  // Fetch keys (per-branch — M2)
   const { data: keys } = await admin
     .from('translation_keys')
     .select('id, key, description')
-    .eq('project_id', projectId)
+    .eq('branch_id', branchId)
     .order('key', { ascending: true })
 
   if (!keys?.length) {

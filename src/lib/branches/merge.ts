@@ -144,7 +144,7 @@ export async function applyMerge(args: {
   userId: string
   auto: AutoMerge[]
   resolutions: Resolution[]
-}): Promise<{ merged: number; skipped: number; backupVersionId?: string } | { error: string }> {
+}): Promise<{ merged: number; skipped: number; createdKeys: number; backupVersionId?: string } | { error: string }> {
   const { projectId, sourceBranchId, targetBranchId, userId, auto, resolutions } = args
   const admin = createAdminClient()
 
@@ -156,17 +156,43 @@ export async function applyMerge(args: {
   })
   const backupVersionId = 'error' in backup ? undefined : backup.id
 
-  // 2. Resolve key/locale names → ids in the project
-  const [{ data: keys }, { data: locales }] = await Promise.all([
-    admin.from('translation_keys').select('id, key').eq('project_id', projectId),
+  // 2. Resolve names → ids. Keys are per-branch (M2): use the TARGET branch's
+  //    keys, and pull source keys for metadata of any that must be created.
+  const [{ data: targetKeys }, { data: sourceKeys }, { data: locales }] = await Promise.all([
+    admin.from('translation_keys').select('id, key').eq('branch_id', targetBranchId),
+    admin.from('translation_keys')
+      .select('key, description, tags, platforms, char_limit, is_plural, plural_forms')
+      .eq('branch_id', sourceBranchId),
     admin.from('locales').select('id, code').eq('project_id', projectId),
   ])
-  const keyIdByName = Object.fromEntries((keys ?? []).map((k) => [k.key, k.id]))
+  const keyIdByName: Record<string, string> = Object.fromEntries((targetKeys ?? []).map((k) => [k.key, k.id]))
+  const sourceKeyByName = Object.fromEntries((sourceKeys ?? []).map((k) => [k.key, k]))
   const localeIdByCode = Object.fromEntries((locales ?? []).map((l) => [l.code, l.id]))
 
   const all = [...auto, ...resolutions]
   let merged = 0
   let skipped = 0
+
+  // 2b. Structural merge — create keys present on source but not yet on target
+  const neededNames = Array.from(new Set(all.map((c) => c.keyName)))
+  const missingNames = neededNames.filter((n) => !keyIdByName[n] && sourceKeyByName[n])
+  let createdKeys = 0
+  for (let i = 0; i < missingNames.length; i += 200) {
+    const chunk = missingNames.slice(i, i + 200)
+    const { data: inserted } = await admin
+      .from('translation_keys')
+      .insert(chunk.map((name) => {
+        const src = sourceKeyByName[name]!
+        return {
+          project_id: projectId, branch_id: targetBranchId, key: name,
+          description: src.description, tags: src.tags, platforms: src.platforms,
+          char_limit: src.char_limit, is_plural: src.is_plural, plural_forms: src.plural_forms,
+          created_by: userId,
+        }
+      }))
+      .select('id, key')
+    for (const row of inserted ?? []) { keyIdByName[row.key] = row.id; createdKeys++ }
+  }
 
   const rows = all.map((c) => {
     const keyId = keyIdByName[c.keyName]
@@ -200,5 +226,5 @@ export async function applyMerge(args: {
     await admin.from('branches').update({ base_snapshot_id: rebase.id }).eq('id', sourceBranchId)
   }
 
-  return { merged, skipped, backupVersionId }
+  return { merged, skipped, createdKeys, backupVersionId }
 }

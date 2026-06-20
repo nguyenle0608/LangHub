@@ -15,18 +15,17 @@ export type Comment = CommentRow & { user_email?: string }
 
 // ── Reads ────────────────────────────────────────────────────────────────────
 
-export async function findDuplicateGroups(projectId: string): Promise<DuplicateGroup[]> {
+export async function findDuplicateGroups(projectId: string, branchId: string): Promise<DuplicateGroup[]> {
   const supabase = await createClient()
 
-  // Get all keys for this project
+  // Keys are per-branch (M2) — scope to the given branch
   const { data: keys } = await supabase
     .from('translation_keys')
     .select('id, key, description, tags, project_id')
     .eq('project_id', projectId)
+    .eq('branch_id', branchId)
 
   if (!keys?.length) return []
-
-  const keyIds = keys.map((k) => k.id)
 
   // Get base locale for the project
   const { data: baseLocale } = await supabase
@@ -38,11 +37,11 @@ export async function findDuplicateGroups(projectId: string): Promise<DuplicateG
 
   if (!baseLocale) return []
 
-  // Get all base-locale translations for these keys
+  // Base-locale translations on this branch (scope by branch_id, not a huge .in())
   const { data: translations } = await supabase
     .from('translations')
     .select('key_id, value')
-    .in('key_id', keyIds)
+    .eq('branch_id', branchId)
     .eq('locale_id', baseLocale.id)
     .not('value', 'is', null)
     .neq('value', '')

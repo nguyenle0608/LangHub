@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { findDuplicateGroups, mergeKeys, linkKeys } from '@/lib/supabase/queries/keys'
+import { resolveBranchId } from '@/lib/branches/queries'
 
 const MergeSchema = z.object({
   projectId: z.string().uuid(),
@@ -23,7 +24,10 @@ export async function GET(req: NextRequest) {
   const projectId = searchParams.get('projectId')
   if (!projectId) return NextResponse.json({ error: 'projectId required' }, { status: 400 })
 
-  const groups = await findDuplicateGroups(projectId)
+  const branchId = await resolveBranchId(projectId, searchParams.get('branch'))
+  if (!branchId) return NextResponse.json({ error: 'No branch found for project' }, { status: 400 })
+
+  const groups = await findDuplicateGroups(projectId, branchId)
   return NextResponse.json({ data: groups })
 }
 

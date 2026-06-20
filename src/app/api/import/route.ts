@@ -73,41 +73,36 @@ export async function POST(req: NextRequest) {
   })
   const snapshotId = 'error' in snapshotResult ? undefined : snapshotResult.id
 
-  // 3. Fetch existing keys + all locales + all branches in parallel
-  const [{ data: existingKeys }, { data: allLocales }, { data: allBranches }] = await Promise.all([
-    admin.from('translation_keys').select('id, key').eq('project_id', projectId),
+  // 3. Fetch existing keys (on the active branch) + locales in parallel
+  const [{ data: existingKeys }, { data: allLocales }] = await Promise.all([
+    admin.from('translation_keys').select('id, key').eq('branch_id', branchId),
     admin.from('locales').select('id').eq('project_id', projectId),
-    admin.from('branches').select('id').eq('project_id', projectId),
   ])
 
   const keyMap = new Map<string, string>((existingKeys ?? []).map((k) => [k.key, k.id]))
   const localeIds = (allLocales ?? []).map((l) => l.id)
-  const branchIds = (allBranches ?? []).map((b) => b.id)
 
   // 4. Separate new vs existing keys
   const newDotKeys = entries.filter(([k]) => !keyMap.has(k)).map(([k]) => k)
   const updatedCount = entries.filter(([k]) => keyMap.has(k)).length
 
-  // 5. Batch insert new translation_keys
+  // 5. Batch insert new translation_keys on the active branch
   if (newDotKeys.length > 0) {
     const CHUNK = 200
     for (let i = 0; i < newDotKeys.length; i += CHUNK) {
       const chunk = newDotKeys.slice(i, i + CHUNK)
       const { data: inserted } = await admin
         .from('translation_keys')
-        .insert(chunk.map((key) => ({ project_id: projectId, key, created_by: user.id })))
+        .insert(chunk.map((key) => ({ project_id: projectId, branch_id: branchId, key, created_by: user.id })))
         .select('id, key')
       for (const row of inserted ?? []) keyMap.set(row.key, row.id)
     }
 
-    // 6. Batch insert empty translations for all branches × locales × new keys
-    //    (keys are global — show up empty on every branch)
+    // 6. Empty translations for new keys × locales on this branch
     const emptyRows = newDotKeys.flatMap((k) => {
       const keyId = keyMap.get(k)
       if (!keyId) return []
-      return branchIds.flatMap((bid) =>
-        localeIds.map((lid) => ({ branch_id: bid, key_id: keyId, locale_id: lid, value: null, status: 'empty' as const }))
-      )
+      return localeIds.map((lid) => ({ branch_id: branchId, key_id: keyId, locale_id: lid, value: null, status: 'empty' as const }))
     })
     const TCHUNK = 500
     for (let i = 0; i < emptyRows.length; i += TCHUNK) {

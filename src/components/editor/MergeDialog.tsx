@@ -90,10 +90,12 @@ export function MergeDialog({ projectId, sourceBranch, targetBranch, onClose, on
           apply: true, deleteSource, resolutions,
         }),
       })
-      const json = await res.json() as { data?: { merged: number; deletedSource?: boolean }; error?: string }
+      const json = await res.json() as { data?: { merged: number; createdKeys?: number; deletedSource?: boolean }; error?: string }
       if (!res.ok || !json.data) { toast.error(json.error ?? 'Merge failed'); return }
+      const newKeys = json.data.createdKeys ?? 0
       toast.success(
         `Merged ${json.data.merged} change${json.data.merged !== 1 ? 's' : ''} into ${targetBranch.name}` +
+        (newKeys > 0 ? ` (+${newKeys} new key${newKeys !== 1 ? 's' : ''})` : '') +
         (json.data.deletedSource ? ` · deleted ${sourceBranch.name}` : '')
       )
       onMerged({ deletedSourceId: json.data.deletedSource ? sourceBranch.id : undefined })

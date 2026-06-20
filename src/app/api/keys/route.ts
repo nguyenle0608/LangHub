@@ -7,6 +7,7 @@ import { resolveBranchId } from '@/lib/branches/queries'
 
 const PostSchema = z.object({
   projectId: z.string().uuid(),
+  branchId: z.string().uuid().optional(),
   key: z.string().min(1).max(200).regex(/^[a-z0-9_.]+$/, {
     message: 'Key must be lowercase letters, numbers, dots, and underscores only',
   }),
@@ -44,13 +45,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   }
 
+  const branchId = await resolveBranchId(parsed.data.projectId, parsed.data.branchId)
+  if (!branchId) return NextResponse.json({ error: 'No branch found for project' }, { status: 400 })
+
   const result = await createTranslationKey({
     ...parsed.data,
+    branchId,
     userId: user.id,
   })
 
   if ('error' in result) {
-    return NextResponse.json({ error: result.error }, { status: 500 })
+    return NextResponse.json({ error: result.error }, { status: 400 })
   }
 
   return NextResponse.json(result, { status: 201 })
