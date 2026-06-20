@@ -62,6 +62,47 @@ function keyOverallStatus(
   return 'pending'
 }
 
+// A cell coordinate in the selectable grid: row = index over visible key rows,
+// col = index over visibleLocales.
+type Cell = { row: number; col: number }
+
+// Parse clipboard text (TSV from Excel/Sheets) into a 2D grid.
+// Handles double-quoted fields with embedded tabs/newlines and "" escapes.
+function parseClipboardTable(text: string): string[][] {
+  const rows: string[][] = []
+  let row: string[] = []
+  let field = ''
+  let inQuotes = false
+  let i = 0
+  while (i < text.length) {
+    const ch = text[i]
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { field += '"'; i += 2; continue }
+        inQuotes = false; i++; continue
+      }
+      field += ch; i++; continue
+    }
+    if (ch === '"') { inQuotes = true; i++; continue }
+    if (ch === '\t') { row.push(field); field = ''; i++; continue }
+    if (ch === '\r') { i++; continue }
+    if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; i++; continue }
+    field += ch; i++
+  }
+  row.push(field); rows.push(row)
+  // Drop a trailing empty row produced by a final newline
+  const last = rows[rows.length - 1]
+  if (last && last.length === 1 && last[0] === '') rows.pop()
+  return rows
+}
+
+// Serialize a 2D grid to TSV, quoting cells that contain tab/newline/quote.
+function serializeClipboardTable(grid: string[][]): string {
+  return grid
+    .map((r) => r.map((cell) => (/[\t\n\r"]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell)).join('\t'))
+    .join('\n')
+}
+
 // ---------------------------------------------------------------------------
 // Main TranslationTable
 // ---------------------------------------------------------------------------
@@ -92,6 +133,13 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
   const draggingLocaleRef = useRef<string | null>(null)
   const [dragOverLocaleId, setDragOverLocaleId] = useState<string | null>(null)
   const [selectedLocaleId, setSelectedLocaleId] = useState<string | null>(null)
+
+  // Excel-like range selection (drag across locale cells, then copy/paste)
+  const [selRange, setSelRange] = useState<{ anchor: Cell; focus: Cell } | null>(null)
+  const pointerDownRef = useRef(false)
+  const didDragRef = useRef(false)
+  const selRangeRef = useRef(selRange)
+  selRangeRef.current = selRange
 
   // Sorted locales: base first
   const locales = useMemo(() => {
@@ -201,6 +249,20 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
 
     return rows
   }, [filteredKeys, groupBy, collapsedGroups])
+
+  // Ordered list of visible key IDs (for mapping selection row index ↔ key)
+  const rowOrder = useMemo(
+    () => virtualRows.filter((r): r is Extract<VirtualRow, { type: 'key' }> => r.type === 'key').map((r) => r.item.id),
+    [virtualRows]
+  )
+  const rowIndexByKeyId = useMemo(() => {
+    const m = new Map<string, number>()
+    rowOrder.forEach((id, i) => m.set(id, i))
+    return m
+  }, [rowOrder])
+
+  // Clear any range selection when the visible set changes (coords would be stale)
+  useEffect(() => { setSelRange(null) }, [search, filterStatus, selectedLocaleId, groupBy])
 
   // Stats
   const stats = useMemo(() => {
@@ -318,6 +380,8 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         if (editingCell) {
           setEditingCell(null)
           setEditValue('')
+        } else if (selRange) {
+          setSelRange(null)
         } else {
           setSelectedKeyId(null)
         }
@@ -325,7 +389,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [editingCell])
+  }, [editingCell, selRange])
 
   // Virtualizer — measureElement enables dynamic row heights so tall cells don't clip
   const virtualizer = useVirtualizer({
@@ -626,6 +690,254 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
     }
     return map
   }, [presences])
+
+  // ── Excel-like copy / paste ──────────────────────────────────────────────
+  // Normalized selection bounds (inclusive) for highlight + copy/paste
+  const selBounds = selRange
+    ? {
+        r0: Math.min(selRange.anchor.row, selRange.focus.row),
+        r1: Math.max(selRange.anchor.row, selRange.focus.row),
+        c0: Math.min(selRange.anchor.col, selRange.focus.col),
+        c1: Math.max(selRange.anchor.col, selRange.focus.col),
+      }
+    : null
+
+  // Mirror latest render state into a ref so the once-bound listeners read fresh data
+  const latestRef = useRef<{
+    selRange: typeof selRange
+    editingCell: string | null
+    keys: KeyWithTranslations[]
+    visibleLocales: typeof visibleLocales
+    rowOrder: string[]
+    lockedCols: Set<string>
+  }>({ selRange: null, editingCell: null, keys: [], visibleLocales: [], rowOrder: [], lockedCols: new Set() })
+  latestRef.current = { selRange, editingCell, keys, visibleLocales, rowOrder, lockedCols }
+
+  // Keep a fresh reference to startEdit for the once-bound keydown listener
+  const startEditRef = useRef(startEdit)
+  startEditRef.current = startEdit
+
+  const applyPaste = useCallback((grid: string[][]) => {
+    const { selRange: sel, rowOrder: order, visibleLocales: vis, lockedCols: locked } = latestRef.current
+    if (!sel || grid.length === 0) return
+    const aRow = Math.min(sel.anchor.row, sel.focus.row)
+    const aCol = Math.min(sel.anchor.col, sel.focus.col)
+
+    const items: { keyId: string; localeId: string; value: string; status: 'pending' | 'empty' }[] = []
+    let lockedSkipped = 0
+    for (let i = 0; i < grid.length; i++) {
+      const gridRow = grid[i]
+      if (!gridRow) continue
+      const keyId = order[aRow + i]
+      if (!keyId) break // past the last row
+      for (let j = 0; j < gridRow.length; j++) {
+        const locale = vis[aCol + j]
+        if (!locale) continue // past the last column
+        if (locked.has(locale.id)) { lockedSkipped++; continue }
+        const value = gridRow[j] ?? ''
+        items.push({ keyId, localeId: locale.id, value, status: value.trim() ? 'pending' : 'empty' })
+      }
+    }
+    if (items.length === 0) {
+      if (lockedSkipped) toast.error('Target column is locked')
+      return
+    }
+
+    // Optimistic update
+    const byKey = new Map<string, typeof items>()
+    for (const it of items) {
+      const arr = byKey.get(it.keyId) ?? []
+      arr.push(it)
+      byKey.set(it.keyId, arr)
+    }
+    setKeys((prev) =>
+      prev.map((k) => {
+        const its = byKey.get(k.id)
+        if (!its) return k
+        const trans = [...k.translations]
+        for (const it of its) {
+          const idx = trans.findIndex((t) => t.locale_id === it.localeId)
+          const existing = idx >= 0 ? trans[idx] : undefined
+          if (existing) {
+            trans[idx] = { ...existing, value: it.value, status: it.status }
+          } else {
+            trans.push({
+              id: `optimistic-${it.localeId}`,
+              key_id: k.id, locale_id: it.localeId, value: it.value, status: it.status,
+              updated_at: new Date().toISOString(),
+              translated_by: null, reviewed_by: null,
+              ai_model: null, ai_suggested_at: null, ai_suggestion: null,
+            })
+          }
+        }
+        return { ...k, translations: trans }
+      })
+    )
+
+    // Persist
+    void fetch('/api/translations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({})) as { error?: string }
+          toast.error(json.error ?? 'Paste failed')
+        } else {
+          toast.success(
+            `Pasted ${items.length} cell${items.length > 1 ? 's' : ''}` +
+            (lockedSkipped ? ` · ${lockedSkipped} locked skipped` : '')
+          )
+        }
+      })
+      .catch(() => toast.error('Network error'))
+  }, [])
+
+  // Clear the contents of every non-empty, non-locked cell in the selection
+  const clearSelection = useCallback(() => {
+    const { selRange: sel, rowOrder: order, visibleLocales: vis, lockedCols: locked, keys: cur } = latestRef.current
+    if (!sel) return
+    const r0 = Math.min(sel.anchor.row, sel.focus.row), r1 = Math.max(sel.anchor.row, sel.focus.row)
+    const c0 = Math.min(sel.anchor.col, sel.focus.col), c1 = Math.max(sel.anchor.col, sel.focus.col)
+    const keyById = new Map(cur.map((k) => [k.id, k]))
+
+    const items: { keyId: string; localeId: string; value: string; status: 'empty' }[] = []
+    let lockedSkipped = 0
+    for (let r = r0; r <= r1; r++) {
+      const keyId = order[r]
+      if (!keyId) continue
+      const key = keyById.get(keyId)
+      for (let c = c0; c <= c1; c++) {
+        const locale = vis[c]
+        if (!locale) continue
+        if (locked.has(locale.id)) { lockedSkipped++; continue }
+        const t = key?.translations.find((tr) => tr.locale_id === locale.id)
+        if (!t?.value) continue // already empty
+        items.push({ keyId, localeId: locale.id, value: '', status: 'empty' })
+      }
+    }
+    if (items.length === 0) {
+      if (lockedSkipped) toast.error('Selected column is locked')
+      return
+    }
+
+    const targetSet = new Set(items.map((it) => `${it.keyId}:${it.localeId}`))
+    setKeys((prev) =>
+      prev.map((k) => {
+        const trans = k.translations.map((tr) =>
+          targetSet.has(`${k.id}:${tr.locale_id}`) ? { ...tr, value: '', status: 'empty' } : tr
+        )
+        return { ...k, translations: trans }
+      })
+    )
+
+    void fetch('/api/translations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({})) as { error?: string }
+          toast.error(json.error ?? 'Clear failed')
+        } else {
+          toast.success(`Cleared ${items.length} cell${items.length > 1 ? 's' : ''}`)
+        }
+      })
+      .catch(() => toast.error('Network error'))
+  }, [])
+
+  useEffect(() => {
+    const isEditableTarget = (el: Element | null) => {
+      if (!el) return false
+      const tag = el.tagName
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el as HTMLElement).isContentEditable
+    }
+
+    const onCopy = (e: ClipboardEvent) => {
+      const { selRange: sel, editingCell: editing, rowOrder: order, visibleLocales: vis, keys: cur } = latestRef.current
+      if (!sel || editing || isEditableTarget(document.activeElement)) return
+      const r0 = Math.min(sel.anchor.row, sel.focus.row), r1 = Math.max(sel.anchor.row, sel.focus.row)
+      const c0 = Math.min(sel.anchor.col, sel.focus.col), c1 = Math.max(sel.anchor.col, sel.focus.col)
+      const keyById = new Map(cur.map((k) => [k.id, k]))
+      const grid: string[][] = []
+      for (let r = r0; r <= r1; r++) {
+        const keyId = order[r]
+        const key = keyId ? keyById.get(keyId) : undefined
+        const line: string[] = []
+        for (let c = c0; c <= c1; c++) {
+          const localeId = vis[c]?.id
+          const t = key?.translations.find((tr) => tr.locale_id === localeId)
+          line.push(t?.value ?? '')
+        }
+        grid.push(line)
+      }
+      e.preventDefault()
+      e.clipboardData?.setData('text/plain', serializeClipboardTable(grid))
+    }
+
+    const onPaste = (e: ClipboardEvent) => {
+      const { selRange: sel, editingCell: editing } = latestRef.current
+      if (!sel || editing || isEditableTarget(document.activeElement)) return
+      const text = e.clipboardData?.getData('text/plain') ?? ''
+      if (!text) return
+      e.preventDefault()
+      applyPaste(parseClipboardTable(text))
+    }
+
+    const onMouseUp = () => { pointerDownRef.current = false }
+
+    // Clicking anywhere outside a translation cell clears the cell selection
+    const onDocMouseDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target?.closest('[data-cell]')) return
+      if (latestRef.current.selRange) setSelRange(null)
+    }
+
+    // Enter / F2 → edit the selected cell; typing a char → overwrite (Excel-style)
+    const onKeyDown = (e: KeyboardEvent) => {
+      const { selRange: sel, editingCell: editing, rowOrder: order, visibleLocales: vis, keys: cur, lockedCols: locked } = latestRef.current
+      if (editing || !sel || isEditableTarget(document.activeElement)) return
+
+      // Delete / Backspace → clear all selected cells
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault()
+        clearSelection()
+        return
+      }
+
+      const keyId = order[sel.focus.row]
+      const locale = vis[sel.focus.col]
+      if (!keyId || !locale || locked.has(locale.id)) return
+
+      if (e.key === 'Enter' || e.key === 'F2') {
+        e.preventDefault()
+        const key = cur.find((k) => k.id === keyId)
+        const t = key?.translations.find((tr) => tr.locale_id === locale.id)
+        startEditRef.current(keyId, locale.id, t?.value ?? '')
+        return
+      }
+      // Printable char (not space) with no modifiers → start editing, replacing content
+      if (e.key.length === 1 && e.key !== ' ' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault()
+        startEditRef.current(keyId, locale.id, e.key)
+      }
+    }
+
+    document.addEventListener('copy', onCopy)
+    document.addEventListener('paste', onPaste)
+    document.addEventListener('mouseup', onMouseUp)
+    document.addEventListener('mousedown', onDocMouseDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('copy', onCopy)
+      document.removeEventListener('paste', onPaste)
+      document.removeEventListener('mouseup', onMouseUp)
+      document.removeEventListener('mousedown', onDocMouseDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [applyPaste, clearSelection])
 
   // Column drag-to-reorder
   const handleColDragStart = useCallback((e: React.DragEvent, localeId: string) => {
@@ -1193,6 +1505,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
                       const keyItem = row.item
                       const isSelected = selectedRows.has(keyItem.id)
                       const isActive = selectedKeyId === keyItem.id
+                      const rowIndex = rowIndexByKeyId.get(keyItem.id) ?? -1
                       const keyParts = keyItem.key.split('.')
                       const displayKey = groupBy && row.depth > 0 ? (keyParts[keyParts.length - 1] ?? keyItem.key) : keyItem.key
 
@@ -1246,7 +1559,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
                           )}
 
                           {/* Translation cells */}
-                          {visibleLocales.map((locale) => {
+                          {visibleLocales.map((locale, colIndex) => {
                             const t = keyItem.translations.find((tr) => tr.locale_id === locale.id)
                             const cellId = `${keyItem.id}:${locale.id}`
                             const isEditingThis = editingCell === cellId
@@ -1254,16 +1567,47 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
                             const presenceColor = presenceCellMap.get(cellId)
                             const isFrozen = frozenCols.has(locale.id)
                             const isLocked = lockedCols.has(locale.id)
+                            const inSel = !!selBounds && !isEditingThis &&
+                              rowIndex >= selBounds.r0 && rowIndex <= selBounds.r1 &&
+                              colIndex >= selBounds.c0 && colIndex <= selBounds.c1
 
                             return (
                               <Fragment key={locale.id}>
                                 <div
-                                  className={cn('h-[84px]', isFrozen && cn(
+                                  data-cell="1"
+                                  className={cn('relative h-[84px] select-none', isFrozen && cn(
                                     'sticky z-10',
                                     isActive ? 'bg-zinc-800' : 'bg-zinc-950 group-hover:bg-zinc-800',
                                     isSelected && 'bg-blue-950'
                                   ))}
                                   style={isFrozen ? { left: stickyLeft.get(locale.id) } : undefined}
+                                  onMouseDown={(e) => {
+                                    if (e.button !== 0 || isEditingThis) return
+                                    // Commit any edit in another cell — preventDefault below blocks the native blur
+                                    const ae = document.activeElement as HTMLElement | null
+                                    if (ae && (ae.tagName === 'TEXTAREA' || ae.tagName === 'INPUT')) ae.blur()
+                                    if (e.shiftKey && selRangeRef.current) {
+                                      e.preventDefault()
+                                      didDragRef.current = true
+                                      setSelRange({ anchor: selRangeRef.current.anchor, focus: { row: rowIndex, col: colIndex } })
+                                      return
+                                    }
+                                    e.preventDefault()
+                                    pointerDownRef.current = true
+                                    didDragRef.current = false
+                                    setSelRange({ anchor: { row: rowIndex, col: colIndex }, focus: { row: rowIndex, col: colIndex } })
+                                  }}
+                                  onMouseEnter={() => {
+                                    if (!pointerDownRef.current) return
+                                    didDragRef.current = true
+                                    setSelRange((prev) => (prev ? { anchor: prev.anchor, focus: { row: rowIndex, col: colIndex } } : prev))
+                                  }}
+                                  onClick={() => { didDragRef.current = false }}
+                                  onDoubleClick={() => {
+                                    if (isLocked || isEditingThis) return
+                                    setSelRange(null)
+                                    startEdit(keyItem.id, locale.id, t?.value ?? '')
+                                  }}
                                 >
                                   <TranslationCell
                                     value={t?.value ?? null}
@@ -1275,10 +1619,12 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
                                     presenceColor={presenceColor}
                                     isReadonly={isLocked}
                                     onEditValueChange={setEditValue}
-                                    onStartEdit={() => { startEdit(keyItem.id, locale.id, t?.value ?? '') }}
                                     onSave={() => void saveCell(keyItem.id, locale.id)}
                                     onCancel={cancelEdit}
                                   />
+                                  {inSel && (
+                                    <div className="pointer-events-none absolute inset-0 z-20 bg-blue-500/15 ring-1 ring-inset ring-blue-400/70" />
+                                  )}
                                 </div>
                               </Fragment>
                             )

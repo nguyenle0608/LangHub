@@ -29,16 +29,21 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json(result)
 }
 
+const STATUS_ENUM = z.enum(['empty', 'pending', 'reviewed', 'approved'])
+
 const BulkUpsertSchema = z.object({
-  status: z.enum(['reviewed', 'approved']).default('approved'),
+  // Default status applied to items that don't specify their own
+  status: STATUS_ENUM.default('approved'),
   items: z.array(z.object({
     keyId: z.string().uuid(),
     localeId: z.string().uuid(),
     value: z.string(),
+    status: STATUS_ENUM.optional(),
   })).min(1).max(5000),
 })
 
-// Bulk upsert — single DB upsert for all items with given status
+// Bulk upsert — single DB upsert for all items.
+// Used by: Approve all / Review all (top-level status) and paste (per-item status).
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -55,7 +60,7 @@ export async function POST(req: NextRequest) {
     key_id: item.keyId,
     locale_id: item.localeId,
     value: item.value,
-    status: parsed.data.status,
+    status: item.status ?? parsed.data.status,
     updated_at: now,
   }))
 

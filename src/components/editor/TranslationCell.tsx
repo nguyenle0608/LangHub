@@ -14,7 +14,6 @@ interface Props {
   presenceColor?: string
   isReadonly?: boolean
   onEditValueChange: (v: string) => void
-  onStartEdit: () => void
   onSave: () => void
   onCancel: () => void
 }
@@ -36,7 +35,6 @@ export function TranslationCell({
   presenceColor,
   isReadonly,
   onEditValueChange,
-  onStartEdit,
   onSave,
   onCancel,
 }: Props) {
@@ -72,7 +70,7 @@ export function TranslationCell({
               onCancel()
             }
           }}
-          className="w-full h-full resize-none overflow-y-auto bg-zinc-800 text-zinc-100 text-sm px-3 py-2 focus:outline-none leading-relaxed"
+          className="w-full h-full resize-none overflow-y-auto select-text bg-zinc-800 text-zinc-100 text-sm px-3 py-2 focus:outline-none leading-relaxed"
           placeholder="Enter translation…"
         />
         {charLimit !== null && (
@@ -94,10 +92,9 @@ export function TranslationCell({
 
   return (
     <div
-      onClick={isReadonly ? undefined : onStartEdit}
       className={cn(
         'relative h-full w-full px-3 py-2 flex flex-col justify-start text-sm transition-colors',
-        isReadonly ? 'cursor-default bg-zinc-900/30' : 'cursor-text hover:bg-zinc-800/60',
+        isReadonly ? 'cursor-default bg-zinc-900/30' : 'cursor-default hover:bg-zinc-800/60',
         isEmpty ? 'text-zinc-600 italic' : 'text-zinc-200',
         presenceColor && 'ring-inset ring-1'
       )}
