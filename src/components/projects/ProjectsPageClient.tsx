@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { LayoutGrid, List, LogOut, ArrowUpDown, Plus, Settings } from 'lucide-react'
+import { LayoutGrid, List, LogOut, ArrowUpDown, Plus } from 'lucide-react'
+import { Logo } from '@/components/Logo'
 import { toast } from 'sonner'
 import { ProjectCard } from './ProjectCard'
 import { CreateProjectDialog } from './CreateProjectDialog'
@@ -19,6 +20,8 @@ interface Props {
   orgs: OrgWithStats[]
   currentOrgId: string
   userEmail: string | undefined
+  userRole: string
+  hasOrgParam: boolean
 }
 
 function sortProjects(projects: ProjectWithStats[], sort: SortKey): ProjectWithStats[] {
@@ -30,12 +33,21 @@ function sortProjects(projects: ProjectWithStats[], sort: SortKey): ProjectWithS
   })
 }
 
-export function ProjectsPageClient({ projects, orgs, currentOrgId, userEmail }: Props) {
+export function ProjectsPageClient({ projects, orgs, currentOrgId, userEmail, userRole, hasOrgParam }: Props) {
   const router = useRouter()
   const [view, setView] = useState<ViewMode>('grid')
   const [sort, setSort] = useState<SortKey>('name')
   const [loggingOut, setLoggingOut] = useState(false)
   const [createOrgOpen, setCreateOrgOpen] = useState(false)
+
+  // Silently update URL with default org — avoids server-side redirect flash
+  useEffect(() => {
+    if (!hasOrgParam && currentOrgId) {
+      router.replace(`/projects?org=${currentOrgId}`, { scroll: false })
+    }
+  }, [hasOrgParam, currentOrgId, router])
+
+  const canDelete = userRole === 'owner'
 
   const sorted = sortProjects(projects, sort)
 
@@ -68,42 +80,22 @@ export function ProjectsPageClient({ projects, orgs, currentOrgId, userEmail }: 
       {/* Header */}
       <header className="border-b border-zinc-800 bg-zinc-900/50 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+          {/* Left: logo + org switcher */}
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded bg-blue-600 flex items-center justify-center flex-shrink-0">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-3.5 h-3.5 text-white">
-                <path d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
-              </svg>
-            </div>
+            <Logo size={30} />
             <span className="font-semibold text-zinc-100 tracking-tight hidden sm:inline">LangHub</span>
             <span className="text-zinc-700 hidden sm:inline">/</span>
             <OrgSwitcher
               orgs={orgs}
               currentOrgId={currentOrgId}
+              canManageOrg={canManageOrg}
               onSwitch={handleOrgSwitch}
               onCreateNew={() => setCreateOrgOpen(true)}
             />
           </div>
-          <div className="flex items-center gap-3">
-            {canManageOrg && (
-              <a
-                href={`/orgs/${currentOrgId}/settings`}
-                className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-100 transition-colors"
-                title="Workspace settings"
-              >
-                <Settings className="h-4 w-4" />
-                <span className="hidden sm:inline">Settings</span>
-              </a>
-            )}
-            <span className="text-sm text-zinc-500 hidden sm:inline">{userEmail}</span>
-            <button
-              onClick={handleLogout}
-              disabled={loggingOut}
-              className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-100 transition-colors disabled:opacity-50"
-            >
-              <LogOut className="h-4 w-4" />
-              <span className="hidden sm:inline">{loggingOut ? 'Signing out…' : 'Sign out'}</span>
-            </button>
-          </div>
+
+          {/* Right: user avatar dropdown */}
+          <UserMenu email={userEmail} onLogout={handleLogout} loggingOut={loggingOut} />
         </div>
       </header>
 
@@ -181,7 +173,7 @@ export function ProjectsPageClient({ projects, orgs, currentOrgId, userEmail }: 
         ) : view === 'grid' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {sorted.map((project) => (
-              <ProjectCard key={project.id} project={project} />
+              <ProjectCard key={project.id} project={project} canDelete={canDelete} />
             ))}
           </div>
         ) : (
@@ -195,7 +187,7 @@ export function ProjectsPageClient({ projects, orgs, currentOrgId, userEmail }: 
               <div />
             </div>
             {sorted.map((project) => (
-              <ProjectListRow key={project.id} project={project} />
+              <ProjectListRow key={project.id} project={project} canDelete={canDelete} />
             ))}
           </div>
         )}
@@ -204,7 +196,7 @@ export function ProjectsPageClient({ projects, orgs, currentOrgId, userEmail }: 
   )
 }
 
-function ProjectListRow({ project }: { project: ProjectWithStats }) {
+function ProjectListRow({ project, canDelete }: { project: ProjectWithStats; canDelete: boolean }) {
   const router = useRouter()
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -250,7 +242,7 @@ function ProjectListRow({ project }: { project: ProjectWithStats }) {
       <span className="text-sm text-zinc-400 tabular-nums">{project.key_count}</span>
       <span className="text-sm text-zinc-400 tabular-nums">{project.locale_count}</span>
       <div className="flex items-center justify-end" onClick={(e) => e.preventDefault()}>
-        {confirmDelete ? (
+        {canDelete && (confirmDelete ? (
           <div className="flex gap-1">
             <button
               onClick={handleDelete}
@@ -275,8 +267,63 @@ function ProjectListRow({ project }: { project: ProjectWithStats }) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
           </button>
-        )}
+        ))}
       </div>
     </a>
+  )
+}
+
+function UserMenu({
+  email,
+  onLogout,
+  loggingOut,
+}: {
+  email: string | undefined
+  onLogout: () => void
+  loggingOut: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const initial = (email?.[0] ?? '?').toUpperCase()
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold text-white hover:bg-blue-500 transition-colors"
+        title={email}
+      >
+        {initial}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-10 w-56 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl z-50 overflow-hidden">
+          <div className="px-4 py-3 border-b border-zinc-800">
+            <p className="text-xs text-zinc-500">Signed in as</p>
+            <p className="text-sm text-zinc-200 font-medium truncate mt-0.5">{email ?? '—'}</p>
+          </div>
+          <div className="p-1">
+            <button
+              onClick={() => { setOpen(false); onLogout() }}
+              disabled={loggingOut}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded transition-colors disabled:opacity-50"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              {loggingOut ? 'Signing out…' : 'Sign out'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }

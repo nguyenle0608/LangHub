@@ -182,8 +182,8 @@ function TranslationsPane({
         const isSaving = saving.has(locale.id)
         const isApproving = approving.has(locale.id)
         const isReviewing = reviewing.has(locale.id)
-        const canReview = canManage && !!draft.trim() && t?.status !== 'reviewed' && t?.status !== 'approved'
-        const canApprove = canManage && !!draft.trim() && t?.status !== 'approved'
+        const canReview = canEdit && !!draft.trim() && t?.status !== 'reviewed' && t?.status !== 'approved'
+        const canApprove = canEdit && !!draft.trim() && t?.status !== 'approved'
         const charLimit = keyItem.char_limit
         const overLimit = charLimit !== null && draft.length > charLimit
 

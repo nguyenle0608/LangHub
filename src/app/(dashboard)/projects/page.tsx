@@ -19,12 +19,8 @@ export default async function ProjectsPage({
   }
 
   const currentOrgId = searchParams.org ?? orgs[0]?.id ?? ''
-
-  if (!searchParams.org && orgs[0]) {
-    redirect(`/projects?org=${orgs[0].id}`)
-  }
-
   const projects = await getProjectsByOrg(currentOrgId)
+  const currentOrg = orgs.find((o) => o.id === currentOrgId)
 
   return (
     <ProjectsPageClient
@@ -32,6 +28,8 @@ export default async function ProjectsPage({
       orgs={orgs}
       currentOrgId={currentOrgId}
       userEmail={user.email}
+      userRole={currentOrg?.role ?? 'viewer'}
+      hasOrgParam={!!searchParams.org}
     />
   )
 }

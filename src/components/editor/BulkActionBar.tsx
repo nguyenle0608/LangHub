@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 interface Props {
   selectedCount: number
   projectId: string
+  canReview: boolean
   canDelete: boolean
   onClear: () => void
   onDelete: () => void
@@ -15,7 +16,7 @@ interface Props {
   onApprove: () => void
 }
 
-export function BulkActionBar({ selectedCount, projectId, canDelete, onClear, onDelete, onReview, onApprove }: Props) {
+export function BulkActionBar({ selectedCount, projectId, canReview, canDelete, onClear, onDelete, onReview, onApprove }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [snapshotting, setSnapshotting] = useState(false)
 
@@ -70,27 +71,31 @@ export function BulkActionBar({ selectedCount, projectId, canDelete, onClear, on
         </div>
       )}
 
-      <Button
-        size="sm"
-        variant="outline"
-        className="gap-1.5 h-8 text-xs border-zinc-700 text-blue-400 hover:text-blue-300 hover:bg-blue-950/40"
-        onClick={onReview}
-        disabled={confirmDelete}
-      >
-        <Eye className="h-3.5 w-3.5" />
-        Review all
-      </Button>
+      {canReview && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1.5 h-8 text-xs border-zinc-700 text-blue-400 hover:text-blue-300 hover:bg-blue-950/40"
+          onClick={onReview}
+          disabled={confirmDelete}
+        >
+          <Eye className="h-3.5 w-3.5" />
+          Review all
+        </Button>
+      )}
 
-      <Button
-        size="sm"
-        variant="outline"
-        className="gap-1.5 h-8 text-xs border-zinc-700"
-        onClick={onApprove}
-        disabled={confirmDelete}
-      >
-        <CheckCircle className="h-3.5 w-3.5" />
-        Approve all
-      </Button>
+      {canReview && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1.5 h-8 text-xs border-zinc-700"
+          onClick={onApprove}
+          disabled={confirmDelete}
+        >
+          <CheckCircle className="h-3.5 w-3.5" />
+          Approve all
+        </Button>
+      )}
 
       {canDelete && (confirmDelete ? (
         <>

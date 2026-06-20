@@ -1,17 +1,18 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { ChevronDown, Check, Plus, Building2 } from 'lucide-react'
+import { ChevronDown, Check, Plus, Building2, Settings } from 'lucide-react'
 import type { OrgWithStats } from '@/types'
 
 interface Props {
   orgs: OrgWithStats[]
   currentOrgId: string
+  canManageOrg: boolean
   onSwitch: (orgId: string) => void
   onCreateNew: () => void
 }
 
-export function OrgSwitcher({ orgs, currentOrgId, onSwitch, onCreateNew }: Props) {
+export function OrgSwitcher({ orgs, currentOrgId, canManageOrg, onSwitch, onCreateNew }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -77,6 +78,18 @@ export function OrgSwitcher({ orgs, currentOrgId, onSwitch, onCreateNew }: Props
           </div>
 
           <div className="border-t border-zinc-800 py-1">
+            {canManageOrg && currentOrgId && (
+              <a
+                href={`/orgs/${currentOrgId}/settings`}
+                onClick={() => setOpen(false)}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-zinc-800 transition-colors"
+              >
+                <div className="w-6 h-6 rounded bg-zinc-800 flex items-center justify-center flex-shrink-0">
+                  <Settings className="h-3 w-3 text-zinc-400" />
+                </div>
+                <span className="text-sm text-zinc-400">Workspace settings</span>
+              </a>
+            )}
             <button
               onClick={() => {
                 onCreateNew()

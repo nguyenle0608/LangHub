@@ -125,9 +125,11 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Role-based permissions
-  const canEdit = user.role !== 'viewer'
-  const canManage = user.role === 'owner' || user.role === 'admin'
-  const canEditKeys = user.role === 'owner'   // only owner can rename/delete keys
+  const canEdit = user.role !== 'viewer'         // edit translation content
+  const canSelect = user.role !== 'viewer'       // can select rows (checkbox visible)
+  const canReview = user.role !== 'viewer'       // can review / approve translations
+  const canManage = user.role === 'owner' || user.role === 'admin'  // import, add key, manage locales
+  const canEditKeys = user.role === 'owner'      // rename / delete keys
 
   // State
   const [keys, setKeys] = useState(initialKeys)
@@ -400,7 +402,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
   )
 
   useRealtime({ keyIds, onUpdate: handleRealtimeUpdate })
-  const { presences, trackCell } = usePresence(project.id, user)
+  const { presences, trackCell, clearCell } = usePresence(project.id, user)
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -438,9 +440,9 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
     (keyId: string, localeId: string, currentValue: string) => {
       setEditingCell(`${keyId}:${localeId}`)
       setEditValue(currentValue)
-      void trackCell(keyId, localeId)
+      // trackCell fires via textarea onFocus — no need to call here
     },
-    [trackCell]
+    []
   )
 
   const saveCell = useCallback(
@@ -534,17 +536,17 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         toast.error('Network error')
       } finally {
         setSavingCell(null)
-        void trackCell(null, null)
+        // trackCell(null) fires via textarea onBlur — no need to call here
       }
     },
-    [editValue, locales, keys, trackCell, pushUndo]
+    [editValue, locales, keys, pushUndo]
   )
 
   const cancelEdit = useCallback(() => {
     setEditingCell(null)
     setEditValue('')
-    void trackCell(null, null)
-  }, [trackCell])
+    // trackCell(null) fires via textarea onBlur — no need to call here
+  }, [])
 
   // Row selection
   const toggleRow = useCallback((keyId: string, e: React.MouseEvent) => {
@@ -603,6 +605,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
   }, [selectedRows])
 
   const handleBulkApprove = useCallback(async () => {
+    if (!canReview) return
     const ids = Array.from(selectedRows)
     const items = ids.flatMap((keyId) => {
       const key = keys.find((k) => k.id === keyId)
@@ -638,9 +641,10 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
     )
     setSelectedRows(new Set())
     toast.success(`Approved ${ids.length} key${ids.length > 1 ? 's' : ''}`)
-  }, [selectedRows, locales, keys])
+  }, [canReview, selectedRows, locales, keys])
 
   const handleBulkReview = useCallback(async () => {
+    if (!canReview) return
     const ids = Array.from(selectedRows)
     const items = ids.flatMap((keyId) => {
       const key = keys.find((k) => k.id === keyId)
@@ -678,7 +682,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
     )
     setSelectedRows(new Set())
     toast.success(`Marked ${ids.length} key${ids.length > 1 ? 's' : ''} as reviewed`)
-  }, [selectedRows, locales, keys])
+  }, [canReview, selectedRows, locales, keys])
 
   // Column layout
   const COLS = { check: 40, key: 224, locale: 200, status: 88 }
@@ -1430,25 +1434,39 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
       </div>
 
       {/* ── Presence bar ── */}
-      {presences.length > 0 && (
-        <div className="h-7 border-b border-zinc-800/50 bg-blue-950/30 flex items-center px-4 gap-2 flex-shrink-0">
-          <div className="flex -space-x-1">
-            {presences.slice(0, 4).map((p) => (
-              <div
-                key={p.userId}
-                className="w-4 h-4 rounded-full border border-zinc-900 flex items-center justify-center text-[8px] font-bold"
-                style={{ backgroundColor: p.color }}
-                title={p.email}
-              >
-                {(p.email[0] ?? '?').toUpperCase()}
+      {/* Always render — height reserved so grid never shifts. Fade content in/out. */}
+      {(() => {
+        const active = presences.filter((p) => p.keyId)
+        const visible = active.length > 0
+        return (
+          <div className="h-7 border-b border-zinc-800/50 flex-shrink-0 overflow-hidden relative">
+            <div
+              className={cn(
+                'absolute inset-0 bg-blue-950/30 flex items-center px-4 gap-2 transition-opacity duration-300',
+                visible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+              )}
+            >
+              <div className="flex -space-x-1">
+                {active.slice(0, 4).map((p) => (
+                  <div
+                    key={p.userId}
+                    className="w-4 h-4 rounded-full border border-zinc-900 flex items-center justify-center text-[8px] font-bold"
+                    style={{ backgroundColor: p.color }}
+                    title={p.email}
+                  >
+                    {(p.email[0] ?? '?').toUpperCase()}
+                  </div>
+                ))}
               </div>
-            ))}
+              <span className="text-xs text-blue-300/70">
+                {active.length === 1
+                  ? `${active[0]!.email} is editing`
+                  : `${active.length} people editing`}
+              </span>
+            </div>
           </div>
-          <span className="text-xs text-blue-300/70">
-            {presences[0]?.email} is editing
-          </span>
-        </div>
-      )}
+        )
+      })()}
 
       {/* ── Main content ── */}
       <div className="flex flex-1 overflow-hidden">
@@ -1544,12 +1562,12 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
               className="sticky top-0 z-10 bg-zinc-900 border-b border-zinc-800 grid min-w-max"
               style={{ gridTemplateColumns: gridCols }}
             >
-              {/* Checkbox — only for managers */}
+              {/* Checkbox — viewer excluded */}
               <div
                 className="flex items-center justify-center h-9 sticky z-20 bg-zinc-900"
                 style={{ left: stickyLeft.get('check') }}
               >
-                {canManage && (
+                {canSelect && (
                   <input
                     type="checkbox"
                     checked={selectedRows.size === filteredKeys.length && filteredKeys.length > 0}
@@ -1779,9 +1797,9 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
                               isSelected && 'bg-blue-950'
                             )}
                             style={{ left: stickyLeft.get('check') }}
-                            onClick={(e) => canManage && toggleRow(keyItem.id, e)}
+                            onClick={(e) => canSelect && toggleRow(keyItem.id, e)}
                           >
-                            {canManage && <input type="checkbox" checked={isSelected} onChange={() => undefined} className="accent-blue-500 cursor-pointer" />}
+                            {canSelect && <input type="checkbox" checked={isSelected} onChange={() => undefined} className="accent-blue-500 cursor-pointer" />}
                           </div>
 
                           {/* Key name */}
@@ -1869,6 +1887,8 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
                                     presenceColor={presenceColor}
                                     isReadonly={isLocked}
                                     onEditValueChange={setEditValue}
+                                    onFocused={() => trackCell(keyItem.id, locale.id)}
+                                    onBlurred={clearCell}
                                     onSave={() => void saveCell(keyItem.id, locale.id)}
                                     onCancel={cancelEdit}
                                   />
@@ -1909,11 +1929,12 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         onKeyDeleted={handleKeyDeleted}
       />
 
-      {/* Bulk action bar — managers only */}
-      {canManage && selectedRows.size > 0 && (
+      {/* Bulk action bar — translators+ see count/clear; review/approve/delete gated inside */}
+      {canSelect && selectedRows.size > 0 && (
         <BulkActionBar
           selectedCount={selectedRows.size}
           projectId={project.id}
+          canReview={canReview}
           canDelete={canEditKeys}
           onClear={() => setSelectedRows(new Set())}
           onDelete={handleBulkDelete}

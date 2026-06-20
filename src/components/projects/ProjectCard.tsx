@@ -18,7 +18,7 @@ function ProgressBar({ percent }: { percent: number }) {
   )
 }
 
-export function ProjectCard({ project }: { project: ProjectWithStats }) {
+export function ProjectCard({ project, canDelete }: { project: ProjectWithStats; canDelete: boolean }) {
   const router = useRouter()
   const [menuOpen, setMenuOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -111,22 +111,26 @@ export function ProjectCard({ project }: { project: ProjectWithStats }) {
                   <ExternalLink className="h-3.5 w-3.5" />
                   Open editor
                 </Link>
-                <Link
-                  href={`/${project.id}/settings`}
-                  className="flex items-center gap-2.5 px-3 py-2 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
-                  onClick={() => setMenuOpen(false)}
-                >
-                  <Settings className="h-3.5 w-3.5" />
-                  Settings
-                </Link>
-                <div className="border-t border-zinc-800 my-1" />
-                <button
-                  onClick={() => setConfirmDelete(true)}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete project
-                </button>
+                {canDelete && (
+                  <>
+                    <Link
+                      href={`/${project.id}/settings`}
+                      className="flex items-center gap-2.5 px-3 py-2 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <Settings className="h-3.5 w-3.5" />
+                      Settings
+                    </Link>
+                    <div className="border-t border-zinc-800 my-1" />
+                    <button
+                      onClick={() => setConfirmDelete(true)}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete project
+                    </button>
+                  </>
+                )}
               </>
             ) : (
               <div className="px-3 py-2 space-y-2">
