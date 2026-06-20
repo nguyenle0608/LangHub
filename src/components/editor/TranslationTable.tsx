@@ -6,7 +6,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   Search, Plus, Download, Upload, ChevronRight,
   Sparkles, LogOut, ListFilter, Layers2, ChevronDown,
-  Columns3, Eye, EyeOff, Pin, PinOff, Lock, Unlock, GripVertical,
+  Columns3, Eye, EyeOff, Pin, PinOff, Lock, Unlock, GripVertical, Undo2, Redo2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -65,6 +65,10 @@ function keyOverallStatus(
 // A cell coordinate in the selectable grid: row = index over visible key rows,
 // col = index over visibleLocales.
 type Cell = { row: number; col: number }
+
+// One cell's value/status transition, for undo/redo history.
+type CellState = { value: string; status: string }
+type CellChange = { keyId: string; localeId: string; before: CellState; after: CellState }
 
 // Parse clipboard text (TSV from Excel/Sheets) into a 2D grid.
 // Handles double-quoted fields with embedded tabs/newlines and "" escapes.
@@ -140,6 +144,20 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
   const didDragRef = useRef(false)
   const selRangeRef = useRef(selRange)
   selRangeRef.current = selRange
+
+  // Undo/redo history of cell value/status changes (edit, paste, clear)
+  const undoRef = useRef<CellChange[][]>([])
+  const redoRef = useRef<CellChange[][]>([])
+  const [, setHistTick] = useState(0)
+  const HISTORY_LIMIT = 200
+  const pushUndo = useCallback((changes: CellChange[]) => {
+    const real = changes.filter((c) => c.before.value !== c.after.value || c.before.status !== c.after.status)
+    if (real.length === 0) return
+    undoRef.current.push(real)
+    if (undoRef.current.length > HISTORY_LIMIT) undoRef.current.shift()
+    redoRef.current = []
+    setHistTick((t) => t + 1)
+  }, [])
 
   // Sorted locales: base first
   const locales = useMemo(() => {
@@ -420,6 +438,14 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
       const isBase = locales.find((l) => l.id === localeId)?.is_base ?? false
       const status = value.trim() ? 'pending' : 'empty'
 
+      // Record for undo (before applying the optimistic update)
+      const prevCell = keys.find((k) => k.id === keyId)?.translations.find((t) => t.locale_id === localeId)
+      pushUndo([{
+        keyId, localeId,
+        before: { value: prevCell?.value ?? '', status: prevCell?.status ?? 'empty' },
+        after: { value, status },
+      }])
+
       // Optimistic update — handles both existing rows and missing rows (upsert case)
       setKeys((prev) =>
         prev.map((k) => {
@@ -496,7 +522,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         void trackCell(null, null)
       }
     },
-    [editValue, locales, keys, trackCell]
+    [editValue, locales, keys, trackCell, pushUndo]
   )
 
   const cancelEdit = useCallback(() => {
@@ -718,12 +744,14 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
   startEditRef.current = startEdit
 
   const applyPaste = useCallback((grid: string[][]) => {
-    const { selRange: sel, rowOrder: order, visibleLocales: vis, lockedCols: locked } = latestRef.current
+    const { selRange: sel, rowOrder: order, visibleLocales: vis, lockedCols: locked, keys: cur } = latestRef.current
     if (!sel || grid.length === 0) return
     const aRow = Math.min(sel.anchor.row, sel.focus.row)
     const aCol = Math.min(sel.anchor.col, sel.focus.col)
+    const keyById = new Map(cur.map((k) => [k.id, k]))
 
     const items: { keyId: string; localeId: string; value: string; status: 'pending' | 'empty' }[] = []
+    const changes: CellChange[] = []
     let lockedSkipped = 0
     for (let i = 0; i < grid.length; i++) {
       const gridRow = grid[i]
@@ -735,13 +763,21 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         if (!locale) continue // past the last column
         if (locked.has(locale.id)) { lockedSkipped++; continue }
         const value = gridRow[j] ?? ''
-        items.push({ keyId, localeId: locale.id, value, status: value.trim() ? 'pending' : 'empty' })
+        const status = value.trim() ? 'pending' : 'empty' as const
+        const prev = keyById.get(keyId)?.translations.find((t) => t.locale_id === locale.id)
+        items.push({ keyId, localeId: locale.id, value, status })
+        changes.push({
+          keyId, localeId: locale.id,
+          before: { value: prev?.value ?? '', status: prev?.status ?? 'empty' },
+          after: { value, status },
+        })
       }
     }
     if (items.length === 0) {
       if (lockedSkipped) toast.error('Target column is locked')
       return
     }
+    pushUndo(changes)
 
     // Optimistic update
     const byKey = new Map<string, typeof items>()
@@ -792,7 +828,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         }
       })
       .catch(() => toast.error('Network error'))
-  }, [])
+  }, [pushUndo])
 
   // Clear the contents of every non-empty, non-locked cell in the selection
   const clearSelection = useCallback(() => {
@@ -803,6 +839,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
     const keyById = new Map(cur.map((k) => [k.id, k]))
 
     const items: { keyId: string; localeId: string; value: string; status: 'empty' }[] = []
+    const changes: CellChange[] = []
     let lockedSkipped = 0
     for (let r = r0; r <= r1; r++) {
       const keyId = order[r]
@@ -815,12 +852,18 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         const t = key?.translations.find((tr) => tr.locale_id === locale.id)
         if (!t?.value) continue // already empty
         items.push({ keyId, localeId: locale.id, value: '', status: 'empty' })
+        changes.push({
+          keyId, localeId: locale.id,
+          before: { value: t.value, status: t.status ?? 'empty' },
+          after: { value: '', status: 'empty' },
+        })
       }
     }
     if (items.length === 0) {
       if (lockedSkipped) toast.error('Selected column is locked')
       return
     }
+    pushUndo(changes)
 
     const targetSet = new Set(items.map((it) => `${it.keyId}:${it.localeId}`))
     setKeys((prev) =>
@@ -846,7 +889,71 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         }
       })
       .catch(() => toast.error('Network error'))
+  }, [pushUndo])
+
+  // Apply a set of cell states (optimistic + persist) — used by undo/redo
+  const commitCells = useCallback((cells: { keyId: string; localeId: string; value: string; status: string }[]) => {
+    if (cells.length === 0) return
+    const byKey = new Map<string, typeof cells>()
+    for (const c of cells) {
+      const arr = byKey.get(c.keyId) ?? []
+      arr.push(c)
+      byKey.set(c.keyId, arr)
+    }
+    setKeys((prev) =>
+      prev.map((k) => {
+        const its = byKey.get(k.id)
+        if (!its) return k
+        const trans = [...k.translations]
+        for (const it of its) {
+          const idx = trans.findIndex((t) => t.locale_id === it.localeId)
+          const existing = idx >= 0 ? trans[idx] : undefined
+          if (existing) {
+            trans[idx] = { ...existing, value: it.value, status: it.status }
+          } else {
+            trans.push({
+              id: `optimistic-${it.localeId}`,
+              key_id: k.id, locale_id: it.localeId, value: it.value, status: it.status,
+              updated_at: new Date().toISOString(),
+              translated_by: null, reviewed_by: null,
+              ai_model: null, ai_suggested_at: null, ai_suggestion: null,
+            })
+          }
+        }
+        return { ...k, translations: trans }
+      })
+    )
+    void fetch('/api/translations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: cells }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({})) as { error?: string }
+          toast.error(json.error ?? 'Update failed')
+        }
+      })
+      .catch(() => toast.error('Network error'))
   }, [])
+
+  const undo = useCallback(() => {
+    const changes = undoRef.current.pop()
+    if (!changes) return
+    redoRef.current.push(changes)
+    setHistTick((t) => t + 1)
+    commitCells(changes.map((c) => ({ keyId: c.keyId, localeId: c.localeId, value: c.before.value, status: c.before.status })))
+    toast.success('Undo')
+  }, [commitCells])
+
+  const redo = useCallback(() => {
+    const changes = redoRef.current.pop()
+    if (!changes) return
+    undoRef.current.push(changes)
+    setHistTick((t) => t + 1)
+    commitCells(changes.map((c) => ({ keyId: c.keyId, localeId: c.localeId, value: c.after.value, status: c.after.status })))
+    toast.success('Redo')
+  }, [commitCells])
 
   useEffect(() => {
     const isEditableTarget = (el: Element | null) => {
@@ -898,7 +1005,22 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
     // Enter / F2 → edit the selected cell; typing a char → overwrite (Excel-style)
     const onKeyDown = (e: KeyboardEvent) => {
       const { selRange: sel, editingCell: editing, rowOrder: order, visibleLocales: vis, keys: cur, lockedCols: locked } = latestRef.current
-      if (editing || !sel || isEditableTarget(document.activeElement)) return
+      const inField = isEditableTarget(document.activeElement)
+
+      // Undo / redo — work regardless of selection, but not while typing in a field
+      if (!inField && !editing && (e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault()
+        if (e.shiftKey) redo()
+        else undo()
+        return
+      }
+      if (!inField && !editing && (e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
+        e.preventDefault()
+        redo()
+        return
+      }
+
+      if (editing || !sel || inField) return
 
       // Delete / Backspace → clear all selected cells
       if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -937,7 +1059,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
       document.removeEventListener('mousedown', onDocMouseDown)
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [applyPaste, clearSelection])
+  }, [applyPaste, clearSelection, undo, redo])
 
   // Column drag-to-reorder
   const handleColDragStart = useCallback((e: React.DragEvent, localeId: string) => {
@@ -1002,6 +1124,26 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         </div>
 
         <div className="flex items-center gap-1.5">
+          <div className="flex items-center">
+            <Button
+              variant="ghost" size="sm"
+              className="h-7 w-7 p-0 text-zinc-400 hover:text-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed"
+              onClick={() => undo()}
+              disabled={undoRef.current.length === 0}
+              title="Undo (Ctrl/Cmd+Z)"
+            >
+              <Undo2 className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost" size="sm"
+              className="h-7 w-7 p-0 text-zinc-400 hover:text-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed"
+              onClick={() => redo()}
+              disabled={redoRef.current.length === 0}
+              title="Redo (Ctrl/Cmd+Shift+Z)"
+            >
+              <Redo2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
           <ManageLocalesDialog project={project} onLocalesChanged={() => {}} />
           <Link href={`/${project.id}/keys`}>
             <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-zinc-400 hover:text-zinc-100">
