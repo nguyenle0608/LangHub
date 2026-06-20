@@ -4,11 +4,13 @@ Web-based localization management for mobile and web developers. Import, transla
 
 ## Features
 
-- **Translation Editor** — virtualized table with inline editing, status tracking (empty / pending / reviewed / approved), and real-time collaboration
-- **Key Management** — add, rename, tag keys; duplicate detection with merge/link actions; comment threads; full edit history
+- **Translation Editor** — virtualized spreadsheet with inline editing, sticky columns, and real-time collaboration
+- **Status Workflow** — `empty` → `pending` → `reviewed` → `approved` per locale per key; bulk Review all / Approve all
+- **Key Management** — add, rename, tag keys; duplicate detection with merge/link; comment threads; full edit history
 - **Version Snapshots** — point-in-time snapshots with diff viewer; auto-snapshot before every destructive operation
 - **Import** — JSON, ARB, CSV, YAML with 5-step wizard, preview, and namespace prefixing
 - **Export** — JSON (nested or flat), ARB, CSV, YAML; single locale → direct download, multi-locale → ZIP
+- **Organizations** — multi-org support with member roles (owner / admin / translator / viewer)
 - **Keyboard shortcuts** — `⌘K` / `Ctrl+K` to add key, `Esc` to close panels
 
 ## Tech Stack
@@ -83,35 +85,7 @@ supabase db reset
 
 ## Project Structure
 
-```
-src/
-  app/
-    (auth)/          # Login / signup pages
-    (dashboard)/     # Protected app routes
-      projects/      # Project list
-      [projectId]/
-        editor/      # Main translation table
-        keys/        # Key management + duplicate finder
-        versions/    # Snapshot history + diff viewer
-        import/      # Import wizard
-        export/      # Export sheet
-        settings/    # Project settings
-    api/             # Route handlers (auth-gated)
-  components/
-    editor/          # TranslationTable, AddKeySheet, KeyDetailPanel, …
-    keys/            # DuplicateFinder
-    versions/        # VersionsPage, VersionDiffView
-    import/          # ImportWizard
-    export/          # ExportSheet
-  lib/
-    supabase/
-      queries/       # All DB queries (server-only)
-    parsers/         # Pure parse functions (JSON/ARB/CSV/YAML)
-    exporters/       # Pure export functions
-    versions/        # Snapshot + diff logic
-  hooks/             # useRealtime, usePresence
-  types/             # Shared TypeScript types
-```
+See [`docs/project-struct.md`](docs/project-struct.md) for a detailed breakdown.
 
 ## Architecture Notes
 
