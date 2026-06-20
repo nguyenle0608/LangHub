@@ -1,0 +1,60 @@
+schema: spec-driven
+
+context: |
+  LangHub is a web-based localization management tool built with Next.js 14 (App Router),
+  Supabase (PostgreSQL + Realtime + Auth), Tailwind CSS, and shadcn/ui.
+
+  Target users: Mobile App and Web App developers who need to manage multi-language translations.
+  Similar in concept to Lokalise or Gridly.
+
+  OpenSpec specs MUST be organized by business capability / bounded context.
+  Do NOT create specs for individual components, API endpoints, hooks, or implementation files.
+
+  Approved capability folders:
+    - project-management       (create/edit/delete projects, project settings)
+    - locale-management        (add/remove locales, set default locale)
+    - translation-keys         (create/edit/delete/search translation keys)
+    - translation-editor       (edit translation values, inline editing, status tracking)
+    - translation-import       (import from JSON/YAML/PO/ARB/XLIFF files)
+    - translation-export       (export to JSON/YAML/PO/ARB/XLIFF files)
+    - translation-status       (draft/approved/needs_review status workflow)
+    - version-history          (project snapshots, restore from version)
+    - collaboration            (multi-user access, roles, sharing — future)
+    - ai-translation           (AI-powered translation — future/placeholder only)
+    - authentication           (login, register, session, password reset)
+    - realtime-sync            (live translation updates via Supabase Realtime)
+
+  Routing guidance:
+    - Project CRUD, settings, slug: project-management
+    - Adding/removing language locales, default locale: locale-management
+    - Key name, description, dot.notation structure: translation-keys
+    - Editing translation values, inline cell editing, focus: translation-editor
+    - Uploading and parsing format files: translation-import
+    - Downloading and serializing format files: translation-export
+    - Status transitions (draft → needs_review → approved): translation-status
+    - Creating/restoring project snapshots: version-history
+    - Supabase Realtime subscription for live updates: realtime-sync
+    - Login, logout, OAuth, session management: authentication
+
+rules:
+  proposal:
+    - Capabilities MUST use existing approved business capability names whenever possible.
+    - Do NOT create capability names for actions, components, hooks, API routes, or implementation details.
+    - Forbidden capability patterns include *-component, *-hook, *-api, *-route, *-page, *-form.
+    - If a change modifies behavior inside an existing domain, list that domain under Modified Capabilities.
+    - Only list New Capabilities when introducing a genuinely new business domain.
+    - AI translation features MUST be scoped to ai-translation capability and show "Coming Soon" — no real API calls.
+
+  specs:
+    - Spec content MUST describe observable behavior, not component names, hooks, or internal implementation.
+    - Delta specs MUST be placed under the owning business capability folder.
+    - API endpoints MAY appear in scenarios only when they are part of an external contract.
+    - Screen/page names MAY appear in scenarios only as user-facing context.
+    - Destructive operations (import override, bulk delete, restore) MUST include version snapshot requirement in spec.
+
+  tasks:
+    - Tasks MAY mention files, API routes, query functions, components, and tests.
+    - Tasks MUST trace back to requirements in a business capability spec.
+    - Tasks MUST include auth validation for any new API routes.
+    - Tasks MUST include snapshot creation for any destructive operations.
+    - Tasks MUST use createAdminClient() for server-side mutations.

@@ -34,3 +34,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+# Added by code-review-graph
+.code-review-graph/
+
+# Codegraph index (build artifact)
+.codegraph/
+
+# Claude Code local settings (machine-specific permissions)
+.claude/settings.local.json
