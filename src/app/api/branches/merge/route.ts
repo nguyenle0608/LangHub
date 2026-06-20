@@ -1,0 +1,80 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+import { createClient } from '@/lib/supabase/server'
+import { getUserOrgRole } from '@/lib/supabase/queries/organizations'
+import { computeMerge, applyMerge } from '@/lib/branches/merge'
+
+const CellSchema = z.object({
+  keyName: z.string(),
+  localeCode: z.string(),
+  value: z.string().nullable(),
+  status: z.string().nullable(),
+})
+
+const Schema = z.object({
+  projectId: z.string().uuid(),
+  sourceBranchId: z.string().uuid(),
+  targetBranchId: z.string().uuid(),
+  apply: z.boolean().default(false),
+  resolutions: z.array(CellSchema).optional(),
+})
+
+async function roleForProject(projectId: string, userId: string): Promise<string | null> {
+  const supabase = await createClient()
+  const { data: project } = await supabase.from('projects').select('org_id').eq('id', projectId).single()
+  if (!project?.org_id) return null
+  return getUserOrgRole(project.org_id, userId)
+}
+
+export async function POST(req: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = await req.json() as unknown
+  const parsed = Schema.safeParse(body)
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+
+  const { projectId, sourceBranchId, targetBranchId, apply, resolutions } = parsed.data
+  if (sourceBranchId === targetBranchId) {
+    return NextResponse.json({ error: 'Source and target branches must differ' }, { status: 400 })
+  }
+
+  const role = await roleForProject(projectId, user.id)
+  if (role !== 'owner' && role !== 'admin') {
+    return NextResponse.json({ error: 'Only owners and admins can merge branches' }, { status: 403 })
+  }
+
+  const plan = await computeMerge(projectId, sourceBranchId, targetBranchId)
+  if ('error' in plan) return NextResponse.json({ error: plan.error }, { status: 400 })
+
+  // Preview mode — return the plan for the conflict UI
+  if (!apply) {
+    return NextResponse.json({
+      data: { auto: plan.auto.length, conflicts: plan.conflicts },
+    })
+  }
+
+  // Apply mode — must resolve every conflict
+  if (plan.conflicts.length > 0) {
+    const provided = new Set((resolutions ?? []).map((r) => `${r.keyName}::${r.localeCode}`))
+    const unresolved = plan.conflicts.filter((c) => !provided.has(`${c.keyName}::${c.localeCode}`))
+    if (unresolved.length > 0) {
+      return NextResponse.json(
+        { error: `${unresolved.length} conflict(s) not resolved`, conflicts: plan.conflicts },
+        { status: 409 }
+      )
+    }
+  }
+
+  const result = await applyMerge({
+    projectId,
+    sourceBranchId,
+    targetBranchId,
+    userId: user.id,
+    auto: plan.auto,
+    resolutions: resolutions ?? [],
+  })
+  if ('error' in result) return NextResponse.json({ error: result.error }, { status: 500 })
+  return NextResponse.json({ data: result })
+}
