@@ -61,7 +61,12 @@ export async function GET() {
   try {
     const res = await fetch(
       'https://restcountries.com/v3.1/all?fields=name,cca2,languages',
-      { next: { revalidate: 86400 } } // cache 24h
+      {
+        next: { revalidate: 86400 },
+        headers: process.env.RESTCOUNTRIES_API_KEY
+          ? { Authorization: `Bearer ${process.env.RESTCOUNTRIES_API_KEY}` }
+          : {},
+      }
     )
 
     if (!res.ok) throw new Error(`restcountries returned ${res.status}`)
