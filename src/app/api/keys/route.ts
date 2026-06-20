@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createTranslationKey } from '@/lib/supabase/queries/translations'
+import { createTranslationKey, getTranslationKeys } from '@/lib/supabase/queries/translations'
+import { resolveBranchId } from '@/lib/branches/queries'
 
 const PostSchema = z.object({
   projectId: z.string().uuid(),
@@ -25,14 +26,11 @@ export async function GET(req: NextRequest) {
   const projectId = searchParams.get('projectId')
   if (!projectId) return NextResponse.json({ error: 'projectId required' }, { status: 400 })
 
-  const { data, error } = await supabase
-    .from('translation_keys')
-    .select('*, translations(*)')
-    .eq('project_id', projectId)
-    .order('key', { ascending: true })
+  const branchId = await resolveBranchId(projectId, searchParams.get('branch'))
+  if (!branchId) return NextResponse.json({ error: 'No branch found for project' }, { status: 400 })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ data: data ?? [] })
+  const data = await getTranslationKeys(projectId, branchId)
+  return NextResponse.json({ data })
 }
 
 export async function POST(req: NextRequest) {

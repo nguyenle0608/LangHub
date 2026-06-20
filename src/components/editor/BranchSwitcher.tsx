@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { GitBranch, Plus, Check, Trash2, Loader2, GitMerge } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -15,11 +14,24 @@ interface Props {
   branches: Branch[]
   activeBranchId: string
   canManage: boolean
+  switching: boolean
+  onSwitch: (branchId: string) => void
+  onBranchCreated: (branch: Branch) => void
+  onBranchDeleted: (branchId: string) => void
   onMerge?: (sourceBranchId: string) => void
 }
 
-export function BranchSwitcher({ projectId, branches, activeBranchId, canManage, onMerge }: Props) {
-  const router = useRouter()
+export function BranchSwitcher({
+  projectId,
+  branches,
+  activeBranchId,
+  canManage,
+  switching,
+  onSwitch,
+  onBranchCreated,
+  onBranchDeleted,
+  onMerge,
+}: Props) {
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
@@ -29,7 +41,7 @@ export function BranchSwitcher({ projectId, branches, activeBranchId, canManage,
 
   function switchTo(branchId: string) {
     setOpen(false)
-    router.push(`/${projectId}/editor?branch=${branchId}`)
+    if (branchId !== activeBranchId) onSwitch(branchId)
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -49,8 +61,7 @@ export function BranchSwitcher({ projectId, branches, activeBranchId, canManage,
       setNewName('')
       setCreating(false)
       setOpen(false)
-      router.push(`/${projectId}/editor?branch=${json.data.id}`)
-      router.refresh()
+      onBranchCreated(json.data)
     } catch {
       toast.error('Network error')
     } finally {
@@ -71,11 +82,7 @@ export function BranchSwitcher({ projectId, branches, activeBranchId, canManage,
       const json = await res.json() as { error?: string }
       if (!res.ok) { toast.error(json.error ?? 'Failed to delete'); return }
       toast.success(`Deleted "${branch.name}"`)
-      if (branch.id === activeBranchId) {
-        const main = branches.find((b) => b.is_default)
-        if (main) { router.push(`/${projectId}/editor?branch=${main.id}`) }
-      }
-      router.refresh()
+      onBranchDeleted(branch.id)
     } catch {
       toast.error('Network error')
     } finally {
@@ -92,8 +99,10 @@ export function BranchSwitcher({ projectId, branches, activeBranchId, canManage,
           className="h-7 text-xs gap-1.5 text-zinc-300 hover:text-zinc-100 border border-zinc-800 hover:border-zinc-700"
           title="Switch branch"
         >
-          <GitBranch className="h-3.5 w-3.5 text-blue-400" />
-          <span className="font-medium max-w-[120px] truncate">{active?.name ?? 'main'}</span>
+          {switching
+            ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400" />
+            : <GitBranch className="h-3.5 w-3.5 text-zinc-400" />}
+          <span className="font-medium max-w-[140px] truncate">{active?.name ?? 'main'}</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1 bg-zinc-900 border-zinc-800" align="start">
@@ -107,14 +116,16 @@ export function BranchSwitcher({ projectId, branches, activeBranchId, canManage,
                 key={b.id}
                 onClick={() => switchTo(b.id)}
                 className={cn(
-                  'group w-full flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer text-xs',
-                  isActive ? 'bg-blue-500/10 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/60'
+                  'group w-full flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer text-xs border-l-2',
+                  isActive
+                    ? 'bg-blue-500/15 text-zinc-100 border-blue-500'
+                    : 'text-zinc-300 hover:bg-zinc-800/60 border-transparent'
                 )}
               >
-                <GitBranch className={cn('h-3.5 w-3.5 flex-shrink-0', b.is_default ? 'text-blue-400' : 'text-zinc-500')} />
+                <GitBranch className={cn('h-3.5 w-3.5 flex-shrink-0', isActive ? 'text-blue-400' : 'text-zinc-500')} />
                 <span className="flex-1 truncate font-medium">{b.name}</span>
                 {b.is_default && (
-                  <span className="text-[9px] uppercase tracking-wide text-zinc-600 border border-zinc-700 rounded px-1">main</span>
+                  <span className="text-[9px] uppercase tracking-wide text-zinc-500 border border-zinc-700 rounded px-1">main</span>
                 )}
                 {isActive && <Check className="h-3 w-3 text-blue-400 flex-shrink-0" />}
                 {canManage && !isActive && onMerge && !b.is_default && (
@@ -129,6 +140,7 @@ export function BranchSwitcher({ projectId, branches, activeBranchId, canManage,
                 {canManage && !b.is_default && (
                   <button
                     onClick={(e) => handleDelete(b, e)}
+                    disabled={busy}
                     className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-400 transition-colors"
                     title="Delete branch"
                   >

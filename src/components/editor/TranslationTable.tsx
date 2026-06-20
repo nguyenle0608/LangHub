@@ -2,7 +2,6 @@
 
 import { useState, useRef, useMemo, useCallback, Fragment, useEffect } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   Search, Plus, Download, Upload,
@@ -127,7 +126,7 @@ function serializeClipboardTable(grid: string[][]): string {
 // Main TranslationTable
 // ---------------------------------------------------------------------------
 
-export function TranslationTable({ project, initialKeys, branches, activeBranchId, user }: Props) {
+export function TranslationTable({ project, initialKeys, branches: initialBranches, activeBranchId: initialBranchId, user }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Role-based permissions
@@ -137,10 +136,13 @@ export function TranslationTable({ project, initialKeys, branches, activeBranchI
   const canManage = user.role === 'owner' || user.role === 'admin'  // import, add key, manage locales
   const canEditKeys = user.role === 'owner'      // rename / delete keys
 
-  const router = useRouter()
-
   // State
   const [keys, setKeys] = useState(initialKeys)
+  // Branch state — switching is client-side (no full navigation) so column
+  // layout and other UI state survive; only the cell content reloads.
+  const [activeBranchId, setActiveBranchId] = useState(initialBranchId)
+  const [branches, setBranches] = useState(initialBranches)
+  const [switchingBranch, setSwitchingBranch] = useState(false)
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
   const [editingCell, setEditingCell] = useState<string | null>(null)
@@ -184,6 +186,56 @@ export function TranslationTable({ project, initialKeys, branches, activeBranchI
     redoRef.current = []
     setHistTick((t) => t + 1)
   }, [])
+
+  // Switch branch client-side: reload only cell content, preserve all layout.
+  const handleSwitchBranch = useCallback(async (branchId: string) => {
+    if (branchId === activeBranchId || switchingBranch) return
+    setSwitchingBranch(true)
+    try {
+      const res = await fetch(`/api/keys?projectId=${project.id}&branch=${branchId}`)
+      const json = await res.json() as { data?: KeyWithTranslations[]; error?: string }
+      if (!res.ok || !json.data) { toast.error(json.error ?? 'Failed to load branch'); return }
+      setKeys(json.data)
+      setActiveBranchId(branchId)
+      // Clear transient per-branch UI; keep column layout
+      setSelectedRows(new Set())
+      setSelectedKeyId(null)
+      setEditingCell(null)
+      // Update URL without a full navigation (no loading flash, no remount)
+      window.history.replaceState(null, '', `/${project.id}/editor?branch=${branchId}`)
+    } catch {
+      toast.error('Network error')
+    } finally {
+      setSwitchingBranch(false)
+    }
+  }, [activeBranchId, switchingBranch, project.id])
+
+  // Reload the active branch's cell content (after a merge into it, etc.)
+  const reloadActiveBranch = useCallback(async () => {
+    setSwitchingBranch(true)
+    try {
+      const res = await fetch(`/api/keys?projectId=${project.id}&branch=${activeBranchId}`)
+      const json = await res.json() as { data?: KeyWithTranslations[]; error?: string }
+      if (res.ok && json.data) setKeys(json.data)
+    } catch {
+      // leave existing keys on failure
+    } finally {
+      setSwitchingBranch(false)
+    }
+  }, [project.id, activeBranchId])
+
+  const handleBranchCreated = useCallback((branch: Branch) => {
+    setBranches((prev) => [...prev, branch])
+    void handleSwitchBranch(branch.id)
+  }, [handleSwitchBranch])
+
+  const handleBranchDeleted = useCallback((branchId: string) => {
+    setBranches((prev) => prev.filter((b) => b.id !== branchId))
+    if (branchId === activeBranchId) {
+      const main = branches.find((b) => b.is_default)
+      if (main) void handleSwitchBranch(main.id)
+    }
+  }, [activeBranchId, branches, handleSwitchBranch])
 
   // Sorted locales: base first
   const locales = useMemo(() => {
@@ -1161,6 +1213,10 @@ export function TranslationTable({ project, initialKeys, branches, activeBranchI
             branches={branches}
             activeBranchId={activeBranchId}
             canManage={canManage}
+            switching={switchingBranch}
+            onSwitch={handleSwitchBranch}
+            onBranchCreated={handleBranchCreated}
+            onBranchDeleted={handleBranchDeleted}
             onMerge={(sourceBranchId) => setMergeSourceId(sourceBranchId)}
           />
         </div>
@@ -1965,7 +2021,7 @@ export function TranslationTable({ project, initialKeys, branches, activeBranchI
             sourceBranch={source}
             targetBranch={target}
             onClose={() => setMergeSourceId(null)}
-            onMerged={() => { setMergeSourceId(null); router.refresh() }}
+            onMerged={() => { setMergeSourceId(null); void reloadActiveBranch() }}
           />
         )
       })()}
