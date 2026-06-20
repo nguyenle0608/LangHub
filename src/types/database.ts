@@ -39,6 +39,64 @@ export type Database = {
   }
   public: {
     Tables: {
+      branches: {
+        Row: {
+          base_snapshot_id: string | null
+          created_at: string | null
+          created_by: string | null
+          id: string
+          is_default: boolean | null
+          is_locked: boolean | null
+          name: string
+          parent_branch_id: string | null
+          project_id: string
+        }
+        Insert: {
+          base_snapshot_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_default?: boolean | null
+          is_locked?: boolean | null
+          name: string
+          parent_branch_id?: string | null
+          project_id: string
+        }
+        Update: {
+          base_snapshot_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_default?: boolean | null
+          is_locked?: boolean | null
+          name?: string
+          parent_branch_id?: string | null
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "branches_base_snapshot_id_fkey"
+            columns: ["base_snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "branches_parent_branch_id_fkey"
+            columns: ["parent_branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "branches_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       comments: {
         Row: {
           created_at: string
@@ -306,6 +364,7 @@ export type Database = {
           ai_model: string | null
           ai_suggested_at: string | null
           ai_suggestion: string | null
+          branch_id: string
           id: string
           key_id: string | null
           locale_id: string | null
@@ -319,6 +378,7 @@ export type Database = {
           ai_model?: string | null
           ai_suggested_at?: string | null
           ai_suggestion?: string | null
+          branch_id: string
           id?: string
           key_id?: string | null
           locale_id?: string | null
@@ -332,6 +392,7 @@ export type Database = {
           ai_model?: string | null
           ai_suggested_at?: string | null
           ai_suggestion?: string | null
+          branch_id?: string
           id?: string
           key_id?: string | null
           locale_id?: string | null
@@ -342,6 +403,13 @@ export type Database = {
           value?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "translations_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "translations_key_id_fkey"
             columns: ["key_id"]
@@ -450,6 +518,7 @@ export type Database = {
       }
       versions: {
         Row: {
+          branch_id: string | null
           created_at: string | null
           created_by: string | null
           description: string | null
@@ -459,6 +528,7 @@ export type Database = {
           tag: string | null
         }
         Insert: {
+          branch_id?: string | null
           created_at?: string | null
           created_by?: string | null
           description?: string | null
@@ -468,6 +538,7 @@ export type Database = {
           tag?: string | null
         }
         Update: {
+          branch_id?: string | null
           created_at?: string | null
           created_by?: string | null
           description?: string | null
@@ -477,6 +548,13 @@ export type Database = {
           tag?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "versions_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "versions_project_id_fkey"
             columns: ["project_id"]

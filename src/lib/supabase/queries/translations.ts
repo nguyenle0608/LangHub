@@ -13,6 +13,7 @@ const PAGE_SIZE = 1000
 
 export async function getTranslationKeys(
   projectId: string,
+  branchId: string,
   opts?: { search?: string; status?: string; tags?: string[] }
 ): Promise<KeyWithTranslations[]> {
   const supabase = await createClient()
@@ -21,10 +22,13 @@ export async function getTranslationKeys(
   const all: KeyWithTranslations[] = []
   let offset = 0
   while (true) {
+    // Embedded translations filtered to the active branch — keys are global,
+    // values diverge per branch.
     const { data, error } = await supabase
       .from('translation_keys')
       .select('*, translations(*)')
       .eq('project_id', projectId)
+      .eq('translations.branch_id', branchId)
       .order('key', { ascending: true })
       .range(offset, offset + PAGE_SIZE - 1)
 
@@ -102,19 +106,19 @@ export async function getTranslationHistoryForKey(keyId: string) {
 // ── Writes: admin client (service role) ──────────────────────────────────
 
 export async function updateTranslation(
-  keyId: string, localeId: string, value: string, status: string, userId: string
+  branchId: string, keyId: string, localeId: string, value: string, status: string, userId: string
 ): Promise<{ id: string } | { error: string }> {
   const admin = createAdminClient()
 
   const { data: current } = await admin
     .from('translations').select('id, value, status')
-    .eq('key_id', keyId).eq('locale_id', localeId).maybeSingle()
+    .eq('branch_id', branchId).eq('key_id', keyId).eq('locale_id', localeId).maybeSingle()
 
   const { data: updated, error } = await admin
     .from('translations')
     .upsert(
-      { key_id: keyId, locale_id: localeId, value, status, translated_by: userId, updated_at: new Date().toISOString() },
-      { onConflict: 'key_id,locale_id' }
+      { branch_id: branchId, key_id: keyId, locale_id: localeId, value, status, translated_by: userId, updated_at: new Date().toISOString() },
+      { onConflict: 'branch_id,key_id,locale_id' }
     )
     .select('id').single()
 
@@ -149,12 +153,21 @@ export async function createTranslationKey(data: {
 
   if (error || !keyRow) return { error: error?.message ?? 'Failed to create key' }
 
+  // Keys are global; create an empty translation per branch × locale so the
+  // new key shows up (empty) on every branch.
   if (data.localeIds.length > 0) {
-    await admin.from('translations').insert(
+    const { data: branches } = await admin
+      .from('branches').select('id').eq('project_id', data.projectId)
+    const branchIds = (branches ?? []).map((b) => b.id)
+
+    const rows = branchIds.flatMap((branchId) =>
       data.localeIds.map((localeId) => ({
-        key_id: keyRow.id, locale_id: localeId, value: null, status: 'empty' as const,
+        branch_id: branchId, key_id: keyRow.id, locale_id: localeId, value: null, status: 'empty' as const,
       }))
     )
+    for (let i = 0; i < rows.length; i += 500) {
+      await admin.from('translations').insert(rows.slice(i, i + 500))
+    }
   }
 
   return { id: keyRow.id }

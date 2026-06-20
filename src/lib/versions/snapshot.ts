@@ -16,7 +16,7 @@ export type RestoreOptions = {
 export async function createSnapshot(
   projectId: string,
   userId: string,
-  meta: { name: string; description?: string; tag?: string }
+  meta: { name: string; description?: string; tag?: string; branchId?: string }
 ): Promise<VersionWithStats | { error: string }> {
   const admin = createAdminClient()
 
@@ -29,6 +29,7 @@ export async function createSnapshot(
       name: meta.name,
       description: meta.description ?? null,
       tag: meta.tag ?? 'manual',
+      branch_id: meta.branchId ?? null,
     })
     .select('*')
     .single()
@@ -65,11 +66,13 @@ export async function createSnapshot(
 
   const localeCodeById = Object.fromEntries((locales ?? []).map((l) => [l.id, l.code]))
 
-  // 4. Fetch all translations
-  const { data: translations } = await admin
+  // 4. Fetch all translations (scoped to the branch being snapshotted)
+  let transQuery = admin
     .from('translations')
     .select('key_id, locale_id, value, status')
     .in('key_id', keyIds)
+  if (meta.branchId) transQuery = transQuery.eq('branch_id', meta.branchId)
+  const { data: translations } = await transQuery
 
   if (!translations?.length) {
     await admin.from('version_stats').insert({
@@ -126,6 +129,7 @@ export async function getVersions(projectId: string): Promise<VersionWithStats[]
     .from('versions')
     .select('*, version_stats(*)')
     .eq('project_id', projectId)
+    .neq('tag', 'branch_base') // hide internal fork-base snapshots
     .order('created_at', { ascending: false })
 
   if (!versions) return []
@@ -163,16 +167,18 @@ export async function restoreSnapshot(
   versionId: string,
   projectId: string,
   userId: string,
+  branchId: string,
   options: RestoreOptions
 ): Promise<{ restored: number; skipped: number; backupVersionId?: string } | { error: string }> {
   const admin = createAdminClient()
 
-  // 1. Auto-backup if requested
+  // 1. Auto-backup if requested (backs up the target branch)
   let backupVersionId: string | undefined
   if (options.createBackupFirst) {
     const backup = await createSnapshot(projectId, userId, {
       name: `Auto: Before restoring snapshot`,
       tag: 'auto_before_restore',
+      branchId,
     })
     if ('error' in backup) return { error: `Backup failed: ${backup.error}` }
     backupVersionId = backup.id
@@ -220,6 +226,7 @@ export async function restoreSnapshot(
     const { data: current } = await admin
       .from('translations')
       .select('id, value, status')
+      .eq('branch_id', branchId)
       .eq('key_id', keyId)
       .eq('locale_id', localeId)
       .maybeSingle()
@@ -227,8 +234,8 @@ export async function restoreSnapshot(
     const { data: upserted, error } = await admin
       .from('translations')
       .upsert(
-        { key_id: keyId, locale_id: localeId, value: snap.value, status: snap.status ?? 'empty', updated_at: new Date().toISOString() },
-        { onConflict: 'key_id,locale_id' }
+        { branch_id: branchId, key_id: keyId, locale_id: localeId, value: snap.value, status: snap.status ?? 'empty', updated_at: new Date().toISOString() },
+        { onConflict: 'branch_id,key_id,locale_id' }
       )
       .select('id')
       .single()

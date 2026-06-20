@@ -50,8 +50,14 @@ async function getProjectTranslations(
   const keyIds = (keyRows ?? []).map((k) => k.id)
   if (keyIds.length === 0) return { totalKeys, translations: [] }
 
+  // Project-level stats reflect the default (main) branch only.
+  const { data: mainBranch } = await supabase
+    .from('branches').select('id').eq('project_id', projectId).eq('is_default', true).maybeSingle()
+  if (!mainBranch) return { totalKeys, translations: [] }
+
   const { data: translations } = await supabase
-    .from('translations').select('locale_id, status').in('key_id', keyIds)
+    .from('translations').select('locale_id, status')
+    .eq('branch_id', mainBranch.id).in('key_id', keyIds)
 
   return { totalKeys, translations: translations ?? [] }
 }

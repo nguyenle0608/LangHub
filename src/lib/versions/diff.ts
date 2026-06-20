@@ -22,7 +22,8 @@ function snapshotKey(keyName: string, localeCode: string): SnapshotKey {
 export async function diffVersions(
   projectId: string,
   versionIdA: string,
-  versionIdB: string | 'current'
+  versionIdB: string | 'current',
+  branchId?: string
 ): Promise<DiffEntry[]> {
   const admin = createAdminClient()
 
@@ -59,10 +60,12 @@ export async function diffVersions(
 
       const localeCodeById = Object.fromEntries((locales ?? []).map((l) => [l.id, l.code]))
 
-      const { data: translations } = await supabase
+      let transQuery = supabase
         .from('translations')
         .select('key_id, locale_id, value, status')
         .in('key_id', keyIds)
+      if (branchId) transQuery = transQuery.eq('branch_id', branchId)
+      const { data: translations } = await transQuery
 
       for (const t of translations ?? []) {
         const kName = keyNameById[t.key_id ?? '']
