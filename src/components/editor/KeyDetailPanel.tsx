@@ -67,10 +67,14 @@ function TranslationsPane({
   keyItem,
   locales,
   onUpdated,
+  canEdit,
+  canManage,
 }: {
   keyItem: KeyWithTranslations
   locales: LocaleWithStats[]
   onUpdated: (patch: Partial<KeyWithTranslations>) => void
+  canEdit: boolean
+  canManage: boolean
 }) {
   const [drafts, setDrafts] = useState<Map<string, string>>(() => {
     const m = new Map<string, string>()
@@ -178,8 +182,8 @@ function TranslationsPane({
         const isSaving = saving.has(locale.id)
         const isApproving = approving.has(locale.id)
         const isReviewing = reviewing.has(locale.id)
-        const canReview = !!draft.trim() && t?.status !== 'reviewed' && t?.status !== 'approved'
-        const canApprove = !!draft.trim() && t?.status !== 'approved'
+        const canReview = canManage && !!draft.trim() && t?.status !== 'reviewed' && t?.status !== 'approved'
+        const canApprove = canManage && !!draft.trim() && t?.status !== 'approved'
         const charLimit = keyItem.char_limit
         const overLimit = charLimit !== null && draft.length > charLimit
 
@@ -212,18 +216,22 @@ function TranslationsPane({
             {/* textarea */}
             <textarea
               value={draft}
-              onChange={(e) => setDrafts((p) => new Map(p).set(locale.id, e.target.value))}
-              onBlur={() => void saveTranslation(locale.id)}
+              onChange={(e) => canEdit && setDrafts((p) => new Map(p).set(locale.id, e.target.value))}
+              onBlur={() => canEdit && void saveTranslation(locale.id)}
               rows={3}
               placeholder={locale.is_base ? 'Source text…' : 'Translation…'}
-              className="w-full bg-transparent text-sm text-zinc-100 px-3 py-2.5 resize-none focus:outline-none placeholder:text-zinc-600 leading-relaxed"
+              readOnly={!canEdit}
+              className={cn(
+                'w-full bg-transparent text-sm text-zinc-100 px-3 py-2.5 resize-none focus:outline-none placeholder:text-zinc-600 leading-relaxed',
+                !canEdit && 'cursor-default select-text'
+              )}
             />
 
             {/* footer */}
             {(isDirty || canReview || canApprove) && (
               <div className="flex items-center justify-end px-3 py-1.5 border-t border-zinc-800/60 bg-zinc-950/30">
                 <div className="flex gap-1.5">
-                  {isDirty && (
+                  {isDirty && canEdit && (
                     <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px] text-zinc-400 hover:text-zinc-200" onClick={() => void saveTranslation(locale.id)} disabled={isSaving}>
                       Save
                     </Button>
@@ -529,12 +537,14 @@ interface Props {
   keyItem: KeyWithTranslations | undefined
   locales: LocaleWithStats[]
   userId: string
+  canEdit: boolean
+  canManage: boolean
   onClose: () => void
   onKeyUpdated: (patch: Partial<KeyWithTranslations>) => void
   onKeyDeleted: (keyId: string) => void
 }
 
-export function KeyDetailPanel({ keyItem, locales, userId, onClose, onKeyUpdated, onKeyDeleted }: Props) {
+export function KeyDetailPanel({ keyItem, locales, userId, canEdit, canManage, onClose, onKeyUpdated, onKeyDeleted }: Props) {
   return (
     <Dialog open={!!keyItem} onOpenChange={(v) => { if (!v) onClose() }}>
       <DialogContent className="max-w-4xl p-0 bg-zinc-950 border-zinc-800 flex flex-col max-h-[88vh] [&>button]:hidden">
@@ -559,6 +569,8 @@ export function KeyDetailPanel({ keyItem, locales, userId, onClose, onKeyUpdated
                 keyItem={keyItem}
                 locales={locales}
                 onUpdated={onKeyUpdated}
+                canEdit={canEdit}
+                canManage={canManage}
               />
             </div>
 

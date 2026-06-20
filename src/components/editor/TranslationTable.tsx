@@ -124,6 +124,10 @@ function serializeClipboardTable(grid: string[][]): string {
 export function TranslationTable({ project, initialKeys, user }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
+  // Role-based permissions
+  const canEdit = user.role !== 'viewer'
+  const canManage = user.role === 'owner' || user.role === 'admin'
+
   // State
   const [keys, setKeys] = useState(initialKeys)
   const [search, setSearch] = useState('')
@@ -754,6 +758,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
   startEditRef.current = startEdit
 
   const applyPaste = useCallback((grid: string[][]) => {
+    if (!canEdit) return
     const { selRange: sel, rowOrder: order, visibleLocales: vis, lockedCols: locked, keys: cur } = latestRef.current
     if (!sel || grid.length === 0) return
     const aRow = Math.min(sel.anchor.row, sel.focus.row)
@@ -842,6 +847,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
 
   // Clear the contents of every non-empty, non-locked cell in the selection
   const clearSelection = useCallback(() => {
+    if (!canEdit) return
     const { selRange: sel, rowOrder: order, visibleLocales: vis, lockedCols: locked, keys: cur } = latestRef.current
     if (!sel) return
     const r0 = Math.min(sel.anchor.row, sel.focus.row), r1 = Math.max(sel.anchor.row, sel.focus.row)
@@ -1032,6 +1038,8 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
 
       if (editing || !sel || inField) return
 
+      if (!canEdit) return
+
       // Delete / Backspace → clear all selected cells
       if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault()
@@ -1145,12 +1153,14 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
 
         {/* Data operations */}
         <div className="flex items-center">
-          <Link href={`/${project.id}/import`}>
-            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-zinc-400 hover:text-zinc-100">
-              <Upload className="h-3.5 w-3.5" />
-              <span className="hidden md:inline">Import</span>
-            </Button>
-          </Link>
+          {canManage && (
+            <Link href={`/${project.id}/import`}>
+              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-zinc-400 hover:text-zinc-100">
+                <Upload className="h-3.5 w-3.5" />
+                <span className="hidden md:inline">Import</span>
+              </Button>
+            </Link>
+          )}
           <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-zinc-400 hover:text-zinc-100" onClick={() => setShowExport(true)}>
             <Download className="h-3.5 w-3.5" />
             <span className="hidden md:inline">Export</span>
@@ -1160,7 +1170,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         <div className="w-px h-4 bg-zinc-800" />
 
         {/* Languages config */}
-        <ManageLocalesDialog project={project} onLocalesChanged={() => {}} />
+        {canManage && <ManageLocalesDialog project={project} onLocalesChanged={() => {}} />}
 
         {/* Overflow menu: Duplicates, Versions, AI Translate */}
         <Popover>
@@ -1406,14 +1416,16 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
 
         <div className="w-px h-4 bg-zinc-800" />
 
-        <Button
-          size="sm"
-          className="h-7 text-xs gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
-          onClick={() => setShowAddKey(true)}
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Add Key
-        </Button>
+        {canManage && (
+          <Button
+            size="sm"
+            className="h-7 text-xs gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
+            onClick={() => setShowAddKey(true)}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add Key
+          </Button>
+        )}
       </div>
 
       {/* ── Presence bar ── */}
@@ -1531,17 +1543,19 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
               className="sticky top-0 z-10 bg-zinc-900 border-b border-zinc-800 grid min-w-max"
               style={{ gridTemplateColumns: gridCols }}
             >
-              {/* Checkbox */}
+              {/* Checkbox — only for managers */}
               <div
                 className="flex items-center justify-center h-9 sticky z-20 bg-zinc-900"
                 style={{ left: stickyLeft.get('check') }}
               >
-                <input
-                  type="checkbox"
-                  checked={selectedRows.size === filteredKeys.length && filteredKeys.length > 0}
-                  onChange={toggleAllRows}
-                  className="accent-blue-500 cursor-pointer"
-                />
+                {canManage && (
+                  <input
+                    type="checkbox"
+                    checked={selectedRows.size === filteredKeys.length && filteredKeys.length > 0}
+                    onChange={toggleAllRows}
+                    className="accent-blue-500 cursor-pointer"
+                  />
+                )}
               </div>
               {/* Key */}
               {showKey && (
@@ -1680,15 +1694,17 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
                           Import File
                         </Button>
                       </Link>
-                      <Button
-                        size="sm"
-                        className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
-                        onClick={() => setShowAddKey(true)}
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        Add Key
-                        <span className="text-blue-200/60 text-[10px] ml-1">⌘K</span>
-                      </Button>
+                      {canManage && (
+                        <Button
+                          size="sm"
+                          className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
+                          onClick={() => setShowAddKey(true)}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Add Key
+                          <span className="text-blue-200/60 text-[10px] ml-1">⌘K</span>
+                        </Button>
+                      )}
                     </div>
                   </>
                 ) : (
@@ -1762,9 +1778,9 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
                               isSelected && 'bg-blue-950'
                             )}
                             style={{ left: stickyLeft.get('check') }}
-                            onClick={(e) => toggleRow(keyItem.id, e)}
+                            onClick={(e) => canManage && toggleRow(keyItem.id, e)}
                           >
-                            <input type="checkbox" checked={isSelected} onChange={() => undefined} className="accent-blue-500 cursor-pointer" />
+                            {canManage && <input type="checkbox" checked={isSelected} onChange={() => undefined} className="accent-blue-500 cursor-pointer" />}
                           </div>
 
                           {/* Key name */}
@@ -1837,7 +1853,7 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
                                   }}
                                   onClick={() => { didDragRef.current = false }}
                                   onDoubleClick={() => {
-                                    if (isLocked || isEditingThis) return
+                                    if (!canEdit || isLocked || isEditingThis) return
                                     setSelRange(null)
                                     startEdit(keyItem.id, locale.id, t?.value ?? '')
                                   }}
@@ -1884,13 +1900,15 @@ export function TranslationTable({ project, initialKeys, user }: Props) {
         keyItem={selectedKey}
         locales={locales}
         userId={user.id}
+        canEdit={canEdit}
+        canManage={canManage}
         onClose={() => setSelectedKeyId(null)}
         onKeyUpdated={(patch) => handleKeyUpdated(selectedKeyId!, patch)}
         onKeyDeleted={handleKeyDeleted}
       />
 
-      {/* Bulk action bar */}
-      {selectedRows.size > 0 && (
+      {/* Bulk action bar — managers only */}
+      {canManage && selectedRows.size > 0 && (
         <BulkActionBar
           selectedCount={selectedRows.size}
           projectId={project.id}
