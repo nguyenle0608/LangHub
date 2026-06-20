@@ -1,9 +1,15 @@
 import { redirect } from 'next/navigation'
 import { getUser } from '@/lib/supabase/auth'
+import { AuthWatcher } from '@/components/AuthWatcher'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await getUser()
   if (!user) redirect('/login')
 
-  return <>{children}</>
+  return (
+    <>
+      <AuthWatcher initialUserId={user.id} />
+      {children}
+    </>
+  )
 }
