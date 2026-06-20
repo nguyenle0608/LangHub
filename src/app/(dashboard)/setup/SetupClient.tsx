@@ -2,9 +2,11 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { signOut } from '@/lib/supabase/auth'
 
 export function SetupClient() {
   const router = useRouter()
@@ -41,7 +43,15 @@ export function SetupClient() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4 relative">
+      <button
+        onClick={() => void signOut()}
+        className="absolute top-4 right-4 flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+        title="Sign out"
+      >
+        <LogOut className="h-3.5 w-3.5" />
+        Sign out
+      </button>
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="flex items-center justify-center gap-2 mb-8">
