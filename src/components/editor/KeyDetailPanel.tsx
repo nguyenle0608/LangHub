@@ -69,14 +69,12 @@ function TranslationsPane({
   branchId,
   onUpdated,
   canEdit,
-  canManage,
 }: {
   keyItem: KeyWithTranslations
   locales: LocaleWithStats[]
   branchId: string
   onUpdated: (patch: Partial<KeyWithTranslations>) => void
   canEdit: boolean
-  canManage: boolean
 }) {
   const [drafts, setDrafts] = useState<Map<string, string>>(() => {
     const m = new Map<string, string>()
@@ -268,14 +266,12 @@ function TranslationsPane({
 
 function DetailsPane({
   keyItem,
-  locales,
   userId,
   onUpdated,
   onDeleted,
   canEditKeys,
 }: {
   keyItem: KeyWithTranslations
-  locales: LocaleWithStats[]
   userId: string
   onUpdated: (patch: Partial<KeyWithTranslations>) => void
   onDeleted: () => void
@@ -546,14 +542,13 @@ interface Props {
   userId: string
   branchId: string
   canEdit: boolean
-  canManage: boolean
   canEditKeys: boolean
   onClose: () => void
   onKeyUpdated: (patch: Partial<KeyWithTranslations>) => void
   onKeyDeleted: (keyId: string) => void
 }
 
-export function KeyDetailPanel({ keyItem, locales, userId, branchId, canEdit, canManage, canEditKeys, onClose, onKeyUpdated, onKeyDeleted }: Props) {
+export function KeyDetailPanel({ keyItem, locales, userId, branchId, canEdit, canEditKeys, onClose, onKeyUpdated, onKeyDeleted }: Props) {
   return (
     <Dialog open={!!keyItem} onOpenChange={(v) => { if (!v) onClose() }}>
       <DialogContent className="max-w-4xl p-0 bg-zinc-950 border-zinc-800 flex flex-col max-h-[88vh] [&>button]:hidden">
@@ -580,7 +575,6 @@ export function KeyDetailPanel({ keyItem, locales, userId, branchId, canEdit, ca
                 branchId={branchId}
                 onUpdated={onKeyUpdated}
                 canEdit={canEdit}
-                canManage={canManage}
               />
             </div>
 
@@ -589,7 +583,6 @@ export function KeyDetailPanel({ keyItem, locales, userId, branchId, canEdit, ca
               <DetailsPane
                 key={keyItem.id}
                 keyItem={keyItem}
-                locales={locales}
                 userId={userId}
                 canEditKeys={canEditKeys}
                 onUpdated={onKeyUpdated}

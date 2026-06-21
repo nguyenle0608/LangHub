@@ -16,7 +16,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
 import type { LocaleOption } from '@/app/api/locales-list/route'
 
 interface Props {

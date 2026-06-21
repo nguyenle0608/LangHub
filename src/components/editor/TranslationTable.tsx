@@ -279,7 +279,7 @@ export function TranslationTable({ project, initialKeys, branches: initialBranch
     })
 
     return result
-  }, [keys, search, filterStatus, selectedLocaleId, columnFilters])
+  }, [keys, search, filterStatus, selectedLocaleId, columnFilters, locales])
 
   // Virtual rows (flat list of group headers + key rows for the virtualizer)
   const virtualRows = useMemo((): VirtualRow[] => {
@@ -1148,7 +1148,7 @@ export function TranslationTable({ project, initialKeys, branches: initialBranch
       document.removeEventListener('mousedown', onDocMouseDown)
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [applyPaste, clearSelection, undo, redo])
+  }, [applyPaste, clearSelection, undo, redo, canEdit])
 
   // Column drag-to-reorder
   const handleColDragStart = useCallback((e: React.DragEvent, localeId: string) => {
@@ -1412,14 +1412,14 @@ export function TranslationTable({ project, initialKeys, branches: initialBranch
                 <div className="flex items-center gap-0.5 px-2 py-1 rounded hover:bg-zinc-800/60">
                   <span className="flex-1 text-xs text-zinc-300">Key name</span>
                   <button
-                    onClick={() => setFrozenCols((p) => { const n = new Set(p); frozen ? n.delete('key') : n.add('key'); return n })}
+                    onClick={() => setFrozenCols((p) => { const n = new Set(p); if (frozen) n.delete('key'); else n.add('key'); return n })}
                     className={cn('p-1 rounded', frozen ? 'text-blue-400 hover:text-blue-300' : 'text-zinc-600 hover:text-zinc-300')}
                     title={frozen ? 'Unfreeze column' : 'Freeze column (stays visible when scrolling)'}
                   >
                     {frozen ? <Pin className="h-3 w-3" /> : <PinOff className="h-3 w-3" />}
                   </button>
                   <button
-                    onClick={() => setHiddenCols((p) => { const n = new Set(p); hidden ? n.delete('key') : n.add('key'); return n })}
+                    onClick={() => setHiddenCols((p) => { const n = new Set(p); if (hidden) n.delete('key'); else n.add('key'); return n })}
                     className={cn('p-1 rounded', hidden ? 'text-zinc-600 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-200')}
                     title={hidden ? 'Show' : 'Hide'}
                   >
@@ -1435,7 +1435,7 @@ export function TranslationTable({ project, initialKeys, branches: initialBranch
                 <div className="flex items-center gap-1 px-2 py-1 rounded hover:bg-zinc-800/60">
                   <span className="flex-1 text-xs text-zinc-300">Status</span>
                   <button
-                    onClick={() => setHiddenCols((p) => { const n = new Set(p); hidden ? n.delete('status') : n.add('status'); return n })}
+                    onClick={() => setHiddenCols((p) => { const n = new Set(p); if (hidden) n.delete('status'); else n.add('status'); return n })}
                     className={cn('p-1 rounded', hidden ? 'text-zinc-600 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-200')}
                     title={hidden ? 'Show' : 'Hide'}
                   >
@@ -1455,21 +1455,21 @@ export function TranslationTable({ project, initialKeys, branches: initialBranch
                   <span className="text-sm">{getFlag(locale.code)}</span>
                   <span className="flex-1 text-xs text-zinc-300 truncate ml-1">{locale.name}</span>
                   <button
-                    onClick={() => setFrozenCols((p) => { const n = new Set(p); frozen ? n.delete(locale.id) : n.add(locale.id); return n })}
+                    onClick={() => setFrozenCols((p) => { const n = new Set(p); if (frozen) n.delete(locale.id); else n.add(locale.id); return n })}
                     className={cn('p-1 rounded', frozen ? 'text-blue-400 hover:text-blue-300' : 'text-zinc-600 hover:text-zinc-300')}
                     title={frozen ? 'Unfreeze column' : 'Freeze column (stays visible when scrolling)'}
                   >
                     {frozen ? <Pin className="h-3 w-3" /> : <PinOff className="h-3 w-3" />}
                   </button>
                   <button
-                    onClick={() => setLockedCols((p) => { const n = new Set(p); locked ? n.delete(locale.id) : n.add(locale.id); return n })}
+                    onClick={() => setLockedCols((p) => { const n = new Set(p); if (locked) n.delete(locale.id); else n.add(locale.id); return n })}
                     className={cn('p-1 rounded', locked ? 'text-orange-400 hover:text-orange-300' : 'text-zinc-600 hover:text-zinc-300')}
                     title={locked ? 'Unlock (allow editing)' : 'Lock (read-only)'}
                   >
                     {locked ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
                   </button>
                   <button
-                    onClick={() => setHiddenCols((p) => { const n = new Set(p); hidden ? n.delete(locale.id) : n.add(locale.id); return n })}
+                    onClick={() => setHiddenCols((p) => { const n = new Set(p); if (hidden) n.delete(locale.id); else n.add(locale.id); return n })}
                     className={cn('p-1 rounded', hidden ? 'text-zinc-600 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-200')}
                     title={hidden ? 'Show' : 'Hide'}
                   >
@@ -2009,7 +2009,6 @@ export function TranslationTable({ project, initialKeys, branches: initialBranch
         userId={user.id}
         branchId={activeBranchId}
         canEdit={canEdit}
-        canManage={canManage}
         canEditKeys={canEditKeys}
         onClose={() => setSelectedKeyId(null)}
         onKeyUpdated={(patch) => handleKeyUpdated(selectedKeyId!, patch)}
