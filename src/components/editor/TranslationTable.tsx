@@ -1661,7 +1661,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
           {/* Language focus */}
           <div className="border-t border-zinc-800 p-3">
             <div className="text-[10px] uppercase tracking-wider text-zinc-600 mb-2 px-1">Languages</div>
-            {locales.filter((l) => !l.is_base).map((locale) => {
+            {locales.map((locale) => {
               const isActive = selectedLocaleId === locale.id
               const needsWork = stats.localeNeedsWork.get(locale.id) ?? 0
               return (
@@ -1678,7 +1678,9 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                 >
                   <span className="text-sm leading-none">{getFlag(locale.code)}</span>
                   <span className="flex-1 text-left truncate">{locale.name}</span>
-                  {needsWork > 0 ? (
+                  {locale.is_base ? (
+                    <span className="text-[9px] text-zinc-600 border border-zinc-700 rounded px-1">base</span>
+                  ) : needsWork > 0 ? (
                     <span className="text-[10px] text-amber-400 tabular-nums">{needsWork}</span>
                   ) : (
                     <span className="text-[10px] text-emerald-500/70">✓</span>
