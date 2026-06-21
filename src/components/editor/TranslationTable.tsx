@@ -429,10 +429,9 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     // Per-locale: count of keys where that locale needs work + approved percent
     const localeNeedsWork = new Map<string, number>()
     const localePercent = new Map<string, number>()
-    // Approved translation records (non-base) for progress bar
+    // Approved translation records (non-base) for the overall progress bar
     let approvedRecords = 0
     for (const locale of locales) {
-      if (locale.is_base) continue
       let needsWork = 0
       let approved = 0
       for (const key of keys) {
@@ -440,9 +439,13 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
         if (!t || !t.value || t.status === 'empty' || t.status === 'pending') needsWork++
         if (t?.status === 'approved') approved++
       }
+      // Per-locale stats cover every locale (incl. base) for the sidebar
+      // counter and column-header percent.
       if (needsWork > 0) localeNeedsWork.set(locale.id, needsWork)
       localePercent.set(locale.id, totalKeys > 0 ? Math.round((approved / totalKeys) * 100) : 0)
-      approvedRecords += approved
+      // Overall progress measures translation completeness, so it excludes the
+      // base (source) locale.
+      if (!locale.is_base) approvedRecords += approved
     }
     return {
       total: totalKeys,
@@ -1678,9 +1681,10 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                 >
                   <span className="text-sm leading-none">{getFlag(locale.code)}</span>
                   <span className="flex-1 text-left truncate">{locale.name}</span>
-                  {locale.is_base ? (
+                  {locale.is_base && (
                     <span className="text-[9px] text-zinc-600 border border-zinc-700 rounded px-1">base</span>
-                  ) : needsWork > 0 ? (
+                  )}
+                  {needsWork > 0 ? (
                     <span className="text-[10px] text-amber-400 tabular-nums">{needsWork}</span>
                   ) : (
                     <span className="text-[10px] text-emerald-500/70">✓</span>
