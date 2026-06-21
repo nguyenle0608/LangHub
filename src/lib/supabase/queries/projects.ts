@@ -237,6 +237,16 @@ export async function createProject(data: {
 
   if (projectError || !project) return { error: projectError?.message ?? 'Failed to create project' }
 
+  // Every project needs a default "main" branch (M1/M2 branching). Without it
+  // resolveBranchId returns null and the editor 404s.
+  const { error: branchError } = await admin.from('branches').insert({
+    project_id: project.id, name: 'main', is_default: true, created_by: data.userId,
+  })
+  if (branchError) {
+    await admin.from('projects').delete().eq('id', project.id)
+    return { error: branchError.message }
+  }
+
   await admin.from('locales').insert({
     project_id: project.id, code: data.baseLocale,
     name: data.baseLocaleName ?? LOCALE_NAMES[data.baseLocale] ?? data.baseLocale.toUpperCase(), is_base: true,
