@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { getUserOrgRole } from '@/lib/supabase/queries/organizations'
-import { listBranches, createBranch, deleteBranch, resolveBranchId } from '@/lib/branches/queries'
+import { listBranches, createBranch, deleteBranch, renameBranch, setDefaultBranch, resolveBranchId } from '@/lib/branches/queries'
 
 async function roleForProject(projectId: string, userId: string): Promise<string | null> {
   const supabase = await createClient()
@@ -56,6 +56,38 @@ export async function POST(req: NextRequest) {
   })
   if ('error' in result) return NextResponse.json({ error: result.error }, { status: 400 })
   return NextResponse.json({ data: result }, { status: 201 })
+}
+
+const PatchSchema = z.object({
+  projectId: z.string().uuid(),
+  branchId: z.string().uuid(),
+  name: z.string().min(1).max(100).optional(),
+  setDefault: z.boolean().optional(),
+})
+
+export async function PATCH(req: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = await req.json() as unknown
+  const parsed = PatchSchema.safeParse(body)
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+
+  const role = await roleForProject(parsed.data.projectId, user.id)
+  if (role !== 'owner' && role !== 'admin') {
+    return NextResponse.json({ error: 'Only owners and admins can manage branches' }, { status: 403 })
+  }
+
+  if (parsed.data.name !== undefined) {
+    const r = await renameBranch(parsed.data.branchId, parsed.data.name)
+    if ('error' in r) return NextResponse.json({ error: r.error }, { status: 400 })
+  }
+  if (parsed.data.setDefault) {
+    const r = await setDefaultBranch(parsed.data.projectId, parsed.data.branchId)
+    if ('error' in r) return NextResponse.json({ error: r.error }, { status: 400 })
+  }
+  return NextResponse.json({ success: true })
 }
 
 const DeleteSchema = z.object({

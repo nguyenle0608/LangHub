@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { GitBranch, Plus, Check, Trash2, Loader2, GitMerge } from 'lucide-react'
+import Link from 'next/link'
+import { GitBranch, Plus, Check, Trash2, Loader2, GitMerge, Settings2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -187,6 +188,16 @@ export function BranchSwitcher({
             )}
           </>
         )}
+
+        <div className="border-t border-zinc-800 my-1" />
+        <Link
+          href={`/${projectId}/branches`}
+          onClick={() => setOpen(false)}
+          className="w-full text-left text-xs text-zinc-400 hover:text-zinc-100 px-2 py-1.5 rounded hover:bg-zinc-800/60 flex items-center gap-2"
+        >
+          <Settings2 className="h-3.5 w-3.5 text-zinc-500" />
+          Manage branches
+        </Link>
       </PopoverContent>
     </Popover>
   )

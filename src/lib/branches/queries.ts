@@ -1,9 +1,16 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { createSnapshot } from '@/lib/versions/snapshot'
+import { fetchBranchTranslations } from '@/lib/branches/fetch'
 import type { Database } from '@/types/database'
 
 export type Branch = Database['public']['Tables']['branches']['Row']
+
+export type BranchWithStats = Branch & {
+  keyCount: number
+  localeCount: number
+  approvedPercent: number
+}
 
 // ── Reads: user-scoped client (RLS applies) ───────────────────────────────
 
@@ -16,6 +23,33 @@ export async function listBranches(projectId: string): Promise<Branch[]> {
     .order('is_default', { ascending: false })
     .order('created_at', { ascending: true })
   return data ?? []
+}
+
+/** All branches of a project with per-branch key count + approval progress. */
+export async function listBranchesWithStats(projectId: string): Promise<BranchWithStats[]> {
+  const supabase = await createClient()
+  const [branches, { data: locales }] = await Promise.all([
+    listBranches(projectId),
+    supabase.from('locales').select('id, is_base').eq('project_id', projectId),
+  ])
+  const nonBaseLocaleIds = new Set((locales ?? []).filter((l) => !l.is_base).map((l) => l.id))
+  const localeCount = (locales ?? []).length
+
+  return Promise.all(
+    branches.map(async (b) => {
+      const [{ count }, translations] = await Promise.all([
+        supabase.from('translation_keys').select('*', { count: 'exact', head: true }).eq('branch_id', b.id),
+        fetchBranchTranslations(supabase, b.id),
+      ])
+      const keyCount = count ?? 0
+      const approved = translations.filter(
+        (t) => t.locale_id && nonBaseLocaleIds.has(t.locale_id) && t.status === 'approved'
+      ).length
+      const total = keyCount * nonBaseLocaleIds.size
+      const approvedPercent = total > 0 ? Math.round((approved / total) * 100) : 0
+      return { ...b, keyCount, localeCount, approvedPercent }
+    })
+  )
 }
 
 export async function getBranch(branchId: string): Promise<Branch | null> {
@@ -170,4 +204,16 @@ export async function renameBranch(branchId: string, name: string): Promise<{ su
   const { error } = await admin.from('branches').update({ name: trimmed }).eq('id', branchId)
   if (error) return { error: error.code === '23505' ? `Branch "${trimmed}" already exists` : error.message }
   return { success: true }
+}
+
+/** Make `branchId` the project's default (main) branch. */
+export async function setDefaultBranch(projectId: string, branchId: string): Promise<{ success: true } | { error: string }> {
+  const admin = createAdminClient()
+  const { data: target } = await admin.from('branches').select('id, project_id').eq('id', branchId).single()
+  if (!target || target.project_id !== projectId) return { error: 'Branch not found' }
+  // Unset the current default first (partial unique index allows only one true)
+  const { error: unsetErr } = await admin.from('branches').update({ is_default: false }).eq('project_id', projectId).eq('is_default', true)
+  if (unsetErr) return { error: unsetErr.message }
+  const { error } = await admin.from('branches').update({ is_default: true }).eq('id', branchId)
+  return error ? { error: error.message } : { success: true }
 }

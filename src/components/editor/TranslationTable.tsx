@@ -7,7 +7,7 @@ import {
   Search, Plus, Download, Upload,
   Sparkles, LogOut, ListFilter, Layers2, ChevronDown,
   Columns3, Eye, EyeOff, Pin, PinOff, Lock, Unlock, GripVertical, Undo2, Redo2,
-  MoreHorizontal, Copy, History, Globe2,
+  MoreHorizontal, Copy, History, Globe2, GitBranch as GitBranchIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -1270,6 +1270,12 @@ export function TranslationTable({ project, initialKeys, branches: initialBranch
               <button className="w-full text-left text-xs text-zinc-300 hover:text-zinc-100 px-2 py-1.5 rounded hover:bg-zinc-800/60 flex items-center gap-2">
                 <Copy className="h-3.5 w-3.5 text-zinc-500" />
                 Duplicates
+              </button>
+            </Link>
+            <Link href={`/${project.id}/branches`}>
+              <button className="w-full text-left text-xs text-zinc-300 hover:text-zinc-100 px-2 py-1.5 rounded hover:bg-zinc-800/60 flex items-center gap-2">
+                <GitBranchIcon className="h-3.5 w-3.5 text-zinc-500" />
+                Branches
               </button>
             </Link>
             <Link href={`/${project.id}/versions`}>
