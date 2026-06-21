@@ -22,6 +22,10 @@ export async function POST(req: NextRequest) {
   const format = formData.get('format') as string | null
   const snapshotName = formData.get('snapshotName') as string | null
   const branchParam = formData.get('branchId') as string | null
+  const namespace = (formData.get('namespace') as string | null)?.trim() || null
+  const skipAutoSnapshot = formData.get('skipAutoSnapshot') === 'true'
+  const skipKeysRaw = formData.get('skipKeys') as string | null
+  const skipKeySet = skipKeysRaw ? new Set(JSON.parse(skipKeysRaw) as string[]) : null
 
   if (!file || !projectId || !localeId || !format) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -59,19 +63,31 @@ export async function POST(req: NextRequest) {
     parsedKeys = r.keys
   }
 
-  // Filter empty values
-  const entries = Object.entries(parsedKeys).filter(([, v]) => v.trim())
-  if (entries.length === 0) {
-    return NextResponse.json({ error: 'No valid keys found in file' }, { status: 400 })
+  // Apply namespace prefix
+  if (namespace) {
+    const prefixed: Record<string, string> = {}
+    for (const [k, v] of Object.entries(parsedKeys)) prefixed[`${namespace}.${k}`] = v
+    parsedKeys = prefixed
   }
 
-  // 2. Auto-snapshot before import (active branch)
-  const snapshotResult = await createSnapshot(projectId, user.id, {
-    name: snapshotName ?? `Auto: Before import "${file.name}"`,
-    tag: 'auto_import',
-    branchId,
-  })
-  const snapshotId = 'error' in snapshotResult ? undefined : snapshotResult.id
+  // All keys in the file (including empty values) — used for key creation
+  const allEntries = Object.entries(parsedKeys)
+  if (allEntries.length === 0) {
+    return NextResponse.json({ error: 'No keys found in file' }, { status: 400 })
+  }
+  // Only non-empty values are written as translations
+  const entries = allEntries.filter(([, v]) => v.trim())
+
+  // 2. Auto-snapshot before import (skip for subsequent files in multi-file import)
+  let snapshotId: string | undefined
+  if (!skipAutoSnapshot) {
+    const snapshotResult = await createSnapshot(projectId, user.id, {
+      name: snapshotName ?? `Auto: Before import "${file.name}"`,
+      tag: 'auto_import',
+      branchId,
+    })
+    snapshotId = 'error' in snapshotResult ? undefined : snapshotResult.id
+  }
 
   // 3. Fetch existing keys (on the active branch) + locales in parallel
   const [{ data: existingKeys }, { data: allLocales }] = await Promise.all([
@@ -82,9 +98,12 @@ export async function POST(req: NextRequest) {
   const keyMap = new Map<string, string>((existingKeys ?? []).map((k) => [k.key, k.id]))
   const localeIds = (allLocales ?? []).map((l) => l.id)
 
-  // 4. Separate new vs existing keys
-  const newDotKeys = entries.filter(([k]) => !keyMap.has(k)).map(([k]) => k)
-  const updatedCount = entries.filter(([k]) => keyMap.has(k)).length
+  // 4. Separate new vs existing keys (based on all keys, including empty-valued ones)
+  const newDotKeys = allEntries.filter(([k]) => !keyMap.has(k)).map(([k]) => k)
+  const existingEntries = entries.filter(([k]) => keyMap.has(k))
+  // skipKeySet: existing keys the user chose NOT to overwrite (from preview checkboxes)
+  const skippedCount = skipKeySet ? existingEntries.filter(([k]) => skipKeySet.has(k)).length : 0
+  const updatedCount = existingEntries.length - skippedCount
 
   // 5. Batch insert new translation_keys on the active branch
   if (newDotKeys.length > 0) {
@@ -111,7 +130,12 @@ export async function POST(req: NextRequest) {
   }
 
   // 7. Batch upsert translations for the imported locale (active branch only)
-  const upsertRows = entries.map(([dotKey, value]) => ({
+  // Skip keys the user chose not to overwrite (skipKeySet from preview checkboxes)
+  const entriesToWrite = skipKeySet
+    ? entries.filter(([k]) => !skipKeySet.has(k))
+    : entries
+
+  const upsertRows = entriesToWrite.map(([dotKey, value]) => ({
     branch_id: branchId,
     key_id: keyMap.get(dotKey)!,
     locale_id: localeId,
@@ -150,6 +174,7 @@ export async function POST(req: NextRequest) {
     data: {
       created: newDotKeys.length,
       updated: updatedCount,
+      skipped: skippedCount,
       total: entries.length,
       snapshotId,
       filename: file.name,
