@@ -3,7 +3,7 @@
 import { useState, useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Plus } from 'lucide-react'
+import { Plus, Loader2 } from 'lucide-react'
 import type { ProjectWithStats } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,6 +19,8 @@ export function ProjectSettingsClient({ project }: { project: ProjectWithStats }
   const [description, setDescription] = useState(project.description ?? '')
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [removingLocaleId, setRemovingLocaleId] = useState<string | null>(null)
   const [localeError, setLocaleError] = useState<string | null>(null)
 
   // For adding a new locale
@@ -82,14 +84,24 @@ export function ProjectSettingsClient({ project }: { project: ProjectWithStats }
   async function handleRemoveLocale(localeId: string, isBase: boolean | null) {
     if (isBase) return
     if (!confirm('Remove this locale? All translations for it will be deleted.')) return
-    await fetch(`/api/projects/${project.id}/locales/${localeId}`, { method: 'DELETE' })
-    router.refresh()
+    setRemovingLocaleId(localeId)
+    try {
+      await fetch(`/api/projects/${project.id}/locales/${localeId}`, { method: 'DELETE' })
+      router.refresh()
+    } finally {
+      setRemovingLocaleId(null)
+    }
   }
 
   async function handleDelete() {
-    if (deleteConfirm !== project.name) return
-    await fetch(`/api/projects/${project.id}`, { method: 'DELETE' })
-    router.push('/projects')
+    if (deleteConfirm !== project.name || deleting) return
+    setDeleting(true)
+    try {
+      await fetch(`/api/projects/${project.id}`, { method: 'DELETE' })
+      router.push('/projects')
+    } catch {
+      setDeleting(false)
+    }
   }
 
   return (
@@ -177,12 +189,17 @@ export function ProjectSettingsClient({ project }: { project: ProjectWithStats }
                       {!locale.is_base && (
                         <button
                           onClick={() => handleRemoveLocale(locale.id, locale.is_base)}
-                          className="text-zinc-600 hover:text-red-400 transition-colors"
+                          disabled={removingLocaleId === locale.id}
+                          className="text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50"
                           title="Remove locale"
                         >
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                          </svg>
+                          {removingLocaleId === locale.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          )}
                         </button>
                       )}
                     </div>
@@ -249,11 +266,12 @@ export function ProjectSettingsClient({ project }: { project: ProjectWithStats }
                 />
                 <Button
                   onClick={handleDelete}
-                  disabled={deleteConfirm !== project.name}
+                  disabled={deleteConfirm !== project.name || deleting}
                   variant="destructive"
                   className="bg-red-700 hover:bg-red-600 disabled:opacity-30"
                 >
-                  Delete project
+                  {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {deleting ? 'Deleting…' : 'Delete project'}
                 </Button>
               </div>
             </div>

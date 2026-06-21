@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Plus, Trash2, RotateCcw, GitBranch, Zap, Search } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, RotateCcw, GitBranch, Zap, Search, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import dynamic from 'next/dynamic'
@@ -111,11 +111,13 @@ function VersionCard({
   isSelected,
   onSelect,
   onDelete,
+  deleting,
 }: {
   version: VersionWithStats
   isSelected: boolean
   onSelect: () => void
   onDelete: () => void
+  deleting: boolean
 }) {
   const isManual = version.tag === 'manual'
   const stats = version.stats
@@ -156,9 +158,12 @@ function VersionCard({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onDelete() }}
-            className="text-zinc-700 hover:text-red-400 transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100 mt-0.5"
+            disabled={deleting}
+            className="text-zinc-700 hover:text-red-400 transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100 mt-0.5 disabled:opacity-100"
           >
-            <Trash2 className="h-3 w-3" />
+            {deleting
+              ? <Loader2 className="h-3 w-3 animate-spin text-red-400" />
+              : <Trash2 className="h-3 w-3" />}
           </button>
         )}
       </div>
@@ -197,6 +202,7 @@ export function VersionsPage({ project, initialVersions }: Props) {
   )
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const filtered = versions.filter((v) =>
     !search || v.name.toLowerCase().includes(search.toLowerCase())
@@ -205,13 +211,19 @@ export function VersionsPage({ project, initialVersions }: Props) {
   const selectedVersion = versions.find((v) => v.id === selectedVersionId)
 
   const handleDelete = async (versionId: string) => {
+    if (deletingId) return
     const v = versions.find((ver) => ver.id === versionId)
-    const resp = await fetch(`/api/versions/${versionId}`, { method: 'DELETE' })
-    const data = await resp.json() as { error?: string }
-    if (!resp.ok) { toast.error(data.error ?? 'Failed to delete'); return }
-    setVersions((prev) => prev.filter((ver) => ver.id !== versionId))
-    if (selectedVersionId === versionId) setSelectedVersionId(null)
-    toast.success(`Deleted "${v?.name}"`)
+    setDeletingId(versionId)
+    try {
+      const resp = await fetch(`/api/versions/${versionId}`, { method: 'DELETE' })
+      const data = await resp.json() as { error?: string }
+      if (!resp.ok) { toast.error(data.error ?? 'Failed to delete'); return }
+      setVersions((prev) => prev.filter((ver) => ver.id !== versionId))
+      if (selectedVersionId === versionId) setSelectedVersionId(null)
+      toast.success(`Deleted "${v?.name}"`)
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   const handleCreated = (v: VersionWithStats) => {
@@ -286,6 +298,7 @@ export function VersionsPage({ project, initialVersions }: Props) {
                   isSelected={v.id === selectedVersionId}
                   onSelect={() => setSelectedVersionId(v.id)}
                   onDelete={() => handleDelete(v.id)}
+                  deleting={deletingId === v.id}
                 />
               ))}
             </div>

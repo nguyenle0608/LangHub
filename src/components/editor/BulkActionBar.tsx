@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { X, Trash2, CheckCircle, Eye, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { LoadingButton } from '@/components/ui/loading-button'
 
 interface Props {
   selectedCount: number
@@ -11,9 +12,9 @@ interface Props {
   canReview: boolean
   canDelete: boolean
   onClear: () => void
-  onDelete: () => void
-  onReview: () => void
-  onApprove: () => void
+  onDelete: () => void | Promise<void>
+  onReview: () => void | Promise<void>
+  onApprove: () => void | Promise<void>
 }
 
 export function BulkActionBar({ selectedCount, projectId, canReview, canDelete, onClear, onDelete, onReview, onApprove }: Props) {
@@ -48,9 +49,12 @@ export function BulkActionBar({ selectedCount, projectId, canReview, canDelete, 
       setSnapshotting(false)
       return
     }
-    setSnapshotting(false)
-    onDelete()
-    setConfirmDelete(false)
+    try {
+      await onDelete()
+    } finally {
+      setSnapshotting(false)
+      setConfirmDelete(false)
+    }
   }
 
   return (
@@ -72,7 +76,7 @@ export function BulkActionBar({ selectedCount, projectId, canReview, canDelete, 
       )}
 
       {canReview && (
-        <Button
+        <LoadingButton
           size="sm"
           variant="outline"
           className="gap-1.5 h-8 text-xs border-zinc-700 text-blue-400 hover:text-blue-300 hover:bg-blue-950/40"
@@ -81,11 +85,11 @@ export function BulkActionBar({ selectedCount, projectId, canReview, canDelete, 
         >
           <Eye className="h-3.5 w-3.5" />
           Review all
-        </Button>
+        </LoadingButton>
       )}
 
       {canReview && (
-        <Button
+        <LoadingButton
           size="sm"
           variant="outline"
           className="gap-1.5 h-8 text-xs border-zinc-700"
@@ -94,7 +98,7 @@ export function BulkActionBar({ selectedCount, projectId, canReview, canDelete, 
         >
           <CheckCircle className="h-3.5 w-3.5" />
           Approve all
-        </Button>
+        </LoadingButton>
       )}
 
       {canDelete && (confirmDelete ? (

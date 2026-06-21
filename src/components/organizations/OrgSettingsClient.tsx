@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Trash2, UserMinus, Shield } from 'lucide-react'
+import { ArrowLeft, Trash2, UserMinus, Shield, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -34,6 +34,10 @@ export function OrgSettingsClient({ org, members: initialMembers, currentUserId 
   const [members, setMembers] = useState(initialMembers)
   const [orgName, setOrgName] = useState(org.name)
   const [isSavingName, startSavingName] = useTransition()
+  // Per-member in-flight ops (role change / remove) → disable that row's controls
+  const [pendingMembers, setPendingMembers] = useState<Set<string>>(new Set())
+  const setMemberPending = (id: string, on: boolean) =>
+    setPendingMembers((prev) => { const n = new Set(prev); if (on) n.add(id); else n.delete(id); return n })
 
   // Invite form
   const [inviteEmail, setInviteEmail] = useState('')
@@ -84,30 +88,40 @@ export function OrgSettingsClient({ org, members: initialMembers, currentUserId 
   }
 
   async function handleRemoveMember(memberId: string, memberEmail: string | null) {
-    const res = await fetch(`/api/organizations/${org.id}/members/${memberId}`, {
-      method: 'DELETE',
-    })
-    if (res.ok) {
-      toast.success(`Removed ${memberEmail ?? 'member'}`)
-      setMembers((prev) => prev.filter((m) => m.id !== memberId))
-    } else {
-      toast.error('Failed to remove member')
+    setMemberPending(memberId, true)
+    try {
+      const res = await fetch(`/api/organizations/${org.id}/members/${memberId}`, {
+        method: 'DELETE',
+      })
+      if (res.ok) {
+        toast.success(`Removed ${memberEmail ?? 'member'}`)
+        setMembers((prev) => prev.filter((m) => m.id !== memberId))
+      } else {
+        toast.error('Failed to remove member')
+      }
+    } finally {
+      setMemberPending(memberId, false)
     }
   }
 
   async function handleRoleChange(memberId: string, role: MemberRole) {
-    const res = await fetch(`/api/organizations/${org.id}/members/${memberId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role }),
-    })
-    if (res.ok) {
-      toast.success('Role updated')
-      setMembers((prev) =>
-        prev.map((m) => (m.id === memberId ? { ...m, role } : m))
-      )
-    } else {
-      toast.error('Failed to update role')
+    setMemberPending(memberId, true)
+    try {
+      const res = await fetch(`/api/organizations/${org.id}/members/${memberId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role }),
+      })
+      if (res.ok) {
+        toast.success('Role updated')
+        setMembers((prev) =>
+          prev.map((m) => (m.id === memberId ? { ...m, role } : m))
+        )
+      } else {
+        toast.error('Failed to update role')
+      }
+    } finally {
+      setMemberPending(memberId, false)
     }
   }
 
@@ -213,7 +227,8 @@ export function OrgSettingsClient({ org, members: initialMembers, currentUserId 
                       <select
                         value={member.role}
                         onChange={(e) => handleRoleChange(member.id, e.target.value as MemberRole)}
-                        className="text-xs bg-zinc-800 border border-zinc-700 text-zinc-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                        disabled={pendingMembers.has(member.id)}
+                        className="text-xs bg-zinc-800 border border-zinc-700 text-zinc-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-600 disabled:opacity-50"
                       >
                         <option value="admin">Admin</option>
                         <option value="translator">Translator</option>
@@ -227,10 +242,13 @@ export function OrgSettingsClient({ org, members: initialMembers, currentUserId 
                     {canModify && (
                       <button
                         onClick={() => handleRemoveMember(member.id, member.email)}
-                        className="text-zinc-500 hover:text-red-400 transition-colors p-1"
+                        disabled={pendingMembers.has(member.id)}
+                        className="text-zinc-500 hover:text-red-400 transition-colors p-1 disabled:opacity-50"
                         title="Remove member"
                       >
-                        <UserMinus className="h-3.5 w-3.5" />
+                        {pendingMembers.has(member.id)
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          : <UserMinus className="h-3.5 w-3.5" />}
                       </button>
                     )}
                   </div>
