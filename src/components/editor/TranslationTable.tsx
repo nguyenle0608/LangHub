@@ -7,8 +7,9 @@ import {
   Search, Plus, Download, Upload,
   Sparkles, LogOut, ListFilter, Layers2, ChevronDown,
   Columns3, Eye, EyeOff, Pin, PinOff, Lock, Unlock, GripVertical, Undo2, Redo2,
-  MoreHorizontal, Copy, History, Globe2, GitBranch as GitBranchIcon,
+  MoreHorizontal, Copy, History, GitBranch as GitBranchIcon,
 } from 'lucide-react'
+import { Logo } from '@/components/Logo'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -1193,9 +1194,7 @@ export function TranslationTable({ project, initialKeys, branches: initialBranch
       <header className="h-12 border-b border-zinc-800 flex items-center px-4 gap-3 flex-shrink-0 bg-[#0d1117]">
         {/* Logo + breadcrumb */}
         <Link href="/projects" className="flex items-center gap-2 shrink-0 group">
-          <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center">
-            <Globe2 className="h-3.5 w-3.5 text-white" />
-          </div>
+          <Logo size={24} />
           <span className="font-semibold text-sm text-zinc-100 group-hover:text-white transition-colors hidden lg:block">
             LangHub
           </span>
