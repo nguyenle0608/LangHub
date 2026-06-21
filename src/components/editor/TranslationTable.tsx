@@ -65,13 +65,17 @@ function keyOverallStatus(
   key: KeyWithTranslations,
   locales: ProjectWithStats['locales'],
 ): string {
-  const targetLocales = locales.filter((l) => !l.is_base)
-  if (targetLocales.length === 0) return 'empty'
-  const targetIds = new Set(targetLocales.map((l) => l.id))
-  const targetTranslations = key.translations.filter((t) => t.locale_id && targetIds.has(t.locale_id))
-  const filled = targetTranslations.filter((t) => t.value && t.value.trim())
+  // Status normally reflects the target (non-base) locales. When the project
+  // has only the base locale, fall back to scoring the base itself — otherwise
+  // every key would read as "empty" even after the base is filled/approved.
+  const targets = locales.filter((l) => !l.is_base)
+  const scored = targets.length > 0 ? targets : locales
+  if (scored.length === 0) return 'empty'
+  const scoredIds = new Set(scored.map((l) => l.id))
+  const scoredTranslations = key.translations.filter((t) => t.locale_id && scoredIds.has(t.locale_id))
+  const filled = scoredTranslations.filter((t) => t.value && t.value.trim())
   if (filled.length === 0) return 'empty'
-  if (filled.length < targetLocales.length) return 'pending'
+  if (filled.length < scored.length) return 'pending'
   if (filled.every((t) => t.status === 'approved')) return 'approved'
   if (filled.some((t) => t.status === 'reviewed')) return 'reviewed'
   return 'pending'
@@ -420,7 +424,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   // Stats
   const stats = useMemo(() => {
     const totalKeys = keys.length
-    // Key-level status counts (via keyOverallStatus, non-base only) — used in sidebar + StatsBar
+    // Key-level status counts (via keyOverallStatus) — used in sidebar + StatsBar
     const keyCounts = { empty: 0, pending: 0, reviewed: 0, approved: 0 }
     for (const key of keys) {
       const s = keyOverallStatus(key, locales)
@@ -429,7 +433,10 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     // Per-locale: count of keys where that locale needs work + approved percent
     const localeNeedsWork = new Map<string, number>()
     const localePercent = new Map<string, number>()
-    // Approved translation records (non-base) for the overall progress bar
+    // Approved records for the overall progress bar. Normally scored over the
+    // target (non-base) locales; if the project has only the base locale, the
+    // base counts so progress reflects the user's work instead of staying 0%.
+    const hasTargets = locales.some((l) => !l.is_base)
     let approvedRecords = 0
     for (const locale of locales) {
       let needsWork = 0
@@ -443,9 +450,8 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
       // counter and column-header percent.
       if (needsWork > 0) localeNeedsWork.set(locale.id, needsWork)
       localePercent.set(locale.id, totalKeys > 0 ? Math.round((approved / totalKeys) * 100) : 0)
-      // Overall progress measures translation completeness, so it excludes the
-      // base (source) locale.
-      if (!locale.is_base) approvedRecords += approved
+      const isScored = hasTargets ? !locale.is_base : true
+      if (isScored) approvedRecords += approved
     }
     return {
       total: totalKeys,
@@ -456,10 +462,12 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     }
   }, [keys, locales])
 
-  // Overall %: approved translation records / (keys × non-base locales)
+  // Overall %: approved records / (keys × scored locales). Scored = non-base
+  // locales, or the base alone when it's the only locale (matches stats above).
   const overallPercent = useMemo(() => {
     const nonBaseCount = locales.filter((l) => !l.is_base).length
-    const total = keys.length * nonBaseCount
+    const scoredCount = nonBaseCount > 0 ? nonBaseCount : locales.length
+    const total = keys.length * scoredCount
     if (total === 0) return 0
     return Math.round((stats.approvedRecords / total) * 100)
   }, [keys, locales, stats.approvedRecords])
