@@ -7,7 +7,7 @@ import {
   Search, Plus, Download, Upload,
   Sparkles, LogOut, ListFilter, Layers2, ChevronDown,
   Columns3, Eye, EyeOff, Pin, PinOff, Lock, Unlock, GripVertical, Undo2, Redo2,
-  MoreHorizontal, Copy, History, GitBranch as GitBranchIcon,
+  MoreHorizontal, Copy, History, GitBranch as GitBranchIcon, Loader2,
 } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { toast } from 'sonner'
@@ -43,6 +43,9 @@ import { signOut } from '@/lib/supabase/auth'
 interface Props {
   project: ProjectWithStats
   initialKeys: KeyWithTranslations[]
+  // Total keys on the active branch. initialKeys is the first window; the
+  // rest stream in client-side. May exceed initialKeys.length.
+  totalKeyCount: number
   branches: Branch[]
   activeBranchId: string
   user: { id: string; email?: string | undefined; role: MemberRole }
@@ -131,7 +134,7 @@ function serializeClipboardTable(grid: string[][]): string {
 // Main TranslationTable
 // ---------------------------------------------------------------------------
 
-export function TranslationTable({ project, initialKeys, branches: initialBranches, activeBranchId: initialBranchId, user }: Props) {
+export function TranslationTable({ project, initialKeys, totalKeyCount, branches: initialBranches, activeBranchId: initialBranchId, user }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Role-based permissions
@@ -192,42 +195,90 @@ export function TranslationTable({ project, initialKeys, branches: initialBranch
     setHistTick((t) => t + 1)
   }, [])
 
+  // Windowed loading: the server ships the first page; the rest stream in
+  // here. loadSeqRef guards against races when the user switches branch mid-
+  // load — each load captures a seq and bails if a newer load superseded it.
+  const LOAD_PAGE = 500
+  const loadSeqRef = useRef(0)
+  const [loadingMore, setLoadingMore] = useState(initialKeys.length < totalKeyCount)
+
+  // Append remaining pages for a branch starting at `startOffset`.
+  const streamRemaining = useCallback(async (branchId: string, startOffset: number, seq: number) => {
+    let offset = startOffset
+    try {
+      while (true) {
+        const res = await fetch(`/api/keys?projectId=${project.id}&branch=${branchId}&offset=${offset}&limit=${LOAD_PAGE}`)
+        if (loadSeqRef.current !== seq) return // superseded by a newer load
+        const json = await res.json() as { data?: KeyWithTranslations[] }
+        const page = json.data ?? []
+        if (!res.ok || page.length === 0) break
+        // Dedupe: a key created during streaming can also appear in a later
+        // page (ordered by key), and windows can overlap after edits.
+        setKeys((prev) => {
+          const seen = new Set(prev.map((k) => k.id))
+          const fresh = page.filter((k) => !seen.has(k.id))
+          return fresh.length ? [...prev, ...fresh] : prev
+        })
+        offset += page.length
+        if (page.length < LOAD_PAGE) break
+      }
+    } finally {
+      if (loadSeqRef.current === seq) setLoadingMore(false)
+    }
+  }, [project.id])
+
+  // On mount, stream the keys beyond the server's first window.
+  useEffect(() => {
+    if (initialKeys.length >= totalKeyCount) return
+    const seq = ++loadSeqRef.current
+    void streamRemaining(initialBranchId, initialKeys.length, seq)
+    // Mount-only: initialKeys/initialBranchId are the server's first window.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Load a whole branch in windows: first page replaces, rest stream in.
+  const loadBranchWindowed = useCallback(async (branchId: string) => {
+    const seq = ++loadSeqRef.current
+    setSwitchingBranch(true)
+    setLoadingMore(true)
+    try {
+      const res = await fetch(`/api/keys?projectId=${project.id}&branch=${branchId}&offset=0&limit=${LOAD_PAGE}`)
+      if (loadSeqRef.current !== seq) return
+      const json = await res.json() as { data?: KeyWithTranslations[]; total?: number; error?: string }
+      if (!res.ok || !json.data) { toast.error(json.error ?? 'Failed to load branch'); setLoadingMore(false); return }
+      setKeys(json.data)
+      setSwitchingBranch(false)
+      const total = json.total ?? json.data.length
+      if (json.data.length < total) {
+        void streamRemaining(branchId, json.data.length, seq)
+      } else {
+        setLoadingMore(false)
+      }
+    } catch {
+      toast.error('Network error')
+      setLoadingMore(false)
+    } finally {
+      setSwitchingBranch(false)
+    }
+  }, [project.id, streamRemaining])
+
   // Switch branch client-side: reload only cell content, preserve all layout.
   const handleSwitchBranch = useCallback(async (branchId: string) => {
     if (branchId === activeBranchId || switchingBranch) return
-    setSwitchingBranch(true)
-    try {
-      const res = await fetch(`/api/keys?projectId=${project.id}&branch=${branchId}`)
-      const json = await res.json() as { data?: KeyWithTranslations[]; error?: string }
-      if (!res.ok || !json.data) { toast.error(json.error ?? 'Failed to load branch'); return }
-      setKeys(json.data)
-      setActiveBranchId(branchId)
-      // Clear transient per-branch UI; keep column layout
-      setSelectedRows(new Set())
-      setSelectedKeyId(null)
-      setEditingCell(null)
-      // Update URL without a full navigation (no loading flash, no remount)
-      window.history.replaceState(null, '', `/${project.id}/editor?branch=${branchId}`)
-    } catch {
-      toast.error('Network error')
-    } finally {
-      setSwitchingBranch(false)
-    }
-  }, [activeBranchId, switchingBranch, project.id])
+    setActiveBranchId(branchId)
+    // Clear transient per-branch UI; keep column layout
+    setSelectedRows(new Set())
+    setSelectedKeyId(null)
+    setEditingCell(null)
+    // Update URL without a full navigation (no loading flash, no remount)
+    window.history.replaceState(null, '', `/${project.id}/editor?branch=${branchId}`)
+    await loadBranchWindowed(branchId)
+  }, [activeBranchId, switchingBranch, project.id, loadBranchWindowed])
 
   // Reload the active branch's cell content (after a merge into it, etc.)
   const reloadActiveBranch = useCallback(async () => {
-    setSwitchingBranch(true)
-    try {
-      const res = await fetch(`/api/keys?projectId=${project.id}&branch=${activeBranchId}`)
-      const json = await res.json() as { data?: KeyWithTranslations[]; error?: string }
-      if (res.ok && json.data) setKeys(json.data)
-    } catch {
-      // leave existing keys on failure
-    } finally {
-      setSwitchingBranch(false)
-    }
-  }, [project.id, activeBranchId])
+    await loadBranchWindowed(activeBranchId)
+  }, [activeBranchId, loadBranchWindowed])
 
   const handleBranchCreated = useCallback((branch: Branch) => {
     setBranches((prev) => [...prev, branch])
@@ -464,7 +515,7 @@ export function TranslationTable({ project, initialKeys, branches: initialBranch
         })
       )
     },
-    [activeBranchId]
+    []
   )
 
   useRealtime({ keyIds, branchId: activeBranchId, onUpdate: handleRealtimeUpdate })
@@ -1347,6 +1398,14 @@ export function TranslationTable({ project, initialKeys, branches: initialBranch
             className="h-7 pl-8 pr-3 text-xs w-56 bg-zinc-900 border-zinc-700 placeholder:text-zinc-600"
           />
         </div>
+
+        {/* Streaming indicator — search/filter act on loaded keys only until done */}
+        {loadingMore && (
+          <span className="flex items-center gap-1.5 text-[11px] text-zinc-500" title="Loading remaining keys — search and filters cover loaded keys only until this finishes">
+            <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
+            Loading {keys.length}<span className="text-zinc-700">/{totalKeyCount}</span>
+          </span>
+        )}
 
         <div className="flex-1" />
 

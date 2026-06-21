@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createTranslationKey, getTranslationKeys } from '@/lib/supabase/queries/translations'
+import { createTranslationKey, getTranslationKeys, getTranslationKeyCount } from '@/lib/supabase/queries/translations'
 import { resolveBranchId } from '@/lib/branches/queries'
 
 const PostSchema = z.object({
@@ -29,6 +29,19 @@ export async function GET(req: NextRequest) {
 
   const branchId = await resolveBranchId(projectId, searchParams.get('branch'))
   if (!branchId) return NextResponse.json({ error: 'No branch found for project' }, { status: 400 })
+
+  // Windowed mode (?offset=&limit=): return one page plus the branch total so
+  // the editor can stream the rest. Without limit, return everything.
+  const limitParam = searchParams.get('limit')
+  if (limitParam !== null) {
+    const limit = Math.max(1, Math.min(2000, Number(limitParam) || 0))
+    const offset = Math.max(0, Number(searchParams.get('offset')) || 0)
+    const [data, total] = await Promise.all([
+      getTranslationKeys(projectId, branchId, { offset, limit }),
+      offset === 0 ? getTranslationKeyCount(projectId, branchId) : Promise.resolve(undefined),
+    ])
+    return NextResponse.json({ data, total })
+  }
 
   const data = await getTranslationKeys(projectId, branchId)
   return NextResponse.json({ data })

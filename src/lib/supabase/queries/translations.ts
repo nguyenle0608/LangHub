@@ -17,27 +17,47 @@ export type KeyWithTranslations = KeyRow & { translations: GridTranslation[] }
 
 const PAGE_SIZE = 1000
 
+// Count keys on a branch — cheap, used to drive windowed loading in the editor.
+export async function getTranslationKeyCount(projectId: string, branchId: string): Promise<number> {
+  const supabase = await createClient()
+  const { count } = await supabase
+    .from('translation_keys')
+    .select('*', { count: 'exact', head: true })
+    .eq('project_id', projectId)
+    .eq('branch_id', branchId)
+  return count ?? 0
+}
+
 export async function getTranslationKeys(
   projectId: string,
   branchId: string,
-  opts?: { search?: string; status?: string; tags?: string[] }
+  opts?: { search?: string; status?: string; tags?: string[]; offset?: number; limit?: number }
 ): Promise<KeyWithTranslations[]> {
   const supabase = await createClient()
 
-  // Paginate to bypass PostgREST's 1000-row default limit
-  const all: KeyWithTranslations[] = []
-  let offset = 0
-  while (true) {
-    // Keys are per-branch (M2); translations are embedded and also branch-scoped.
-    const { data, error } = await supabase
+  const baseQuery = () =>
+    supabase
       .from('translation_keys')
+      // Keys are per-branch (M2); translations are embedded and also branch-scoped.
       .select(`*, translations(${GRID_TRANSLATION_COLS})`)
       .eq('project_id', projectId)
       .eq('branch_id', branchId)
       .eq('translations.branch_id', branchId)
       .order('key', { ascending: true })
-      .range(offset, offset + PAGE_SIZE - 1)
 
+  // Windowed mode: fetch a single page (no client-side filtering — the editor
+  // filters in memory once all pages have streamed in).
+  if (opts?.limit !== undefined) {
+    const start = opts.offset ?? 0
+    const { data } = await baseQuery().range(start, start + opts.limit - 1)
+    return (data ?? []) as KeyWithTranslations[]
+  }
+
+  // Full mode: paginate to bypass PostgREST's 1000-row default limit.
+  const all: KeyWithTranslations[] = []
+  let offset = 0
+  while (true) {
+    const { data, error } = await baseQuery().range(offset, offset + PAGE_SIZE - 1)
     if (error || !data || data.length === 0) break
     all.push(...(data as KeyWithTranslations[]))
     if (data.length < PAGE_SIZE) break

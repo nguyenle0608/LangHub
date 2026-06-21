@@ -1,10 +1,14 @@
 import { redirect, notFound } from 'next/navigation'
 import { getUser } from '@/lib/supabase/session'
 import { getProject } from '@/lib/supabase/queries/projects'
-import { getTranslationKeys } from '@/lib/supabase/queries/translations'
+import { getTranslationKeys, getTranslationKeyCount } from '@/lib/supabase/queries/translations'
 import { getUserOrgRole } from '@/lib/supabase/queries/organizations'
 import { listBranches, resolveBranchId } from '@/lib/branches/queries'
 import { TranslationTable } from '@/components/editor/TranslationTable'
+
+// First-paint window: ship this many keys server-side, stream the rest
+// client-side. Sized to fill the viewport comfortably without a heavy payload.
+const INITIAL_KEYS = 200
 
 interface Props {
   params: Promise<{ projectId: string }>
@@ -26,7 +30,10 @@ export default async function EditorPage({ params, searchParams }: Props) {
   ])
   if (!activeBranchId) notFound()
 
-  const keys = await getTranslationKeys(projectId, activeBranchId)
+  const [keys, totalKeys] = await Promise.all([
+    getTranslationKeys(projectId, activeBranchId, { limit: INITIAL_KEYS }),
+    getTranslationKeyCount(projectId, activeBranchId),
+  ])
 
   const role = project.org_id
     ? await getUserOrgRole(project.org_id, user.id)
@@ -36,6 +43,7 @@ export default async function EditorPage({ params, searchParams }: Props) {
     <TranslationTable
       project={project}
       initialKeys={keys}
+      totalKeyCount={totalKeys}
       branches={branches}
       activeBranchId={activeBranchId}
       user={{ id: user.id, email: user.email ?? undefined, role: role ?? 'viewer' }}
