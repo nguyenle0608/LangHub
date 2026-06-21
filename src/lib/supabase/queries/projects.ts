@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { createClient } from '../server'
 import { createAdminClient } from '../admin'
 import { fetchBranchTranslations } from '@/lib/branches/fetch'
@@ -195,7 +196,9 @@ export async function getProjectsByOrg(orgId: string): Promise<ProjectWithStats[
   })
 }
 
-export async function getProject(projectId: string): Promise<ProjectWithStats | null> {
+// Cached per server request: a heavy ProjectWithStats build, deduped if the
+// same project is read more than once during a single render.
+export const getProject = cache(async (projectId: string): Promise<ProjectWithStats | null> => {
   const supabase = await createClient()
 
   const { data: project } = await supabase.from('projects').select('*').eq('id', projectId).single()
@@ -210,7 +213,7 @@ export async function getProject(projectId: string): Promise<ProjectWithStats | 
   const overallPercent = overallTotal > 0 ? Math.round((overallApproved / overallTotal) * 100) : 0
 
   return { ...project, key_count: totalKeys, locale_count: locales.length, overall_percent: overallPercent, locales: localesWithStats } satisfies ProjectWithStats
-}
+})
 
 // ── Writes: admin client (service role) ──────────────────────────────────
 // API routes verify auth via getUser() before calling these functions.

@@ -1,5 +1,5 @@
 import { redirect, notFound } from 'next/navigation'
-import { getUser } from '@/lib/supabase/auth'
+import { getUser } from '@/lib/supabase/session'
 import { getProject } from '@/lib/supabase/queries/projects'
 import { getTranslationKeys } from '@/lib/supabase/queries/translations'
 import { getUserOrgRole } from '@/lib/supabase/queries/organizations'

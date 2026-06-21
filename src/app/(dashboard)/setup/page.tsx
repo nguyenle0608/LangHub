@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { getUser } from '@/lib/supabase/auth'
+import { getUser } from '@/lib/supabase/session'
 import { getOrganizations } from '@/lib/supabase/queries/organizations'
 import { SetupClient } from './SetupClient'
 

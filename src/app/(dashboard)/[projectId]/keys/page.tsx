@@ -1,5 +1,5 @@
 import { redirect, notFound } from 'next/navigation'
-import { getUser } from '@/lib/supabase/auth'
+import { getUser } from '@/lib/supabase/session'
 import { getProject } from '@/lib/supabase/queries/projects'
 import { findDuplicateGroups } from '@/lib/supabase/queries/keys'
 import { resolveBranchId } from '@/lib/branches/queries'

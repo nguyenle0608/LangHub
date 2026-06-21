@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { getUser } from '@/lib/supabase/auth'
+import { getUser } from '@/lib/supabase/session'
 import { AuthWatcher } from '@/components/AuthWatcher'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
