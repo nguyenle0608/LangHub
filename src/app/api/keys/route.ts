@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
 }
 
 const DeleteSchema = z.object({
-  ids: z.array(z.string().uuid()).min(1).max(1000),
+  ids: z.array(z.string().uuid()).min(1),
 })
 
 export async function DELETE(req: NextRequest) {
@@ -89,11 +89,17 @@ export async function DELETE(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: 'ids[] required' }, { status: 400 })
 
   const admin = createAdminClient()
-  const { error } = await admin
-    .from('translation_keys')
-    .delete()
-    .in('id', parsed.data.ids)
+  // Chunk the delete: a single .in('id', [...]) with many UUIDs overflows the
+  // PostgREST request URL (same failure mode as large .in() reads).
+  const ids = parsed.data.ids
+  const CHUNK = 100
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const { error } = await admin
+      .from('translation_keys')
+      .delete()
+      .in('id', ids.slice(i, i + CHUNK))
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ success: true, deleted: parsed.data.ids.length })
+  return NextResponse.json({ success: true, deleted: ids.length })
 }
