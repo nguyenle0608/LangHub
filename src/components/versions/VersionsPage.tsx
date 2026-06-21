@@ -5,9 +5,12 @@ import Link from 'next/link'
 import { ArrowLeft, Plus, Trash2, RotateCcw, GitBranch, Zap, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import dynamic from 'next/dynamic'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { VersionDiffView } from './VersionDiffView'
+
+// Diff view is only shown after a version is selected — lazy-load it.
+const VersionDiffView = dynamic(() => import('./VersionDiffView').then((m) => m.VersionDiffView))
 import type { VersionWithStats } from '@/lib/versions/snapshot'
 import type { ProjectWithStats } from '@/types'
 

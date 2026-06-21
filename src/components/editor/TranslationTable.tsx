@@ -15,15 +15,19 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import dynamic from 'next/dynamic'
 import { TranslationCell } from './TranslationCell'
 import { StatusBadge } from './StatusBadge'
 import { BulkActionBar } from './BulkActionBar'
 import { BranchSwitcher } from './BranchSwitcher'
-import { MergeDialog } from './MergeDialog'
-import { AddKeySheet } from './AddKeySheet'
-import { KeyDetailPanel } from './KeyDetailPanel'
 import { ManageLocalesDialog } from './ManageLocalesDialog'
-import { ExportSheet } from '@/components/export/ExportSheet'
+
+// Interaction-only modals/sheets — lazy-loaded so they stay out of the
+// editor's initial bundle and only fetch when the user opens them.
+const MergeDialog = dynamic(() => import('./MergeDialog').then((m) => m.MergeDialog))
+const AddKeySheet = dynamic(() => import('./AddKeySheet').then((m) => m.AddKeySheet))
+const KeyDetailPanel = dynamic(() => import('./KeyDetailPanel').then((m) => m.KeyDetailPanel))
+const ExportSheet = dynamic(() => import('@/components/export/ExportSheet').then((m) => m.ExportSheet))
 import { useRealtime } from '@/hooks/useRealtime'
 import { usePresence } from '@/hooks/usePresence'
 import type { ProjectWithStats, MemberRole } from '@/types'
@@ -2002,17 +2006,19 @@ export function TranslationTable({ project, initialKeys, branches: initialBranch
         </div>
       </div>
 
-      <KeyDetailPanel
-        keyItem={selectedKey}
-        locales={locales}
-        userId={user.id}
-        branchId={activeBranchId}
-        canEdit={canEdit}
-        canEditKeys={canEditKeys}
-        onClose={() => setSelectedKeyId(null)}
-        onKeyUpdated={(patch) => handleKeyUpdated(selectedKeyId!, patch)}
-        onKeyDeleted={handleKeyDeleted}
-      />
+      {selectedKey && (
+        <KeyDetailPanel
+          keyItem={selectedKey}
+          locales={locales}
+          userId={user.id}
+          branchId={activeBranchId}
+          canEdit={canEdit}
+          canEditKeys={canEditKeys}
+          onClose={() => setSelectedKeyId(null)}
+          onKeyUpdated={(patch) => handleKeyUpdated(selectedKeyId!, patch)}
+          onKeyDeleted={handleKeyDeleted}
+        />
+      )}
 
       {/* Merge dialog */}
       {mergeSourceId && (() => {
@@ -2049,23 +2055,27 @@ export function TranslationTable({ project, initialKeys, branches: initialBranch
       )}
 
       {/* Add Key sheet */}
-      <AddKeySheet
-        open={showAddKey}
-        projectId={project.id}
-        branchId={activeBranchId}
-        locales={locales}
-        existingKeys={keys.map((k) => k.key)}
-        onClose={() => setShowAddKey(false)}
-        onCreated={handleKeyCreated}
-      />
+      {showAddKey && (
+        <AddKeySheet
+          open={showAddKey}
+          projectId={project.id}
+          branchId={activeBranchId}
+          locales={locales}
+          existingKeys={keys.map((k) => k.key)}
+          onClose={() => setShowAddKey(false)}
+          onCreated={handleKeyCreated}
+        />
+      )}
 
       {/* Export dialog */}
-      <ExportSheet
-        open={showExport}
-        project={project}
-        branchId={activeBranchId}
-        onClose={() => setShowExport(false)}
-      />
+      {showExport && (
+        <ExportSheet
+          open={showExport}
+          project={project}
+          branchId={activeBranchId}
+          onClose={() => setShowExport(false)}
+        />
+      )}
     </div>
   )
 }
