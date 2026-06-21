@@ -55,6 +55,77 @@ async function getProjectTranslations(
   return { totalKeys, translations }
 }
 
+type ProjectStats = { totalKeys: number; translations: Pick<TranslationRow, 'locale_id' | 'status'>[] }
+
+// Batched stats for a list of projects. Collapses the per-project 3-query
+// pattern (branch + key count + translations) into ~3 queries total by
+// resolving all default branches at once and grouping rows in memory.
+async function getProjectsTranslationStats(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  projectIds: string[]
+): Promise<Map<string, ProjectStats>> {
+  const result = new Map<string, ProjectStats>()
+  if (!projectIds.length) return result
+
+  // 1. Default (main) branch per project.
+  const { data: branches } = await supabase
+    .from('branches')
+    .select('id, project_id')
+    .in('project_id', projectIds)
+    .eq('is_default', true)
+
+  const branchToProject = new Map<string, string>()
+  for (const b of branches ?? []) {
+    if (b.project_id) branchToProject.set(b.id, b.project_id)
+  }
+  const branchIds = Array.from(branchToProject.keys())
+  for (const pid of projectIds) result.set(pid, { totalKeys: 0, translations: [] })
+  if (!branchIds.length) return result
+
+  const PAGE = 1000
+
+  // 2. Key counts per branch (only branch_id column; paginated).
+  const keyCountByBranch = new Map<string, number>()
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from('translation_keys')
+      .select('branch_id')
+      .in('branch_id', branchIds)
+      .range(from, from + PAGE - 1)
+    if (error || !data || data.length === 0) break
+    for (const row of data) {
+      if (row.branch_id) keyCountByBranch.set(row.branch_id, (keyCountByBranch.get(row.branch_id) ?? 0) + 1)
+    }
+    if (data.length < PAGE) break
+  }
+
+  // 3. Translations for all branches (status/locale only; paginated).
+  const transByBranch = new Map<string, Pick<TranslationRow, 'locale_id' | 'status'>[]>()
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from('translations')
+      .select('branch_id, locale_id, status')
+      .in('branch_id', branchIds)
+      .range(from, from + PAGE - 1)
+    if (error || !data || data.length === 0) break
+    for (const row of data) {
+      if (!row.branch_id) continue
+      const list = transByBranch.get(row.branch_id) ?? []
+      list.push({ locale_id: row.locale_id, status: row.status })
+      transByBranch.set(row.branch_id, list)
+    }
+    if (data.length < PAGE) break
+  }
+
+  for (const [branchId, projectId] of Array.from(branchToProject)) {
+    result.set(projectId, {
+      totalKeys: keyCountByBranch.get(branchId) ?? 0,
+      translations: transByBranch.get(branchId) ?? [],
+    })
+  }
+  return result
+}
+
 // ── Reads: user-scoped client (RLS applies) ───────────────────────────────
 
 export async function getProjects(userId: string): Promise<ProjectWithStats[]> {
@@ -80,15 +151,15 @@ export async function getProjects(userId: string): Promise<ProjectWithStats[]> {
     return acc
   }, {})
 
-  return Promise.all(
-    projectRows.map(async (project) => {
-      const locales = localesByProject[project.id] ?? []
-      const { totalKeys, translations } = await getProjectTranslations(supabase, project.id)
-      const localesWithStats = computeLocaleStats(locales, translations, totalKeys)
-      const overallPercent = computeOverallPercent(localesWithStats, totalKeys)
-      return { ...project, key_count: totalKeys, locale_count: locales.length, overall_percent: overallPercent, locales: localesWithStats } satisfies ProjectWithStats
-    })
-  )
+  const statsByProject = await getProjectsTranslationStats(supabase, projectRows.map((p) => p.id))
+
+  return projectRows.map((project) => {
+    const locales = localesByProject[project.id] ?? []
+    const { totalKeys, translations } = statsByProject.get(project.id) ?? { totalKeys: 0, translations: [] }
+    const localesWithStats = computeLocaleStats(locales, translations, totalKeys)
+    const overallPercent = computeOverallPercent(localesWithStats, totalKeys)
+    return { ...project, key_count: totalKeys, locale_count: locales.length, overall_percent: overallPercent, locales: localesWithStats } satisfies ProjectWithStats
+  })
 }
 
 export async function getProjectsByOrg(orgId: string): Promise<ProjectWithStats[]> {
@@ -113,15 +184,15 @@ export async function getProjectsByOrg(orgId: string): Promise<ProjectWithStats[
     return acc
   }, {})
 
-  return Promise.all(
-    projectRows.map(async (project) => {
-      const locales = localesByProject[project.id] ?? []
-      const { totalKeys, translations } = await getProjectTranslations(supabase, project.id)
-      const localesWithStats = computeLocaleStats(locales, translations, totalKeys)
-      const overallPercent = computeOverallPercent(localesWithStats, totalKeys)
-      return { ...project, key_count: totalKeys, locale_count: locales.length, overall_percent: overallPercent, locales: localesWithStats } satisfies ProjectWithStats
-    })
-  )
+  const statsByProject = await getProjectsTranslationStats(supabase, projectRows.map((p) => p.id))
+
+  return projectRows.map((project) => {
+    const locales = localesByProject[project.id] ?? []
+    const { totalKeys, translations } = statsByProject.get(project.id) ?? { totalKeys: 0, translations: [] }
+    const localesWithStats = computeLocaleStats(locales, translations, totalKeys)
+    const overallPercent = computeOverallPercent(localesWithStats, totalKeys)
+    return { ...project, key_count: totalKeys, locale_count: locales.length, overall_percent: overallPercent, locales: localesWithStats } satisfies ProjectWithStats
+  })
 }
 
 export async function getProject(projectId: string): Promise<ProjectWithStats | null> {
