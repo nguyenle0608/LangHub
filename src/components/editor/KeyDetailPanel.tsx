@@ -484,7 +484,7 @@ function DetailsPane({
           <ChevronDown className={cn('h-3 w-3 text-zinc-600 transition-transform', !historyOpen && '-rotate-90')} />
         </button>
         {historyOpen && (
-          <div className="px-4 pb-4 space-y-2">
+          <div className="px-4 pb-4 space-y-2 max-h-72 overflow-y-auto">
             {historyLoading
               ? [1, 2].map((i) => <div key={i} className="h-12 rounded bg-zinc-800/50 animate-pulse" />)
               : history.length === 0
@@ -562,16 +562,18 @@ export function KeyDetailPanel({ keyItem, locales, userId, branchId, canEdit, ca
         {keyItem && (
           <div className="flex flex-1 overflow-hidden min-h-0">
             {/* Left: translations */}
-            <div className="flex-1 overflow-y-auto border-r border-zinc-800 px-4 py-3">
-              <p className="text-[10px] uppercase tracking-wider text-zinc-600 mb-3">Translations</p>
-              <TranslationsPane
-                key={keyItem.id}
-                keyItem={keyItem}
-                locales={locales}
-                branchId={branchId}
-                onUpdated={onKeyUpdated}
-                canEdit={canEdit}
-              />
+            <div className="flex-1 overflow-y-auto border-r border-zinc-800">
+              <p className="sticky top-0 z-10 bg-zinc-950 text-[10px] uppercase tracking-wider text-zinc-600 px-4 pt-3 pb-2">Translations</p>
+              <div className="px-4 pb-3">
+                <TranslationsPane
+                  key={keyItem.id}
+                  keyItem={keyItem}
+                  locales={locales}
+                  branchId={branchId}
+                  onUpdated={onKeyUpdated}
+                  canEdit={canEdit}
+                />
+              </div>
             </div>
 
             {/* Right: details */}
