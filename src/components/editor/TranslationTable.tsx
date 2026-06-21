@@ -202,24 +202,25 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   const loadSeqRef = useRef(0)
   const [loadingMore, setLoadingMore] = useState(initialKeys.length < totalKeyCount)
 
-  // Append remaining pages for a branch starting at `startOffset`.
-  const streamRemaining = useCallback(async (branchId: string, startOffset: number, seq: number) => {
-    let offset = startOffset
+  // Append remaining pages for a branch using keyset pagination — each page is
+  // fetched with `after` = the last key already loaded.
+  const streamRemaining = useCallback(async (branchId: string, afterKey: string, seq: number) => {
+    let cursor = afterKey
     try {
       while (true) {
-        const res = await fetch(`/api/keys?projectId=${project.id}&branch=${branchId}&offset=${offset}&limit=${LOAD_PAGE}`)
+        const res = await fetch(`/api/keys?projectId=${project.id}&branch=${branchId}&after=${encodeURIComponent(cursor)}&limit=${LOAD_PAGE}`)
         if (loadSeqRef.current !== seq) return // superseded by a newer load
         const json = await res.json() as { data?: KeyWithTranslations[] }
         const page = json.data ?? []
         if (!res.ok || page.length === 0) break
-        // Dedupe: a key created during streaming can also appear in a later
-        // page (ordered by key), and windows can overlap after edits.
+        // Dedupe: a key created during streaming can also fall into a later
+        // page, and handleKeyCreated may have prepended it already.
         setKeys((prev) => {
           const seen = new Set(prev.map((k) => k.id))
           const fresh = page.filter((k) => !seen.has(k.id))
           return fresh.length ? [...prev, ...fresh] : prev
         })
-        offset += page.length
+        cursor = page[page.length - 1]!.key
         if (page.length < LOAD_PAGE) break
       }
     } finally {
@@ -229,9 +230,9 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
 
   // On mount, stream the keys beyond the server's first window.
   useEffect(() => {
-    if (initialKeys.length >= totalKeyCount) return
+    if (initialKeys.length >= totalKeyCount || initialKeys.length === 0) return
     const seq = ++loadSeqRef.current
-    void streamRemaining(initialBranchId, initialKeys.length, seq)
+    void streamRemaining(initialBranchId, initialKeys[initialKeys.length - 1]!.key, seq)
     // Mount-only: initialKeys/initialBranchId are the server's first window.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -242,15 +243,15 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     setSwitchingBranch(true)
     setLoadingMore(true)
     try {
-      const res = await fetch(`/api/keys?projectId=${project.id}&branch=${branchId}&offset=0&limit=${LOAD_PAGE}`)
+      const res = await fetch(`/api/keys?projectId=${project.id}&branch=${branchId}&limit=${LOAD_PAGE}`)
       if (loadSeqRef.current !== seq) return
       const json = await res.json() as { data?: KeyWithTranslations[]; total?: number; error?: string }
       if (!res.ok || !json.data) { toast.error(json.error ?? 'Failed to load branch'); setLoadingMore(false); return }
       setKeys(json.data)
       setSwitchingBranch(false)
       const total = json.total ?? json.data.length
-      if (json.data.length < total) {
-        void streamRemaining(branchId, json.data.length, seq)
+      if (json.data.length < total && json.data.length > 0) {
+        void streamRemaining(branchId, json.data[json.data.length - 1]!.key, seq)
       } else {
         setLoadingMore(false)
       }

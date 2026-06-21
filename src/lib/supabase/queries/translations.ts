@@ -31,7 +31,11 @@ export async function getTranslationKeyCount(projectId: string, branchId: string
 export async function getTranslationKeys(
   projectId: string,
   branchId: string,
-  opts?: { search?: string; status?: string; tags?: string[]; offset?: number; limit?: number }
+  // Windowed mode is keyset/cursor-based: pass `limit` and the previous page's
+  // last key as `afterKey`. Keys are unique + non-null + indexed per branch,
+  // so this is drift-safe (no skip/duplicate when rows change mid-stream) and
+  // has constant cost regardless of how deep we are.
+  opts?: { search?: string; status?: string; tags?: string[]; afterKey?: string; limit?: number }
 ): Promise<KeyWithTranslations[]> {
   const supabase = await createClient()
 
@@ -45,11 +49,12 @@ export async function getTranslationKeys(
       .eq('translations.branch_id', branchId)
       .order('key', { ascending: true })
 
-  // Windowed mode: fetch a single page (no client-side filtering — the editor
-  // filters in memory once all pages have streamed in).
+  // Windowed mode: fetch a single page after the cursor (no client-side
+  // filtering — the editor filters in memory once all pages stream in).
   if (opts?.limit !== undefined) {
-    const start = opts.offset ?? 0
-    const { data } = await baseQuery().range(start, start + opts.limit - 1)
+    let q = baseQuery().limit(opts.limit)
+    if (opts.afterKey !== undefined) q = q.gt('key', opts.afterKey)
+    const { data } = await q
     return (data ?? []) as KeyWithTranslations[]
   }
 
