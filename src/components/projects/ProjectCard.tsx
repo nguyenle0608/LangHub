@@ -72,14 +72,14 @@ export function ProjectCard({ project, canDelete }: { project: ProjectWithStats;
         <ProgressBar percent={project.overall_percent} />
 
         <div className="flex items-center gap-3 mt-3">
-          <div className="flex -space-x-1">
+          <div className="flex items-center gap-1.5">
             {project.locales.slice(0, 6).map((locale) => (
               <span key={locale.id} className="text-base leading-none" title={`${locale.name} — ${locale.percent}%`}>
                 {localeFlag(locale.code)}
               </span>
             ))}
             {project.locales.length > 6 && (
-              <span className="text-xs text-zinc-500 ml-1.5 self-center">+{project.locales.length - 6}</span>
+              <span className="text-xs text-zinc-500 self-center">+{project.locales.length - 6}</span>
             )}
           </div>
           <div className="ml-auto flex items-center gap-3 text-xs text-zinc-500">
