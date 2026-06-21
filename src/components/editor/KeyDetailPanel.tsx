@@ -122,11 +122,7 @@ function TranslationsPane({
             ...keyItem.translations,
             {
               id: result.id ?? `optimistic-${localeId}`,
-              branch_id: branchId,
               key_id: keyItem.id, locale_id: localeId, value, status,
-              updated_at: new Date().toISOString(),
-              translated_by: null, reviewed_by: null,
-              ai_model: null, ai_suggested_at: null, ai_suggestion: null,
             },
           ],
         })

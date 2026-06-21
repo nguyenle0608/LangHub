@@ -455,11 +455,9 @@ export function TranslationTable({ project, initialKeys, branches: initialBranch
             translations: [
               ...k.translations,
               {
-                id: update.id, branch_id: update.branch_id ?? activeBranchId,
+                id: update.id,
                 key_id: update.key_id, locale_id: update.locale_id,
-                value: update.value, status: update.status, updated_at: update.updated_at,
-                translated_by: null, reviewed_by: null,
-                ai_model: null, ai_suggested_at: null, ai_suggestion: null,
+                value: update.value, status: update.status,
               },
             ],
           }
@@ -547,11 +545,7 @@ export function TranslationTable({ project, initialKeys, branches: initialBranch
               ...updatedTranslations,
               {
                 id: `optimistic-${localeId}`,
-                branch_id: activeBranchId,
                 key_id: keyId, locale_id: localeId, value, status,
-                updated_at: new Date().toISOString(),
-                translated_by: null, reviewed_by: null,
-                ai_model: null, ai_suggested_at: null, ai_suggestion: null,
               },
             ]
           }
@@ -888,11 +882,7 @@ export function TranslationTable({ project, initialKeys, branches: initialBranch
           } else {
             trans.push({
               id: `optimistic-${it.localeId}`,
-              branch_id: activeBranchId,
               key_id: k.id, locale_id: it.localeId, value: it.value, status: it.status,
-              updated_at: new Date().toISOString(),
-              translated_by: null, reviewed_by: null,
-              ai_model: null, ai_suggested_at: null, ai_suggestion: null,
             })
           }
         }
@@ -1004,11 +994,7 @@ export function TranslationTable({ project, initialKeys, branches: initialBranch
           } else {
             trans.push({
               id: `optimistic-${it.localeId}`,
-              branch_id: activeBranchId,
               key_id: k.id, locale_id: it.localeId, value: it.value, status: it.status,
-              updated_at: new Date().toISOString(),
-              translated_by: null, reviewed_by: null,
-              ai_model: null, ai_suggested_at: null, ai_suggestion: null,
             })
           }
         }

@@ -5,7 +5,13 @@ import type { Database } from '@/types/database'
 type TranslationRow = Database['public']['Tables']['translations']['Row']
 type KeyRow = Database['public']['Tables']['translation_keys']['Row']
 
-export type KeyWithTranslations = KeyRow & { translations: TranslationRow[] }
+// The grid only needs these 5 of the 12 translation columns. Shipping the
+// full row (ai_*, reviewed_by, translated_by, updated_at, branch_id) is dead
+// weight — ~50%+ of the editor payload, multiplied per locale per key.
+export type GridTranslation = Pick<TranslationRow, 'id' | 'key_id' | 'locale_id' | 'value' | 'status'>
+const GRID_TRANSLATION_COLS = 'id, key_id, locale_id, value, status'
+
+export type KeyWithTranslations = KeyRow & { translations: GridTranslation[] }
 
 // ── Reads: user-scoped client (RLS applies) ───────────────────────────────
 
@@ -25,7 +31,7 @@ export async function getTranslationKeys(
     // Keys are per-branch (M2); translations are embedded and also branch-scoped.
     const { data, error } = await supabase
       .from('translation_keys')
-      .select('*, translations(*)')
+      .select(`*, translations(${GRID_TRANSLATION_COLS})`)
       .eq('project_id', projectId)
       .eq('branch_id', branchId)
       .eq('translations.branch_id', branchId)
