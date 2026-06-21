@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { LayoutGrid, List, LogOut, ArrowUpDown, Plus } from 'lucide-react'
 import { Logo } from '@/components/Logo'
@@ -39,6 +39,12 @@ export function ProjectsPageClient({ projects, orgs, currentOrgId, userEmail, us
   const [sort, setSort] = useState<SortKey>('name')
   const [loggingOut, setLoggingOut] = useState(false)
   const [createOrgOpen, setCreateOrgOpen] = useState(false)
+  const [isSwitchingOrg, startOrgSwitch] = useTransition()
+  const [switchingToOrgId, setSwitchingToOrgId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!isSwitchingOrg) setSwitchingToOrgId(null)
+  }, [isSwitchingOrg])
 
   // Silently update URL with default org — avoids server-side redirect flash
   useEffect(() => {
@@ -59,7 +65,10 @@ export function ProjectsPageClient({ projects, orgs, currentOrgId, userEmail, us
   }
 
   function handleOrgSwitch(orgId: string) {
-    router.push(`/projects?org=${orgId}`)
+    setSwitchingToOrgId(orgId)
+    startOrgSwitch(() => {
+      router.push(`/projects?org=${orgId}`)
+    })
   }
 
   function handleOrgCreated(orgId: string) {
@@ -91,6 +100,7 @@ export function ProjectsPageClient({ projects, orgs, currentOrgId, userEmail, us
               canManageOrg={canManageOrg}
               onSwitch={handleOrgSwitch}
               onCreateNew={() => setCreateOrgOpen(true)}
+              switchingToId={switchingToOrgId}
             />
           </div>
 

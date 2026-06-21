@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { ChevronDown, Check, Plus, Building2, Settings } from 'lucide-react'
+import { ChevronDown, Check, Plus, Building2, Settings, Loader2 } from 'lucide-react'
 import type { OrgWithStats } from '@/types'
 
 interface Props {
@@ -10,13 +10,19 @@ interface Props {
   canManageOrg: boolean
   onSwitch: (orgId: string) => void
   onCreateNew: () => void
+  switchingToId?: string | null
 }
 
-export function OrgSwitcher({ orgs, currentOrgId, canManageOrg, onSwitch, onCreateNew }: Props) {
+export function OrgSwitcher({ orgs, currentOrgId, canManageOrg, onSwitch, onCreateNew, switchingToId }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const isSwitching = !!switchingToId
 
   const currentOrg = orgs.find((o) => o.id === currentOrgId)
+
+  useEffect(() => {
+    if (isSwitching) setOpen(false)
+  }, [isSwitching])
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -31,14 +37,19 @@ export function OrgSwitcher({ orgs, currentOrgId, canManageOrg, onSwitch, onCrea
   return (
     <div ref={ref} className="relative">
       <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-zinc-200 hover:bg-zinc-800 transition-colors max-w-[200px]"
+        onClick={() => { if (!isSwitching) setOpen((v) => !v) }}
+        disabled={isSwitching}
+        className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-zinc-200 hover:bg-zinc-800 transition-colors max-w-[200px] disabled:opacity-70 disabled:cursor-default"
       >
-        <Building2 className="h-4 w-4 text-zinc-400 flex-shrink-0" />
+        {isSwitching
+          ? <Loader2 className="h-4 w-4 text-zinc-400 flex-shrink-0 animate-spin" />
+          : <Building2 className="h-4 w-4 text-zinc-400 flex-shrink-0" />}
         <span className="text-sm font-medium truncate">
-          {currentOrg?.name ?? 'Select workspace'}
+          {isSwitching
+            ? (orgs.find((o) => o.id === switchingToId)?.name ?? currentOrg?.name ?? 'Loading…')
+            : (currentOrg?.name ?? 'Select workspace')}
         </span>
-        <ChevronDown className={`h-3.5 w-3.5 text-zinc-500 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+        {!isSwitching && <ChevronDown className={`h-3.5 w-3.5 text-zinc-500 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />}
       </button>
 
       {open && (
@@ -48,33 +59,38 @@ export function OrgSwitcher({ orgs, currentOrgId, canManageOrg, onSwitch, onCrea
           </div>
 
           <div className="py-1 max-h-64 overflow-y-auto">
-            {orgs.map((org) => (
-              <button
-                key={org.id}
-                onClick={() => {
-                  onSwitch(org.id)
-                  setOpen(false)
-                }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-zinc-800 transition-colors"
-              >
-                <div className="w-6 h-6 rounded bg-blue-600/20 border border-blue-600/30 flex items-center justify-center flex-shrink-0">
-                  <span className="text-[10px] font-bold text-blue-400 uppercase">
-                    {org.name.charAt(0)}
-                  </span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-zinc-200 truncate">{org.name}</p>
-                  <p className="text-[11px] text-zinc-500">
-                    {org.project_count} project{org.project_count !== 1 ? 's' : ''}
-                    {' · '}
-                    {org.role}
-                  </p>
-                </div>
-                {org.id === currentOrgId && (
-                  <Check className="h-3.5 w-3.5 text-blue-400 flex-shrink-0" />
-                )}
-              </button>
-            ))}
+            {orgs.map((org) => {
+              const isThisSwitching = switchingToId === org.id
+              return (
+                <button
+                  key={org.id}
+                  onClick={() => {
+                    if (isSwitching) return
+                    onSwitch(org.id)
+                    setOpen(false)
+                  }}
+                  disabled={isSwitching}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-zinc-800 transition-colors disabled:cursor-default"
+                >
+                  <div className="w-6 h-6 rounded bg-blue-600/20 border border-blue-600/30 flex items-center justify-center flex-shrink-0">
+                    <span className="text-[10px] font-bold text-blue-400 uppercase">
+                      {org.name.charAt(0)}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-zinc-200 truncate">{org.name}</p>
+                    <p className="text-[11px] text-zinc-500">
+                      {org.project_count} project{org.project_count !== 1 ? 's' : ''}
+                      {' · '}
+                      {org.role}
+                    </p>
+                  </div>
+                  {isThisSwitching
+                    ? <Loader2 className="h-3.5 w-3.5 text-blue-400 flex-shrink-0 animate-spin" />
+                    : org.id === currentOrgId && <Check className="h-3.5 w-3.5 text-blue-400 flex-shrink-0" />}
+                </button>
+              )
+            })}
           </div>
 
           <div className="border-t border-zinc-800 py-1">
