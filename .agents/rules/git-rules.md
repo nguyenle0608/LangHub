@@ -62,6 +62,10 @@ fix(api): use admin client for server-side mutations
 refactor(queries): extract translation queries to dedicated file
 ```
 
+> **No co-author trailers.** Commit messages must NOT include a
+> `Co-Authored-By:` line (or any AI-attribution trailer). Keep the message to
+> the type/scope/description and body only.
+
 ---
 
 ## PR Rules
