@@ -1283,6 +1283,68 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     }
   }, [applyPaste, clearSelection, undo, redo, canEdit])
 
+  // Auto-scroll while drag-selecting past the top/bottom edge. onMouseEnter only
+  // fires when the pointer moves over a cell, so a stationary pointer held at the
+  // edge wouldn't scroll or extend the selection — this rAF loop does both by
+  // scrolling the container and re-resolving the cell under the pointer.
+  useEffect(() => {
+    const EDGE = 56       // px zone from the top/bottom edge that triggers scroll
+    const MAX_SPEED = 22  // max px scrolled per frame (at the very edge)
+    const pointer = { x: 0, y: 0 }
+    let raf: number | null = null
+
+    const cellAtPoint = (x: number, y: number) => {
+      const el = document.elementFromPoint(x, y) as HTMLElement | null
+      const cell = el?.closest('[data-cell]') as HTMLElement | null
+      if (!cell || cell.dataset.row == null || cell.dataset.col == null) return null
+      return { row: Number(cell.dataset.row), col: Number(cell.dataset.col) }
+    }
+
+    const step = () => {
+      const sc = scrollRef.current
+      if (!pointerDownRef.current || !sc) { raf = null; return }
+      const rect = sc.getBoundingClientRect()
+      let dy = 0
+      if (pointer.y > rect.bottom - EDGE) {
+        dy = Math.min(MAX_SPEED, ((pointer.y - (rect.bottom - EDGE)) / EDGE) * MAX_SPEED)
+      } else if (pointer.y < rect.top + EDGE) {
+        dy = -Math.min(MAX_SPEED, (((rect.top + EDGE) - pointer.y) / EDGE) * MAX_SPEED)
+      }
+      if (dy === 0) { raf = null; return } // pointer left the edge zone — stop looping
+      sc.scrollTop += dy
+      // Selection follows the cell now under the pointer. Clamp the probe inside
+      // the scroll body so the sticky header row isn't picked at the top edge.
+      const probeY = Math.max(rect.top + 44, Math.min(rect.bottom - 2, pointer.y))
+      const hit = cellAtPoint(pointer.x, probeY)
+      if (hit) {
+        didDragRef.current = true
+        setSelRange((prev) => (prev ? { anchor: prev.anchor, focus: hit } : prev))
+      }
+      raf = requestAnimationFrame(step)
+    }
+
+    const onMove = (e: MouseEvent) => {
+      if (!pointerDownRef.current) return
+      pointer.x = e.clientX
+      pointer.y = e.clientY
+      const sc = scrollRef.current
+      if (!sc) return
+      const rect = sc.getBoundingClientRect()
+      const nearEdge = e.clientY > rect.bottom - EDGE || e.clientY < rect.top + EDGE
+      if (nearEdge && raf == null) raf = requestAnimationFrame(step)
+    }
+
+    const stop = () => { if (raf != null) { cancelAnimationFrame(raf); raf = null } }
+
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', stop)
+    return () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', stop)
+      stop()
+    }
+  }, [])
+
   // Column drag-to-reorder
   const handleColDragStart = useCallback((e: React.DragEvent, localeId: string) => {
     draggingLocaleRef.current = localeId
@@ -2075,6 +2137,8 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                               <Fragment key={locale.id}>
                                 <div
                                   data-cell="1"
+                                  data-row={rowIndex}
+                                  data-col={colIndex}
                                   className={cn('relative h-[84px] select-none', isFrozen && cn(
                                     'sticky z-10',
                                     isActive ? 'bg-zinc-800' : 'bg-zinc-950 group-hover:bg-zinc-800',
