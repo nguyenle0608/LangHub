@@ -7,7 +7,7 @@ import {
   Search, Plus, Download, Upload,
   Sparkles, LogOut, ListFilter, Layers2, ChevronDown,
   Columns3, Eye, EyeOff, Pin, PinOff, Lock, Unlock, GripVertical, Undo2, Redo2,
-  MoreHorizontal, Copy, History, GitBranch as GitBranchIcon, Loader2,
+  MoreHorizontal, Copy, History, GitBranch as GitBranchIcon, Loader2, ArrowUp,
 } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { toast } from 'sonner'
@@ -19,6 +19,7 @@ import dynamic from 'next/dynamic'
 import { TranslationCell } from './TranslationCell'
 import { StatusBadge } from './StatusBadge'
 import { BulkActionBar } from './BulkActionBar'
+import { CellActionBar } from './CellActionBar'
 import { BranchSwitcher } from './BranchSwitcher'
 import { ManageLocalesDialog } from './ManageLocalesDialog'
 
@@ -177,6 +178,8 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   const draggingLocaleRef = useRef<string | null>(null)
   const [dragOverLocaleId, setDragOverLocaleId] = useState<string | null>(null)
   const [selectedLocaleId, setSelectedLocaleId] = useState<string | null>(null)
+  // Show a "scroll to top" button once the table is scrolled down a bit
+  const [showScrollTop, setShowScrollTop] = useState(false)
 
   // Excel-like range selection (drag across locale cells, then copy/paste)
   const [selRange, setSelRange] = useState<{ anchor: Cell; focus: Cell } | null>(null)
@@ -1035,6 +1038,75 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
       .catch(() => toast.error('Network error'))
   }, [pushUndo, canEdit, activeBranchId])
 
+  // Set status (approved/reviewed) on every non-empty, non-locked cell in the
+  // selection — the cell-range counterpart of BulkActionBar's Approve/Review.
+  const setSelectionStatus = useCallback((newStatus: 'approved' | 'reviewed') => {
+    if (!canReview) return
+    const { selRange: sel, rowOrder: order, visibleLocales: vis, lockedCols: locked, keys: cur } = latestRef.current
+    if (!sel) return
+    const r0 = Math.min(sel.anchor.row, sel.focus.row), r1 = Math.max(sel.anchor.row, sel.focus.row)
+    const c0 = Math.min(sel.anchor.col, sel.focus.col), c1 = Math.max(sel.anchor.col, sel.focus.col)
+    const keyById = new Map(cur.map((k) => [k.id, k]))
+
+    const items: { keyId: string; localeId: string; value: string }[] = []
+    const changes: CellChange[] = []
+    let lockedSkipped = 0
+    for (let r = r0; r <= r1; r++) {
+      const keyId = order[r]
+      if (!keyId) continue
+      const key = keyById.get(keyId)
+      for (let c = c0; c <= c1; c++) {
+        const locale = vis[c]
+        if (!locale) continue
+        if (locked.has(locale.id)) { lockedSkipped++; continue }
+        const t = key?.translations.find((tr) => tr.locale_id === locale.id)
+        if (!t?.value || !t.value.trim()) continue          // can't review/approve an empty cell
+        if (t.status === newStatus) continue                // already at target
+        if (newStatus === 'reviewed' && t.status === 'approved') continue // don't downgrade approved
+        items.push({ keyId, localeId: locale.id, value: t.value })
+        changes.push({
+          keyId, localeId: locale.id,
+          before: { value: t.value, status: t.status ?? 'empty' },
+          after: { value: t.value, status: newStatus },
+        })
+      }
+    }
+    if (items.length === 0) {
+      if (lockedSkipped) toast.error('Selected column is locked')
+      else toast.info(newStatus === 'approved' ? 'No translations to approve' : 'No eligible translations to review')
+      return
+    }
+    pushUndo(changes)
+
+    const targetSet = new Set(items.map((it) => `${it.keyId}:${it.localeId}`))
+    setKeys((prev) =>
+      prev.map((k) => ({
+        ...k,
+        translations: k.translations.map((tr) =>
+          targetSet.has(`${k.id}:${tr.locale_id}`) ? { ...tr, status: newStatus } : tr
+        ),
+      }))
+    )
+
+    void fetch('/api/translations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ branchId: activeBranchId, status: newStatus, items }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({})) as { error?: string }
+          toast.error(json.error ?? 'Update failed')
+        } else {
+          toast.success(
+            `${newStatus === 'approved' ? 'Approved' : 'Marked as reviewed'} ${items.length} cell${items.length > 1 ? 's' : ''}` +
+            (lockedSkipped ? ` · ${lockedSkipped} locked skipped` : '')
+          )
+        }
+      })
+      .catch(() => toast.error('Network error'))
+  }, [pushUndo, canReview, activeBranchId])
+
   // Apply a set of cell states (optimistic + persist) — used by undo/redo
   const commitCells = useCallback((cells: { keyId: string; localeId: string; value: string; status: string }[]) => {
     if (cells.length === 0) return
@@ -1139,7 +1211,14 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     // Clicking anywhere outside a translation cell clears the cell selection
     const onDocMouseDown = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null
-      if (target?.closest('[data-cell]')) return
+      // Ignore clicks on a cell, the cell-selection action bar, or a control
+      // marked keep-selection (e.g. scroll-to-top) — otherwise clicking them
+      // would clear the selection (and the resulting layout shift swallows the click).
+      if (
+        target?.closest('[data-cell]') ||
+        target?.closest('[data-cell-actions]') ||
+        target?.closest('[data-keep-selection]')
+      ) return
       if (latestRef.current.selRange) setSelRange(null)
     }
 
@@ -1704,8 +1783,12 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
         </aside>
 
         {/* Table */}
-        <div className="flex flex-1 overflow-hidden">
-          <div ref={scrollRef} className="flex-1 overflow-auto">
+        <div className="flex flex-1 overflow-hidden relative">
+          <div
+            ref={scrollRef}
+            className="flex-1 overflow-auto"
+            onScroll={(e) => setShowScrollTop((e.target as HTMLDivElement).scrollTop > 400)}
+          >
             {/* Sticky header */}
             <div
               className="sticky top-0 z-10 bg-zinc-900 border-b border-zinc-800 grid min-w-max"
@@ -2063,6 +2146,22 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
               )
             })()}
           </div>
+
+          {/* Scroll to top */}
+          {showScrollTop && (
+            <button
+              // Marked keep-selection so the document mousedown handler doesn't clear
+              // the cell selection — that unmounts the action bar, shifts this button,
+              // and makes the click land on empty space instead of scrolling.
+              data-keep-selection="1"
+              onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+              title="Scroll to top"
+              aria-label="Scroll to top"
+              className="absolute bottom-4 right-4 z-30 flex h-9 w-9 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900/90 text-zinc-300 shadow-lg backdrop-blur transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+            >
+              <ArrowUp className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -2099,6 +2198,19 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
           />
         )
       })()}
+
+      {/* Cell-range action bar — shows whenever one or more cells are selected */}
+      {canEdit && selBounds && (
+        <CellActionBar
+          cellCount={(selBounds.r1 - selBounds.r0 + 1) * (selBounds.c1 - selBounds.c0 + 1)}
+          canReview={canReview}
+          canEdit={canEdit}
+          onDeselect={() => setSelRange(null)}
+          onClearContent={clearSelection}
+          onReview={() => setSelectionStatus('reviewed')}
+          onApprove={() => setSelectionStatus('approved')}
+        />
+      )}
 
       {/* Bulk action bar — translators+ see count/clear; review/approve/delete gated inside */}
       {canSelect && selectedRows.size > 0 && (
