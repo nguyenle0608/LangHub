@@ -7,7 +7,8 @@ import {
   Search, Plus, Download, Upload,
   Sparkles, LogOut, ListFilter, Layers2, ChevronDown,
   Columns3, Eye, EyeOff, Pin, PinOff, Lock, Unlock, GripVertical, Undo2, Redo2,
-  MoreHorizontal, Copy, History, GitBranch as GitBranchIcon, Loader2,
+  MoreHorizontal, Copy, History, GitBranch as GitBranchIcon, Loader2, ArrowUp,
+  Info, X,
 } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { toast } from 'sonner'
@@ -19,6 +20,8 @@ import dynamic from 'next/dynamic'
 import { TranslationCell } from './TranslationCell'
 import { StatusBadge } from './StatusBadge'
 import { BulkActionBar } from './BulkActionBar'
+import { CellActionBar } from './CellActionBar'
+import { Tooltip } from '@/components/ui/tooltip'
 import { BranchSwitcher } from './BranchSwitcher'
 import { ManageLocalesDialog } from './ManageLocalesDialog'
 
@@ -177,6 +180,8 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   const draggingLocaleRef = useRef<string | null>(null)
   const [dragOverLocaleId, setDragOverLocaleId] = useState<string | null>(null)
   const [selectedLocaleId, setSelectedLocaleId] = useState<string | null>(null)
+  // Show a "scroll to top" button once the table is scrolled down a bit
+  const [showScrollTop, setShowScrollTop] = useState(false)
 
   // Excel-like range selection (drag across locale cells, then copy/paste)
   const [selRange, setSelRange] = useState<{ anchor: Cell; focus: Cell } | null>(null)
@@ -693,6 +698,15 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     }
   }, [filteredKeys, selectedRows.size])
 
+  // Select every cell in a column (Excel-style column-header click). Reuses the
+  // cell range selection, so the CellActionBar / copy / clear all work as usual.
+  const selectColumn = useCallback((colIndex: number) => {
+    const last = rowOrder.length - 1
+    if (last < 0) return
+    setEditingCell(null)
+    setSelRange({ anchor: { row: 0, col: colIndex }, focus: { row: last, col: colIndex } })
+  }, [rowOrder.length])
+
   // Add key
   const handleKeyCreated = useCallback(
     (newKey: KeyWithTranslations) => {
@@ -888,6 +902,48 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   const startEditRef = useRef(startEdit)
   startEditRef.current = startEdit
 
+  // Serialize all translation writes (edit, paste, clear, approve/review,
+  // undo/redo). Fire-and-forget POSTs can otherwise complete out of order —
+  // rapid undo/redo would let an earlier request commit last, so the DB (and
+  // the realtime echo) ends up on the wrong value. Chaining guarantees the
+  // server processes them in click order.
+  const writeChainRef = useRef<Promise<unknown>>(Promise.resolve())
+  // Count of queued + in-flight writes, to drive a "Saving…" indicator and to
+  // block undo/redo while a write is still settling. The ref mirrors the state
+  // so the once-bound keydown handler can read it without re-binding.
+  const [pendingWrites, setPendingWrites] = useState(0)
+  const pendingWritesRef = useRef(0)
+  const enqueueWrite = useCallback(
+    (body: unknown, opts?: { errorMsg?: string; onSuccess?: () => void }) => {
+      pendingWritesRef.current += 1
+      setPendingWrites((n) => n + 1)
+      const run = writeChainRef.current.then(async () => {
+        try {
+          const res = await fetch('/api/translations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          })
+          if (!res.ok) {
+            const json = await res.json().catch(() => ({})) as { error?: string }
+            toast.error(json.error ?? opts?.errorMsg ?? 'Update failed')
+          } else {
+            opts?.onSuccess?.()
+          }
+        } catch {
+          toast.error('Network error')
+        } finally {
+          pendingWritesRef.current = Math.max(0, pendingWritesRef.current - 1)
+          setPendingWrites((n) => Math.max(0, n - 1))
+        }
+      })
+      // Keep the chain alive regardless of this link's outcome.
+      writeChainRef.current = run.catch(() => {})
+      return run
+    },
+    []
+  )
+
   const applyPaste = useCallback((grid: string[][]) => {
     if (!canEdit) return
     const { selRange: sel, rowOrder: order, visibleLocales: vis, lockedCols: locked, keys: cur } = latestRef.current
@@ -954,24 +1010,14 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     )
 
     // Persist
-    void fetch('/api/translations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ branchId: activeBranchId, items }),
+    void enqueueWrite({ branchId: activeBranchId, items }, {
+      errorMsg: 'Paste failed',
+      onSuccess: () => toast.success(
+        `Pasted ${items.length} cell${items.length > 1 ? 's' : ''}` +
+        (lockedSkipped ? ` · ${lockedSkipped} locked skipped` : '')
+      ),
     })
-      .then(async (res) => {
-        if (!res.ok) {
-          const json = await res.json().catch(() => ({})) as { error?: string }
-          toast.error(json.error ?? 'Paste failed')
-        } else {
-          toast.success(
-            `Pasted ${items.length} cell${items.length > 1 ? 's' : ''}` +
-            (lockedSkipped ? ` · ${lockedSkipped} locked skipped` : '')
-          )
-        }
-      })
-      .catch(() => toast.error('Network error'))
-  }, [pushUndo, canEdit, activeBranchId])
+  }, [pushUndo, canEdit, activeBranchId, enqueueWrite])
 
   // Clear the contents of every non-empty, non-locked cell in the selection
   const clearSelection = useCallback(() => {
@@ -1019,21 +1065,69 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
       })
     )
 
-    void fetch('/api/translations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ branchId: activeBranchId, items }),
+    void enqueueWrite({ branchId: activeBranchId, items }, {
+      errorMsg: 'Clear failed',
+      onSuccess: () => toast.success(`Cleared ${items.length} cell${items.length > 1 ? 's' : ''}`),
     })
-      .then(async (res) => {
-        if (!res.ok) {
-          const json = await res.json().catch(() => ({})) as { error?: string }
-          toast.error(json.error ?? 'Clear failed')
-        } else {
-          toast.success(`Cleared ${items.length} cell${items.length > 1 ? 's' : ''}`)
-        }
-      })
-      .catch(() => toast.error('Network error'))
-  }, [pushUndo, canEdit, activeBranchId])
+  }, [pushUndo, canEdit, activeBranchId, enqueueWrite])
+
+  // Set status (approved/reviewed) on every non-empty, non-locked cell in the
+  // selection — the cell-range counterpart of BulkActionBar's Approve/Review.
+  const setSelectionStatus = useCallback((newStatus: 'approved' | 'reviewed') => {
+    if (!canReview) return
+    const { selRange: sel, rowOrder: order, visibleLocales: vis, lockedCols: locked, keys: cur } = latestRef.current
+    if (!sel) return
+    const r0 = Math.min(sel.anchor.row, sel.focus.row), r1 = Math.max(sel.anchor.row, sel.focus.row)
+    const c0 = Math.min(sel.anchor.col, sel.focus.col), c1 = Math.max(sel.anchor.col, sel.focus.col)
+    const keyById = new Map(cur.map((k) => [k.id, k]))
+
+    const items: { keyId: string; localeId: string; value: string }[] = []
+    const changes: CellChange[] = []
+    let lockedSkipped = 0
+    for (let r = r0; r <= r1; r++) {
+      const keyId = order[r]
+      if (!keyId) continue
+      const key = keyById.get(keyId)
+      for (let c = c0; c <= c1; c++) {
+        const locale = vis[c]
+        if (!locale) continue
+        if (locked.has(locale.id)) { lockedSkipped++; continue }
+        const t = key?.translations.find((tr) => tr.locale_id === locale.id)
+        if (!t?.value || !t.value.trim()) continue          // can't review/approve an empty cell
+        if (t.status === newStatus) continue                // already at target
+        if (newStatus === 'reviewed' && t.status === 'approved') continue // don't downgrade approved
+        items.push({ keyId, localeId: locale.id, value: t.value })
+        changes.push({
+          keyId, localeId: locale.id,
+          before: { value: t.value, status: t.status ?? 'empty' },
+          after: { value: t.value, status: newStatus },
+        })
+      }
+    }
+    if (items.length === 0) {
+      if (lockedSkipped) toast.error('Selected column is locked')
+      else toast.info(newStatus === 'approved' ? 'No translations to approve' : 'No eligible translations to review')
+      return
+    }
+    pushUndo(changes)
+
+    const targetSet = new Set(items.map((it) => `${it.keyId}:${it.localeId}`))
+    setKeys((prev) =>
+      prev.map((k) => ({
+        ...k,
+        translations: k.translations.map((tr) =>
+          targetSet.has(`${k.id}:${tr.locale_id}`) ? { ...tr, status: newStatus } : tr
+        ),
+      }))
+    )
+
+    void enqueueWrite({ branchId: activeBranchId, status: newStatus, items }, {
+      onSuccess: () => toast.success(
+        `${newStatus === 'approved' ? 'Approved' : 'Marked as reviewed'} ${items.length} cell${items.length > 1 ? 's' : ''}` +
+        (lockedSkipped ? ` · ${lockedSkipped} locked skipped` : '')
+      ),
+    })
+  }, [pushUndo, canReview, activeBranchId, enqueueWrite])
 
   // Apply a set of cell states (optimistic + persist) — used by undo/redo
   const commitCells = useCallback((cells: { keyId: string; localeId: string; value: string; status: string }[]) => {
@@ -1064,21 +1158,11 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
         return { ...k, translations: trans }
       })
     )
-    void fetch('/api/translations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ branchId: activeBranchId, items: cells }),
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const json = await res.json().catch(() => ({})) as { error?: string }
-          toast.error(json.error ?? 'Update failed')
-        }
-      })
-      .catch(() => toast.error('Network error'))
-  }, [activeBranchId])
+    void enqueueWrite({ branchId: activeBranchId, items: cells })
+  }, [activeBranchId, enqueueWrite])
 
   const undo = useCallback(() => {
+    if (pendingWritesRef.current > 0) return // wait for the in-flight write to settle
     const changes = undoRef.current.pop()
     if (!changes) return
     redoRef.current.push(changes)
@@ -1088,6 +1172,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   }, [commitCells])
 
   const redo = useCallback(() => {
+    if (pendingWritesRef.current > 0) return // wait for the in-flight write to settle
     const changes = redoRef.current.pop()
     if (!changes) return
     undoRef.current.push(changes)
@@ -1139,7 +1224,14 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     // Clicking anywhere outside a translation cell clears the cell selection
     const onDocMouseDown = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null
-      if (target?.closest('[data-cell]')) return
+      // Ignore clicks on a cell, the cell-selection action bar, or a control
+      // marked keep-selection (e.g. scroll-to-top) — otherwise clicking them
+      // would clear the selection (and the resulting layout shift swallows the click).
+      if (
+        target?.closest('[data-cell]') ||
+        target?.closest('[data-cell-actions]') ||
+        target?.closest('[data-keep-selection]')
+      ) return
       if (latestRef.current.selRange) setSelRange(null)
     }
 
@@ -1204,6 +1296,68 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     }
   }, [applyPaste, clearSelection, undo, redo, canEdit])
 
+  // Auto-scroll while drag-selecting past the top/bottom edge. onMouseEnter only
+  // fires when the pointer moves over a cell, so a stationary pointer held at the
+  // edge wouldn't scroll or extend the selection — this rAF loop does both by
+  // scrolling the container and re-resolving the cell under the pointer.
+  useEffect(() => {
+    const EDGE = 56       // px zone from the top/bottom edge that triggers scroll
+    const MAX_SPEED = 22  // max px scrolled per frame (at the very edge)
+    const pointer = { x: 0, y: 0 }
+    let raf: number | null = null
+
+    const cellAtPoint = (x: number, y: number) => {
+      const el = document.elementFromPoint(x, y) as HTMLElement | null
+      const cell = el?.closest('[data-cell]') as HTMLElement | null
+      if (!cell || cell.dataset.row == null || cell.dataset.col == null) return null
+      return { row: Number(cell.dataset.row), col: Number(cell.dataset.col) }
+    }
+
+    const step = () => {
+      const sc = scrollRef.current
+      if (!pointerDownRef.current || !sc) { raf = null; return }
+      const rect = sc.getBoundingClientRect()
+      let dy = 0
+      if (pointer.y > rect.bottom - EDGE) {
+        dy = Math.min(MAX_SPEED, ((pointer.y - (rect.bottom - EDGE)) / EDGE) * MAX_SPEED)
+      } else if (pointer.y < rect.top + EDGE) {
+        dy = -Math.min(MAX_SPEED, (((rect.top + EDGE) - pointer.y) / EDGE) * MAX_SPEED)
+      }
+      if (dy === 0) { raf = null; return } // pointer left the edge zone — stop looping
+      sc.scrollTop += dy
+      // Selection follows the cell now under the pointer. Clamp the probe inside
+      // the scroll body so the sticky header row isn't picked at the top edge.
+      const probeY = Math.max(rect.top + 44, Math.min(rect.bottom - 2, pointer.y))
+      const hit = cellAtPoint(pointer.x, probeY)
+      if (hit) {
+        didDragRef.current = true
+        setSelRange((prev) => (prev ? { anchor: prev.anchor, focus: hit } : prev))
+      }
+      raf = requestAnimationFrame(step)
+    }
+
+    const onMove = (e: MouseEvent) => {
+      if (!pointerDownRef.current) return
+      pointer.x = e.clientX
+      pointer.y = e.clientY
+      const sc = scrollRef.current
+      if (!sc) return
+      const rect = sc.getBoundingClientRect()
+      const nearEdge = e.clientY > rect.bottom - EDGE || e.clientY < rect.top + EDGE
+      if (nearEdge && raf == null) raf = requestAnimationFrame(step)
+    }
+
+    const stop = () => { if (raf != null) { cancelAnimationFrame(raf); raf = null } }
+
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', stop)
+    return () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', stop)
+      stop()
+    }
+  }, [])
+
   // Column drag-to-reorder
   const handleColDragStart = useCallback((e: React.DragEvent, localeId: string) => {
     draggingLocaleRef.current = localeId
@@ -1241,6 +1395,38 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
 
   const selectedKey = keys.find((k) => k.id === selectedKeyId)
 
+  // Active-filter chips — one per enabled filter, so the AND-combination is
+  // visible and each can be removed individually (or all at once).
+  const STATUS_LABEL: Record<Exclude<FilterStatus, 'all'>, string> = {
+    empty: 'Untranslated', pending: 'Pending', reviewed: 'Reviewed', approved: 'Approved',
+  }
+  const activeFilters: { key: string; label: string; onRemove: () => void }[] = []
+  if (search) {
+    activeFilters.push({ key: 'search', label: `Search: “${search}”`, onRemove: () => setSearch('') })
+  }
+  if (filterStatus !== 'all') {
+    activeFilters.push({ key: 'status', label: `Status: ${STATUS_LABEL[filterStatus]}`, onRemove: () => setFilterStatus('all') })
+  }
+  if (selectedLocaleId) {
+    const loc = locales.find((l) => l.id === selectedLocaleId)
+    activeFilters.push({ key: 'lang', label: `Needs work: ${loc?.name ?? '—'}`, onRemove: () => setSelectedLocaleId(null) })
+  }
+  columnFilters.forEach((st, localeId) => {
+    if (st === 'all') return
+    const loc = locales.find((l) => l.id === localeId)
+    activeFilters.push({
+      key: `col-${localeId}`,
+      label: `${(loc?.code ?? '').toUpperCase()}: ${STATUS_LABEL[st]}`,
+      onRemove: () => setColumnFilters((prev) => { const n = new Map(prev); n.delete(localeId); return n }),
+    })
+  })
+  const clearAllFilters = () => {
+    setSearch('')
+    setFilterStatus('all')
+    setSelectedLocaleId(null)
+    setColumnFilters(new Map())
+  }
+
   return (
     <div className="flex flex-col h-screen bg-[#0d1117] text-zinc-100 overflow-hidden">
       {/* ── TopNav ── */}
@@ -1274,6 +1460,14 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
         </div>
 
         <div className="flex-1" />
+
+        {/* Saving indicator — queued/in-flight translation writes */}
+        {pendingWrites > 0 && (
+          <span className="flex items-center gap-1.5 text-xs text-zinc-400 mr-1" title="Saving your changes…">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <span className="hidden sm:inline">Saving…</span>
+          </span>
+        )}
 
         {/* Progress */}
         <div className="hidden sm:flex items-center gap-2 text-xs text-zinc-400 mr-1">
@@ -1427,7 +1621,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
             variant="ghost" size="sm"
             className="h-7 w-7 p-0 text-zinc-400 hover:text-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed"
             onClick={() => undo()}
-            disabled={undoRef.current.length === 0}
+            disabled={undoRef.current.length === 0 || pendingWrites > 0}
             title="Undo (Ctrl/Cmd+Z)"
           >
             <Undo2 className="h-3.5 w-3.5" />
@@ -1436,7 +1630,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
             variant="ghost" size="sm"
             className="h-7 w-7 p-0 text-zinc-400 hover:text-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed"
             onClick={() => redo()}
-            disabled={redoRef.current.length === 0}
+            disabled={redoRef.current.length === 0 || pendingWrites > 0}
             title="Redo (Ctrl/Cmd+Shift+Z)"
           >
             <Redo2 className="h-3.5 w-3.5" />
@@ -1621,7 +1815,15 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
           {/* Status filters */}
           <div className="p-3">
             <div className="flex items-center justify-between mb-2 px-1">
-              <span className="text-[10px] uppercase tracking-wider text-zinc-600">Status</span>
+              <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-zinc-600">
+                Status
+                <Tooltip
+                  side="right"
+                  content="Filters by each key's overall status across all target languages. Selecting one clears the language filter below."
+                >
+                  <Info className="h-3 w-3 text-zinc-600 hover:text-zinc-400" />
+                </Tooltip>
+              </span>
               {filteredKeys.length !== stats.total && (
                 <span className="text-[10px] text-zinc-600">
                   {filteredKeys.length}<span className="text-zinc-700"> / {stats.total}</span>
@@ -1671,7 +1873,15 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
 
           {/* Language focus */}
           <div className="border-t border-zinc-800 p-3">
-            <div className="text-[10px] uppercase tracking-wider text-zinc-600 mb-2 px-1">Languages</div>
+            <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-zinc-600 mb-2 px-1">
+              By language
+              <Tooltip
+                side="right"
+                content="Click a language to show only keys that still need work (empty or pending) in it. The number is how many remain. This resets the Status filter to All."
+              >
+                <Info className="h-3 w-3 text-zinc-600 hover:text-zinc-400" />
+              </Tooltip>
+            </div>
             {locales.map((locale) => {
               const isActive = selectedLocaleId === locale.id
               const needsWork = stats.localeNeedsWork.get(locale.id) ?? 0
@@ -1704,8 +1914,42 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
         </aside>
 
         {/* Table */}
-        <div className="flex flex-1 overflow-hidden">
-          <div ref={scrollRef} className="flex-1 overflow-auto">
+        <div className="flex flex-col flex-1 overflow-hidden relative">
+          {/* Active filters — makes the combined (AND) filter state visible */}
+          {activeFilters.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap px-3 py-1.5 border-b border-zinc-800 bg-zinc-950/60">
+              <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-zinc-600">
+                Filters
+                <Tooltip
+                  side="bottom"
+                  content="All active filters apply together (AND). Remove one with ×, or Clear all to reset everything."
+                >
+                  <Info className="h-3 w-3 text-zinc-600 hover:text-zinc-400" />
+                </Tooltip>
+              </span>
+              {activeFilters.map((f) => (
+                <button
+                  key={f.key}
+                  onClick={f.onRemove}
+                  className="group flex items-center gap-1 rounded-full border border-zinc-700 bg-zinc-800/60 pl-2 pr-1 py-0.5 text-xs text-zinc-300 hover:border-zinc-600 hover:bg-zinc-800"
+                >
+                  <span className="max-w-[200px] truncate">{f.label}</span>
+                  <X className="h-3 w-3 text-zinc-500 group-hover:text-zinc-200" />
+                </button>
+              ))}
+              <button
+                onClick={clearAllFilters}
+                className="ml-auto text-xs text-zinc-500 hover:text-zinc-200 transition-colors"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
+          <div
+            ref={scrollRef}
+            className="flex-1 overflow-auto"
+            onScroll={(e) => setShowScrollTop((e.target as HTMLDivElement).scrollTop > 400)}
+          >
             {/* Sticky header */}
             <div
               className="sticky top-0 z-10 bg-zinc-900 border-b border-zinc-800 grid min-w-max"
@@ -1739,7 +1983,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                 </div>
               )}
               {/* Locale columns */}
-              {visibleLocales.map((locale) => {
+              {visibleLocales.map((locale, colIndex) => {
                 const colStatus = columnFilters.get(locale.id) ?? 'all'
                 const isFiltered = colStatus !== 'all'
                 const COL_STATUS_OPTIONS: { id: FilterStatus; label: string }[] = [
@@ -1768,8 +2012,17 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                     style={isFrozen ? { left: stickyLeft.get(locale.id) } : undefined}
                   >
                     <GripVertical className="h-3.5 w-3.5 text-zinc-700 hover:text-zinc-400 cursor-grab flex-shrink-0" />
-                    <span>{getFlag(locale.code)}</span>
-                    <span className="uppercase">{locale.code}</span>
+                    <Tooltip side="bottom" content="Click to select the entire column">
+                      <button
+                        type="button"
+                        data-keep-selection="1"
+                        onClick={() => selectColumn(colIndex)}
+                        className="flex items-center gap-1 rounded px-1 py-0.5 cursor-pointer bg-zinc-800/60 ring-1 ring-inset ring-zinc-700/70 hover:bg-zinc-700/70 hover:text-zinc-100 hover:ring-zinc-600 transition-colors"
+                      >
+                        <span>{getFlag(locale.code)}</span>
+                        <span className="uppercase">{locale.code}</span>
+                      </button>
+                    </Tooltip>
                     {locale.is_base && (
                       <span className="text-[9px] text-zinc-600 border border-zinc-700 rounded px-0.5">base</span>
                     )}
@@ -1797,7 +2050,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                                 ? 'text-blue-400 hover:text-blue-300'
                                 : 'text-zinc-600 hover:text-zinc-300'
                             )}
-                            title="Filter by status"
+                            title="Filter this column by status. Combines (AND) with other active filters — may show no rows if they conflict."
                           >
                             <ListFilter className="h-3 w-3" />
                           </button>
@@ -1841,8 +2094,54 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
               })}
               {/* Status */}
               {showStatus && (
-                <div className="px-3 flex items-center h-9 text-xs font-medium text-zinc-400 uppercase tracking-wide">
-                  Status
+                <div className="px-3 flex items-center h-9 gap-1 text-xs font-medium text-zinc-400 uppercase tracking-wide">
+                  <span>Status</span>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        className={cn(
+                          'p-0.5 rounded transition-colors',
+                          filterStatus !== 'all'
+                            ? 'text-blue-400 hover:text-blue-300'
+                            : 'text-zinc-600 hover:text-zinc-300'
+                        )}
+                        title="Filter by each key's overall status across all target languages. Same filter as the sidebar Status list."
+                      >
+                        <ListFilter className="h-3 w-3" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-40 p-1 bg-zinc-900 border-zinc-800" align="end">
+                      {([
+                        { id: 'all', label: 'All' },
+                        { id: 'empty', label: 'Untranslated' },
+                        { id: 'pending', label: 'Pending' },
+                        { id: 'reviewed', label: 'Reviewed' },
+                        { id: 'approved', label: 'Approved' },
+                      ] as { id: FilterStatus; label: string }[]).map((opt) => (
+                        <button
+                          key={opt.id}
+                          onClick={() => { setFilterStatus(opt.id); setSelectedLocaleId(null) }}
+                          className={cn(
+                            'w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs normal-case tracking-normal transition-colors',
+                            filterStatus === opt.id
+                              ? 'bg-zinc-800 text-zinc-100'
+                              : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+                          )}
+                        >
+                          {opt.id !== 'all' && (
+                            <span className={cn(
+                              'w-1.5 h-1.5 rounded-full flex-shrink-0',
+                              opt.id === 'approved' && 'bg-emerald-500',
+                              opt.id === 'reviewed' && 'bg-blue-500',
+                              opt.id === 'pending' && 'bg-amber-500',
+                              opt.id === 'empty' && 'bg-zinc-600',
+                            )} />
+                          )}
+                          {opt.label}
+                        </button>
+                      ))}
+                    </PopoverContent>
+                  </Popover>
                 </div>
               )}
             </div>
@@ -1992,6 +2291,8 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                               <Fragment key={locale.id}>
                                 <div
                                   data-cell="1"
+                                  data-row={rowIndex}
+                                  data-col={colIndex}
                                   className={cn('relative h-[84px] select-none', isFrozen && cn(
                                     'sticky z-10',
                                     isActive ? 'bg-zinc-800' : 'bg-zinc-950 group-hover:bg-zinc-800',
@@ -2063,6 +2364,22 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
               )
             })()}
           </div>
+
+          {/* Scroll to top */}
+          {showScrollTop && (
+            <button
+              // Marked keep-selection so the document mousedown handler doesn't clear
+              // the cell selection — that unmounts the action bar, shifts this button,
+              // and makes the click land on empty space instead of scrolling.
+              data-keep-selection="1"
+              onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+              title="Scroll to top"
+              aria-label="Scroll to top"
+              className="absolute bottom-4 right-4 z-30 flex h-9 w-9 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900/90 text-zinc-300 shadow-lg backdrop-blur transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+            >
+              <ArrowUp className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -2099,6 +2416,19 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
           />
         )
       })()}
+
+      {/* Cell-range action bar — shows whenever one or more cells are selected */}
+      {canEdit && selBounds && (
+        <CellActionBar
+          cellCount={(selBounds.r1 - selBounds.r0 + 1) * (selBounds.c1 - selBounds.c0 + 1)}
+          canReview={canReview}
+          canEdit={canEdit}
+          onDeselect={() => setSelRange(null)}
+          onClearContent={clearSelection}
+          onReview={() => setSelectionStatus('reviewed')}
+          onApprove={() => setSelectionStatus('approved')}
+        />
+      )}
 
       {/* Bulk action bar — translators+ see count/clear; review/approve/delete gated inside */}
       {canSelect && selectedRows.size > 0 && (
