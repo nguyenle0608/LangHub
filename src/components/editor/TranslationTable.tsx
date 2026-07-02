@@ -2094,8 +2094,54 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
               })}
               {/* Status */}
               {showStatus && (
-                <div className="px-3 flex items-center h-9 text-xs font-medium text-zinc-400 uppercase tracking-wide">
-                  Status
+                <div className="px-3 flex items-center h-9 gap-1 text-xs font-medium text-zinc-400 uppercase tracking-wide">
+                  <span>Status</span>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        className={cn(
+                          'p-0.5 rounded transition-colors',
+                          filterStatus !== 'all'
+                            ? 'text-blue-400 hover:text-blue-300'
+                            : 'text-zinc-600 hover:text-zinc-300'
+                        )}
+                        title="Filter by each key's overall status across all target languages. Same filter as the sidebar Status list."
+                      >
+                        <ListFilter className="h-3 w-3" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-40 p-1 bg-zinc-900 border-zinc-800" align="end">
+                      {([
+                        { id: 'all', label: 'All' },
+                        { id: 'empty', label: 'Untranslated' },
+                        { id: 'pending', label: 'Pending' },
+                        { id: 'reviewed', label: 'Reviewed' },
+                        { id: 'approved', label: 'Approved' },
+                      ] as { id: FilterStatus; label: string }[]).map((opt) => (
+                        <button
+                          key={opt.id}
+                          onClick={() => { setFilterStatus(opt.id); setSelectedLocaleId(null) }}
+                          className={cn(
+                            'w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs normal-case tracking-normal transition-colors',
+                            filterStatus === opt.id
+                              ? 'bg-zinc-800 text-zinc-100'
+                              : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+                          )}
+                        >
+                          {opt.id !== 'all' && (
+                            <span className={cn(
+                              'w-1.5 h-1.5 rounded-full flex-shrink-0',
+                              opt.id === 'approved' && 'bg-emerald-500',
+                              opt.id === 'reviewed' && 'bg-blue-500',
+                              opt.id === 'pending' && 'bg-amber-500',
+                              opt.id === 'empty' && 'bg-zinc-600',
+                            )} />
+                          )}
+                          {opt.label}
+                        </button>
+                      ))}
+                    </PopoverContent>
+                  </Popover>
                 </div>
               )}
             </div>
