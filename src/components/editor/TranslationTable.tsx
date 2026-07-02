@@ -698,6 +698,15 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     }
   }, [filteredKeys, selectedRows.size])
 
+  // Select every cell in a column (Excel-style column-header click). Reuses the
+  // cell range selection, so the CellActionBar / copy / clear all work as usual.
+  const selectColumn = useCallback((colIndex: number) => {
+    const last = rowOrder.length - 1
+    if (last < 0) return
+    setEditingCell(null)
+    setSelRange({ anchor: { row: 0, col: colIndex }, focus: { row: last, col: colIndex } })
+  }, [rowOrder.length])
+
   // Add key
   const handleKeyCreated = useCallback(
     (newKey: KeyWithTranslations) => {
@@ -1964,7 +1973,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                 </div>
               )}
               {/* Locale columns */}
-              {visibleLocales.map((locale) => {
+              {visibleLocales.map((locale, colIndex) => {
                 const colStatus = columnFilters.get(locale.id) ?? 'all'
                 const isFiltered = colStatus !== 'all'
                 const COL_STATUS_OPTIONS: { id: FilterStatus; label: string }[] = [
@@ -1993,8 +2002,17 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                     style={isFrozen ? { left: stickyLeft.get(locale.id) } : undefined}
                   >
                     <GripVertical className="h-3.5 w-3.5 text-zinc-700 hover:text-zinc-400 cursor-grab flex-shrink-0" />
-                    <span>{getFlag(locale.code)}</span>
-                    <span className="uppercase">{locale.code}</span>
+                    <Tooltip side="bottom" content="Click to select the entire column">
+                      <button
+                        type="button"
+                        data-keep-selection="1"
+                        onClick={() => selectColumn(colIndex)}
+                        className="flex items-center gap-1 rounded px-1 py-0.5 cursor-pointer bg-zinc-800/60 ring-1 ring-inset ring-zinc-700/70 hover:bg-zinc-700/70 hover:text-zinc-100 hover:ring-zinc-600 transition-colors"
+                      >
+                        <span>{getFlag(locale.code)}</span>
+                        <span className="uppercase">{locale.code}</span>
+                      </button>
+                    </Tooltip>
                     {locale.is_base && (
                       <span className="text-[9px] text-zinc-600 border border-zinc-700 rounded px-0.5">base</span>
                     )}
