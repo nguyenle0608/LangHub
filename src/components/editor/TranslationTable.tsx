@@ -8,6 +8,7 @@ import {
   Sparkles, LogOut, ListFilter, Layers2, ChevronDown,
   Columns3, Eye, EyeOff, Pin, PinOff, Lock, Unlock, GripVertical, Undo2, Redo2,
   MoreHorizontal, Copy, History, GitBranch as GitBranchIcon, Loader2, ArrowUp,
+  Info, X,
 } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { toast } from 'sonner'
@@ -20,6 +21,7 @@ import { TranslationCell } from './TranslationCell'
 import { StatusBadge } from './StatusBadge'
 import { BulkActionBar } from './BulkActionBar'
 import { CellActionBar } from './CellActionBar'
+import { Tooltip } from '@/components/ui/tooltip'
 import { BranchSwitcher } from './BranchSwitcher'
 import { ManageLocalesDialog } from './ManageLocalesDialog'
 
@@ -1382,6 +1384,38 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
 
   const selectedKey = keys.find((k) => k.id === selectedKeyId)
 
+  // Active-filter chips — one per enabled filter, so the AND-combination is
+  // visible and each can be removed individually (or all at once).
+  const STATUS_LABEL: Record<Exclude<FilterStatus, 'all'>, string> = {
+    empty: 'Untranslated', pending: 'Pending', reviewed: 'Reviewed', approved: 'Approved',
+  }
+  const activeFilters: { key: string; label: string; onRemove: () => void }[] = []
+  if (search) {
+    activeFilters.push({ key: 'search', label: `Search: “${search}”`, onRemove: () => setSearch('') })
+  }
+  if (filterStatus !== 'all') {
+    activeFilters.push({ key: 'status', label: `Status: ${STATUS_LABEL[filterStatus]}`, onRemove: () => setFilterStatus('all') })
+  }
+  if (selectedLocaleId) {
+    const loc = locales.find((l) => l.id === selectedLocaleId)
+    activeFilters.push({ key: 'lang', label: `Needs work: ${loc?.name ?? '—'}`, onRemove: () => setSelectedLocaleId(null) })
+  }
+  columnFilters.forEach((st, localeId) => {
+    if (st === 'all') return
+    const loc = locales.find((l) => l.id === localeId)
+    activeFilters.push({
+      key: `col-${localeId}`,
+      label: `${(loc?.code ?? '').toUpperCase()}: ${STATUS_LABEL[st]}`,
+      onRemove: () => setColumnFilters((prev) => { const n = new Map(prev); n.delete(localeId); return n }),
+    })
+  })
+  const clearAllFilters = () => {
+    setSearch('')
+    setFilterStatus('all')
+    setSelectedLocaleId(null)
+    setColumnFilters(new Map())
+  }
+
   return (
     <div className="flex flex-col h-screen bg-[#0d1117] text-zinc-100 overflow-hidden">
       {/* ── TopNav ── */}
@@ -1762,7 +1796,15 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
           {/* Status filters */}
           <div className="p-3">
             <div className="flex items-center justify-between mb-2 px-1">
-              <span className="text-[10px] uppercase tracking-wider text-zinc-600">Status</span>
+              <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-zinc-600">
+                Status
+                <Tooltip
+                  side="right"
+                  content="Filters by each key's overall status across all target languages. Selecting one clears the language filter below."
+                >
+                  <Info className="h-3 w-3 text-zinc-600 hover:text-zinc-400" />
+                </Tooltip>
+              </span>
               {filteredKeys.length !== stats.total && (
                 <span className="text-[10px] text-zinc-600">
                   {filteredKeys.length}<span className="text-zinc-700"> / {stats.total}</span>
@@ -1812,7 +1854,15 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
 
           {/* Language focus */}
           <div className="border-t border-zinc-800 p-3">
-            <div className="text-[10px] uppercase tracking-wider text-zinc-600 mb-2 px-1">Languages</div>
+            <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-zinc-600 mb-2 px-1">
+              By language
+              <Tooltip
+                side="right"
+                content="Click a language to show only keys that still need work (empty or pending) in it. The number is how many remain. This resets the Status filter to All."
+              >
+                <Info className="h-3 w-3 text-zinc-600 hover:text-zinc-400" />
+              </Tooltip>
+            </div>
             {locales.map((locale) => {
               const isActive = selectedLocaleId === locale.id
               const needsWork = stats.localeNeedsWork.get(locale.id) ?? 0
@@ -1845,7 +1895,37 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
         </aside>
 
         {/* Table */}
-        <div className="flex flex-1 overflow-hidden relative">
+        <div className="flex flex-col flex-1 overflow-hidden relative">
+          {/* Active filters — makes the combined (AND) filter state visible */}
+          {activeFilters.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap px-3 py-1.5 border-b border-zinc-800 bg-zinc-950/60">
+              <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-zinc-600">
+                Filters
+                <Tooltip
+                  side="bottom"
+                  content="All active filters apply together (AND). Remove one with ×, or Clear all to reset everything."
+                >
+                  <Info className="h-3 w-3 text-zinc-600 hover:text-zinc-400" />
+                </Tooltip>
+              </span>
+              {activeFilters.map((f) => (
+                <button
+                  key={f.key}
+                  onClick={f.onRemove}
+                  className="group flex items-center gap-1 rounded-full border border-zinc-700 bg-zinc-800/60 pl-2 pr-1 py-0.5 text-xs text-zinc-300 hover:border-zinc-600 hover:bg-zinc-800"
+                >
+                  <span className="max-w-[200px] truncate">{f.label}</span>
+                  <X className="h-3 w-3 text-zinc-500 group-hover:text-zinc-200" />
+                </button>
+              ))}
+              <button
+                onClick={clearAllFilters}
+                className="ml-auto text-xs text-zinc-500 hover:text-zinc-200 transition-colors"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
           <div
             ref={scrollRef}
             className="flex-1 overflow-auto"
@@ -1942,7 +2022,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                                 ? 'text-blue-400 hover:text-blue-300'
                                 : 'text-zinc-600 hover:text-zinc-300'
                             )}
-                            title="Filter by status"
+                            title="Filter this column by status. Combines (AND) with other active filters — may show no rows if they conflict."
                           >
                             <ListFilter className="h-3 w-3" />
                           </button>
