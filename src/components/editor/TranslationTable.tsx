@@ -902,6 +902,48 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   const startEditRef = useRef(startEdit)
   startEditRef.current = startEdit
 
+  // Serialize all translation writes (edit, paste, clear, approve/review,
+  // undo/redo). Fire-and-forget POSTs can otherwise complete out of order —
+  // rapid undo/redo would let an earlier request commit last, so the DB (and
+  // the realtime echo) ends up on the wrong value. Chaining guarantees the
+  // server processes them in click order.
+  const writeChainRef = useRef<Promise<unknown>>(Promise.resolve())
+  // Count of queued + in-flight writes, to drive a "Saving…" indicator and to
+  // block undo/redo while a write is still settling. The ref mirrors the state
+  // so the once-bound keydown handler can read it without re-binding.
+  const [pendingWrites, setPendingWrites] = useState(0)
+  const pendingWritesRef = useRef(0)
+  const enqueueWrite = useCallback(
+    (body: unknown, opts?: { errorMsg?: string; onSuccess?: () => void }) => {
+      pendingWritesRef.current += 1
+      setPendingWrites((n) => n + 1)
+      const run = writeChainRef.current.then(async () => {
+        try {
+          const res = await fetch('/api/translations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          })
+          if (!res.ok) {
+            const json = await res.json().catch(() => ({})) as { error?: string }
+            toast.error(json.error ?? opts?.errorMsg ?? 'Update failed')
+          } else {
+            opts?.onSuccess?.()
+          }
+        } catch {
+          toast.error('Network error')
+        } finally {
+          pendingWritesRef.current = Math.max(0, pendingWritesRef.current - 1)
+          setPendingWrites((n) => Math.max(0, n - 1))
+        }
+      })
+      // Keep the chain alive regardless of this link's outcome.
+      writeChainRef.current = run.catch(() => {})
+      return run
+    },
+    []
+  )
+
   const applyPaste = useCallback((grid: string[][]) => {
     if (!canEdit) return
     const { selRange: sel, rowOrder: order, visibleLocales: vis, lockedCols: locked, keys: cur } = latestRef.current
@@ -968,24 +1010,14 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     )
 
     // Persist
-    void fetch('/api/translations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ branchId: activeBranchId, items }),
+    void enqueueWrite({ branchId: activeBranchId, items }, {
+      errorMsg: 'Paste failed',
+      onSuccess: () => toast.success(
+        `Pasted ${items.length} cell${items.length > 1 ? 's' : ''}` +
+        (lockedSkipped ? ` · ${lockedSkipped} locked skipped` : '')
+      ),
     })
-      .then(async (res) => {
-        if (!res.ok) {
-          const json = await res.json().catch(() => ({})) as { error?: string }
-          toast.error(json.error ?? 'Paste failed')
-        } else {
-          toast.success(
-            `Pasted ${items.length} cell${items.length > 1 ? 's' : ''}` +
-            (lockedSkipped ? ` · ${lockedSkipped} locked skipped` : '')
-          )
-        }
-      })
-      .catch(() => toast.error('Network error'))
-  }, [pushUndo, canEdit, activeBranchId])
+  }, [pushUndo, canEdit, activeBranchId, enqueueWrite])
 
   // Clear the contents of every non-empty, non-locked cell in the selection
   const clearSelection = useCallback(() => {
@@ -1033,21 +1065,11 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
       })
     )
 
-    void fetch('/api/translations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ branchId: activeBranchId, items }),
+    void enqueueWrite({ branchId: activeBranchId, items }, {
+      errorMsg: 'Clear failed',
+      onSuccess: () => toast.success(`Cleared ${items.length} cell${items.length > 1 ? 's' : ''}`),
     })
-      .then(async (res) => {
-        if (!res.ok) {
-          const json = await res.json().catch(() => ({})) as { error?: string }
-          toast.error(json.error ?? 'Clear failed')
-        } else {
-          toast.success(`Cleared ${items.length} cell${items.length > 1 ? 's' : ''}`)
-        }
-      })
-      .catch(() => toast.error('Network error'))
-  }, [pushUndo, canEdit, activeBranchId])
+  }, [pushUndo, canEdit, activeBranchId, enqueueWrite])
 
   // Set status (approved/reviewed) on every non-empty, non-locked cell in the
   // selection — the cell-range counterpart of BulkActionBar's Approve/Review.
@@ -1099,24 +1121,13 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
       }))
     )
 
-    void fetch('/api/translations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ branchId: activeBranchId, status: newStatus, items }),
+    void enqueueWrite({ branchId: activeBranchId, status: newStatus, items }, {
+      onSuccess: () => toast.success(
+        `${newStatus === 'approved' ? 'Approved' : 'Marked as reviewed'} ${items.length} cell${items.length > 1 ? 's' : ''}` +
+        (lockedSkipped ? ` · ${lockedSkipped} locked skipped` : '')
+      ),
     })
-      .then(async (res) => {
-        if (!res.ok) {
-          const json = await res.json().catch(() => ({})) as { error?: string }
-          toast.error(json.error ?? 'Update failed')
-        } else {
-          toast.success(
-            `${newStatus === 'approved' ? 'Approved' : 'Marked as reviewed'} ${items.length} cell${items.length > 1 ? 's' : ''}` +
-            (lockedSkipped ? ` · ${lockedSkipped} locked skipped` : '')
-          )
-        }
-      })
-      .catch(() => toast.error('Network error'))
-  }, [pushUndo, canReview, activeBranchId])
+  }, [pushUndo, canReview, activeBranchId, enqueueWrite])
 
   // Apply a set of cell states (optimistic + persist) — used by undo/redo
   const commitCells = useCallback((cells: { keyId: string; localeId: string; value: string; status: string }[]) => {
@@ -1147,21 +1158,11 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
         return { ...k, translations: trans }
       })
     )
-    void fetch('/api/translations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ branchId: activeBranchId, items: cells }),
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const json = await res.json().catch(() => ({})) as { error?: string }
-          toast.error(json.error ?? 'Update failed')
-        }
-      })
-      .catch(() => toast.error('Network error'))
-  }, [activeBranchId])
+    void enqueueWrite({ branchId: activeBranchId, items: cells })
+  }, [activeBranchId, enqueueWrite])
 
   const undo = useCallback(() => {
+    if (pendingWritesRef.current > 0) return // wait for the in-flight write to settle
     const changes = undoRef.current.pop()
     if (!changes) return
     redoRef.current.push(changes)
@@ -1171,6 +1172,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   }, [commitCells])
 
   const redo = useCallback(() => {
+    if (pendingWritesRef.current > 0) return // wait for the in-flight write to settle
     const changes = redoRef.current.pop()
     if (!changes) return
     undoRef.current.push(changes)
@@ -1459,6 +1461,14 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
 
         <div className="flex-1" />
 
+        {/* Saving indicator — queued/in-flight translation writes */}
+        {pendingWrites > 0 && (
+          <span className="flex items-center gap-1.5 text-xs text-zinc-400 mr-1" title="Saving your changes…">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <span className="hidden sm:inline">Saving…</span>
+          </span>
+        )}
+
         {/* Progress */}
         <div className="hidden sm:flex items-center gap-2 text-xs text-zinc-400 mr-1">
           <div className="w-24 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
@@ -1611,7 +1621,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
             variant="ghost" size="sm"
             className="h-7 w-7 p-0 text-zinc-400 hover:text-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed"
             onClick={() => undo()}
-            disabled={undoRef.current.length === 0}
+            disabled={undoRef.current.length === 0 || pendingWrites > 0}
             title="Undo (Ctrl/Cmd+Z)"
           >
             <Undo2 className="h-3.5 w-3.5" />
@@ -1620,7 +1630,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
             variant="ghost" size="sm"
             className="h-7 w-7 p-0 text-zinc-400 hover:text-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed"
             onClick={() => redo()}
-            disabled={redoRef.current.length === 0}
+            disabled={redoRef.current.length === 0 || pendingWrites > 0}
             title="Redo (Ctrl/Cmd+Shift+Z)"
           >
             <Redo2 className="h-3.5 w-3.5" />
