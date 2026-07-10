@@ -6,6 +6,7 @@ import { exportARB } from '@/lib/exporters/arb'
 import { exportCSV } from '@/lib/exporters/csv'
 import { exportYAML } from '@/lib/exporters/yaml'
 import { exportZIP } from '@/lib/exporters/zip'
+import { buildExportLookup, ExportDataQueryError, fetchExportData } from '@/lib/exporters/data'
 import { resolveBranchId } from '@/lib/branches/queries'
 
 // POST body: { projectId, branchId?, localeIds[], format, filter, nested? }
@@ -33,47 +34,40 @@ export async function POST(req: NextRequest) {
 
   const admin = createAdminClient()
 
-  // Fetch keys (per-branch — M2)
-  const { data: keys } = await admin
-    .from('translation_keys')
-    .select('id, key, description')
-    .eq('branch_id', branchId)
-    .order('key', { ascending: true })
+  let keys
+  let translations
+  try {
+    const exportData = await fetchExportData(admin, branchId, localeIds)
+    keys = exportData.keys
+    translations = exportData.translations
+  } catch (error) {
+    const message = error instanceof ExportDataQueryError ? error.message : 'Failed to load export data'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
 
   if (!keys?.length) {
     return NextResponse.json({ error: 'No keys found' }, { status: 400 })
   }
 
   // Fetch locales
-  const { data: locales } = await admin
+  const { data: locales, error: localesError } = await admin
     .from('locales')
     .select('id, code, name')
     .in('id', localeIds)
+
+  if (localesError) {
+    return NextResponse.json(
+      { error: `Failed to load locales for export: ${localesError.message}` },
+      { status: 500 }
+    )
+  }
 
   if (!locales?.length) {
     return NextResponse.json({ error: 'No locales found' }, { status: 400 })
   }
 
-  // Fetch translations
-  const keyIds = keys.map((k) => k.id)
-  const { data: translations } = await admin
-    .from('translations')
-    .select('key_id, locale_id, value, status')
-    .eq('branch_id', branchId)
-    .in('key_id', keyIds)
-    .in('locale_id', localeIds)
-
   // Build lookup: localeId → keyName → value
-  const byLocale = new Map<string, Record<string, string>>()
-  for (const t of translations ?? []) {
-    if (!t.key_id || !t.locale_id || !t.value) continue
-    if (filter === 'approved' && t.status !== 'approved') continue
-    if (filter === 'reviewed_approved' && t.status !== 'approved' && t.status !== 'reviewed') continue
-    const keyName = keys.find((k) => k.id === t.key_id)?.key
-    if (!keyName) continue
-    if (!byLocale.has(t.locale_id)) byLocale.set(t.locale_id, {})
-    byLocale.get(t.locale_id)![keyName] = t.value
-  }
+  const byLocale = buildExportLookup(keys, translations, filter)
 
   const descriptions = Object.fromEntries(
     keys.filter((k) => k.description).map((k) => [k.key, k.description as string])
