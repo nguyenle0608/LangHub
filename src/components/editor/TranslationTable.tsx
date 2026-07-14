@@ -287,6 +287,11 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   const scrollRef = useRef<HTMLDivElement>(null)
   const SIDEBAR_MIN_WIDTH = 180
   const SIDEBAR_MAX_WIDTH = 420
+  const DEFAULT_COLS = { check: 40, key: 224, locale: 200, status: 88 }
+  const KEY_COL_MIN_WIDTH = 160
+  const KEY_COL_MAX_WIDTH = 420
+  const LOCALE_COL_MIN_WIDTH = 140
+  const LOCALE_COL_MAX_WIDTH = 420
 
   // Role-based permissions
   const canEdit = user.role !== 'viewer'         // edit translation content
@@ -334,6 +339,10 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   const [sidebarWidth, setSidebarWidth] = useState(208)
   const [resizingSidebar, setResizingSidebar] = useState(false)
   const sidebarResizeRef = useRef<{ startX: number; startWidth: number } | null>(null)
+  const [keyColWidth, setKeyColWidth] = useState(DEFAULT_COLS.key)
+  const [localeColWidths, setLocaleColWidths] = useState<Map<string, number>>(new Map())
+  const [resizingColumnId, setResizingColumnId] = useState<string | null>(null)
+  const columnResizeRef = useRef<{ columnId: string; startX: number; startWidth: number; min: number; max: number } | null>(null)
 
   // Excel-like range selection (drag across locale cells, then copy/paste)
   const [selRange, setSelRange] = useState<{ anchor: Cell; focus: Cell } | null>(null)
@@ -429,6 +438,46 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
       document.body.style.userSelect = ''
     }
   }, [resizingSidebar, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH])
+
+  useEffect(() => {
+    if (!resizingColumnId) return
+
+    const onMouseMove = (event: MouseEvent) => {
+      const start = columnResizeRef.current
+      if (!start) return
+      const nextWidth = Math.min(
+        start.max,
+        Math.max(start.min, start.startWidth + event.clientX - start.startX)
+      )
+      if (start.columnId === 'key') {
+        setKeyColWidth(nextWidth)
+      } else {
+        setLocaleColWidths((prev) => {
+          const next = new Map(prev)
+          next.set(start.columnId, nextWidth)
+          return next
+        })
+      }
+    }
+
+    const stopResize = () => {
+      columnResizeRef.current = null
+      setResizingColumnId(null)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', stopResize)
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', stopResize)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [resizingColumnId])
 
   // Load a whole branch in windows: first page replaces, rest stream in.
   const loadBranchWindowed = useCallback(async (branchId: string) => {
@@ -1108,7 +1157,33 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   }, [canReview, selectedRows, locales, keys, activeBranchId])
 
   // Column layout
-  const COLS = { check: 40, key: 224, locale: 200, status: 88 }
+  const getLocaleColWidth = useCallback(
+    (localeId: string) => localeColWidths.get(localeId) ?? DEFAULT_COLS.locale,
+    [localeColWidths, DEFAULT_COLS.locale]
+  )
+  const startColumnResize = useCallback((
+    event: React.MouseEvent,
+    columnId: string,
+    startWidth: number,
+    min: number,
+    max: number,
+  ) => {
+    event.preventDefault()
+    event.stopPropagation()
+    columnResizeRef.current = { columnId, startX: event.clientX, startWidth, min, max }
+    setResizingColumnId(columnId)
+  }, [])
+  const resetColumnWidths = useCallback(() => {
+    setKeyColWidth(DEFAULT_COLS.key)
+    setLocaleColWidths(new Map())
+  }, [DEFAULT_COLS.key])
+  const equalizeLocaleColumnWidths = useCallback(() => {
+    if (locales.length === 0) return
+    const total = locales.reduce((sum, locale) => sum + getLocaleColWidth(locale.id), 0)
+    const average = Math.round(total / locales.length)
+    const width = Math.min(LOCALE_COL_MAX_WIDTH, Math.max(LOCALE_COL_MIN_WIDTH, average))
+    setLocaleColWidths(new Map(locales.map((locale) => [locale.id, width])))
+  }, [locales, getLocaleColWidth, LOCALE_COL_MAX_WIDTH, LOCALE_COL_MIN_WIDTH])
 
   const showKey = !hiddenCols.has('key')
   const showStatus = !hiddenCols.has('status')
@@ -1132,20 +1207,20 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   const stickyLeft = useMemo(() => {
     const map = new Map<string, number>()
     let offset = 0
-    map.set('check', offset); offset += COLS.check
-    if (showKey && frozenCols.has('key')) { map.set('key', offset); offset += COLS.key }
+    map.set('check', offset); offset += DEFAULT_COLS.check
+    if (showKey && frozenCols.has('key')) { map.set('key', offset); offset += keyColWidth }
     for (const l of visibleLocales) {
       if (!frozenCols.has(l.id)) break
-      map.set(l.id, offset); offset += COLS.locale
+      map.set(l.id, offset); offset += getLocaleColWidth(l.id)
     }
     return map
-  }, [showKey, frozenCols, visibleLocales, COLS.check, COLS.key, COLS.locale])
+  }, [showKey, frozenCols, visibleLocales, DEFAULT_COLS.check, keyColWidth, getLocaleColWidth])
 
   const gridCols = [
-    `${COLS.check}px`,
-    showKey ? `${COLS.key}px` : null,
-    ...visibleLocales.map(() => `${COLS.locale}px`),
-    showStatus ? `${COLS.status}px` : null,
+    `${DEFAULT_COLS.check}px`,
+    showKey ? `${keyColWidth}px` : null,
+    ...visibleLocales.map((locale) => `${getLocaleColWidth(locale.id)}px`),
+    showStatus ? `${DEFAULT_COLS.status}px` : null,
   ].filter(Boolean).join(' ')
 
   // Presence lookup for cells
@@ -1937,7 +2012,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
               variant="ghost"
               className={cn(
                 'h-7 text-xs gap-1.5',
-                (hiddenCols.size > 0 || lockedCols.size > 0 || frozenCols.size > 1 || localeOrder.length > 0)
+                (hiddenCols.size > 0 || lockedCols.size > 0 || frozenCols.size > 1 || localeOrder.length > 0 || keyColWidth !== DEFAULT_COLS.key || localeColWidths.size > 0)
                   ? 'text-blue-400 bg-blue-950/40 hover:bg-blue-950/60'
                   : 'text-zinc-400 hover:text-zinc-100'
               )}
@@ -2023,11 +2098,25 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                 </div>
               )
             })}
-            {(hiddenCols.size > 0 || lockedCols.size > 0 || frozenCols.size > 1 || localeOrder.length > 0) && (
+            <div className="border-t border-zinc-800 my-1" />
+            <p className="text-[10px] uppercase tracking-wider text-zinc-600 px-2 py-1">Widths</p>
+            <button
+              onClick={resetColumnWidths}
+              className="w-full text-left text-xs text-zinc-400 hover:text-zinc-200 px-2 py-1.5 rounded hover:bg-zinc-800/60"
+            >
+              Reset widths
+            </button>
+            <button
+              onClick={equalizeLocaleColumnWidths}
+              className="w-full text-left text-xs text-zinc-400 hover:text-zinc-200 px-2 py-1.5 rounded hover:bg-zinc-800/60"
+            >
+              Equalize language widths
+            </button>
+            {(hiddenCols.size > 0 || lockedCols.size > 0 || frozenCols.size > 1 || localeOrder.length > 0 || keyColWidth !== DEFAULT_COLS.key || localeColWidths.size > 0) && (
               <>
                 <div className="border-t border-zinc-800 my-1" />
                 <button
-                  onClick={() => { setHiddenCols(new Set()); setFrozenCols(new Set(['key'])); setLockedCols(new Set()); setLocaleOrder([]) }}
+                  onClick={() => { setHiddenCols(new Set()); setFrozenCols(new Set(['key'])); setLockedCols(new Set()); setLocaleOrder([]); resetColumnWidths() }}
                   className="w-full text-left text-xs text-zinc-500 hover:text-zinc-300 px-2 py-1.5 rounded hover:bg-zinc-800/60"
                 >
                   Reset all
@@ -2353,7 +2442,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
               {showKey && (
                 <div
                   className={cn(
-                    'px-3 flex items-center h-10 gap-1.5 text-xs font-semibold text-zinc-300 uppercase tracking-wide border-r border-zinc-800/70',
+                    'relative px-3 flex items-center h-10 gap-1.5 text-xs font-semibold text-zinc-300 uppercase tracking-wide border-r border-zinc-800/70',
                     stickyLeft.has('key') && 'sticky z-40 bg-zinc-900/95 backdrop-blur',
                     stickyLeft.has('key') && tableScrolledX && 'shadow-[6px_0_14px_rgba(0,0,0,0.35)]'
                   )}
@@ -2361,6 +2450,22 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                 >
                   {frozenCols.has('key') && <Pin className="h-2.5 w-2.5 text-blue-500 flex-shrink-0" />}
                   Key
+                  <div
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label="Resize key column"
+                    title="Drag to resize · Double-click to reset"
+                    className={cn(
+                      'absolute right-0 top-0 h-full w-1.5 cursor-col-resize transition-colors hover:bg-blue-500/70',
+                      resizingColumnId === 'key' && 'bg-blue-500/80'
+                    )}
+                    onMouseDown={(event) => startColumnResize(event, 'key', keyColWidth, KEY_COL_MIN_WIDTH, KEY_COL_MAX_WIDTH)}
+                    onDoubleClick={(event) => {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      setKeyColWidth(DEFAULT_COLS.key)
+                    }}
+                  />
                 </div>
               )}
               {/* Locale columns */}
@@ -2377,6 +2482,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                 const isFrozen = frozenCols.has(locale.id)
                 const isLocked = lockedCols.has(locale.id)
                 const isDraggingThis = dragOverLocaleId === locale.id && draggingLocaleRef.current !== locale.id
+                const localeColWidth = getLocaleColWidth(locale.id)
                 return (
                   <div
                     key={locale.id}
@@ -2386,7 +2492,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                     onDrop={(e) => handleColDrop(e, locale.id)}
                     onDragEnd={handleColDragEnd}
                     className={cn(
-                      'px-2 flex items-center h-10 gap-1 text-xs font-medium text-zinc-300 select-none border-r border-zinc-800/50',
+                      'relative px-2 flex items-center h-10 gap-1 text-xs font-medium text-zinc-300 select-none border-r border-zinc-800/50',
                       isFrozen && 'sticky z-40 bg-zinc-900/95 backdrop-blur',
                       isFrozen && tableScrolledX && 'shadow-[6px_0_14px_rgba(0,0,0,0.35)]',
                       isDraggingThis && 'border-l-2 border-blue-500 bg-blue-950/20'
@@ -2471,6 +2577,26 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                         </PopoverContent>
                       </Popover>
                     )}
+                    <div
+                      role="separator"
+                      aria-orientation="vertical"
+                      aria-label={`Resize ${locale.name} column`}
+                      title="Drag to resize · Double-click to reset"
+                      className={cn(
+                        'absolute right-0 top-0 h-full w-1.5 cursor-col-resize transition-colors hover:bg-blue-500/70',
+                        resizingColumnId === locale.id && 'bg-blue-500/80'
+                      )}
+                      onMouseDown={(event) => startColumnResize(event, locale.id, localeColWidth, LOCALE_COL_MIN_WIDTH, LOCALE_COL_MAX_WIDTH)}
+                      onDoubleClick={(event) => {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        setLocaleColWidths((prev) => {
+                          const next = new Map(prev)
+                          next.delete(locale.id)
+                          return next
+                        })
+                      }}
+                    />
                   </div>
                 )
               })}
