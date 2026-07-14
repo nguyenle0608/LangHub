@@ -77,13 +77,20 @@ export async function fetchExportData(
 export function buildExportLookup(
   keys: ExportKey[],
   translations: ExportTranslation[],
-  filter: ExportFilter
+  filter: ExportFilter,
+  options?: { includeEmpty?: boolean; localeIds?: string[] }
 ): Map<string, Record<string, string>> {
   const keyNames = new Map(keys.map((key) => [key.id, key.key]))
   const byLocale = new Map<string, Record<string, string>>()
 
+  if (options?.includeEmpty) {
+    for (const localeId of options.localeIds ?? []) {
+      byLocale.set(localeId, Object.fromEntries(keys.map((key) => [key.key, ''])))
+    }
+  }
+
   for (const translation of translations) {
-    if (!translation.key_id || !translation.locale_id || !translation.value) continue
+    if (!translation.key_id || !translation.locale_id) continue
     if (filter === 'approved' && translation.status !== 'approved') continue
     if (
       filter === 'reviewed_approved' &&
@@ -94,7 +101,8 @@ export function buildExportLookup(
     const keyName = keyNames.get(translation.key_id)
     if (!keyName) continue
     if (!byLocale.has(translation.locale_id)) byLocale.set(translation.locale_id, {})
-    byLocale.get(translation.locale_id)![keyName] = translation.value
+    if (!options?.includeEmpty && !translation.value) continue
+    byLocale.get(translation.locale_id)![keyName] = translation.value ?? ''
   }
 
   return byLocale

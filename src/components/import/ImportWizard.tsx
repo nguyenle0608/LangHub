@@ -10,6 +10,12 @@ import { parseJSON } from '@/lib/parsers/json'
 import { parseARB } from '@/lib/parsers/arb'
 import { parseCSV } from '@/lib/parsers/csv'
 import { parseYAML } from '@/lib/parsers/yaml'
+import {
+  deriveNamespaceFromFilename,
+  prefixKeysWithNamespace,
+  sanitizeNamespaceSegment,
+  type JsonImportStructure,
+} from '@/lib/localization-namespaces'
 import type { ProjectWithStats } from '@/types'
 
 type Format = 'json' | 'arb' | 'csv' | 'yaml'
@@ -21,9 +27,13 @@ interface FileEntry {
   localeId: string
   keyCount?: number
   newCount?: number
+  fillCount?: number
+  namespace?: string
   // parsed key→value from file, available after computeKeyCounts
   parsedKeys?: Record<string, string>
-  // existing keys that are in this file (duplicates), available after computeKeyCounts
+  // key groups available after computeKeyCounts
+  newKeys?: string[]
+  fillKeys?: string[]
   duplicateKeys?: string[]
 }
 
@@ -96,10 +106,63 @@ function StepIndicator({ step }: { step: number }) {
   )
 }
 
+function PreviewKeyList({
+  title,
+  keys,
+  tone,
+  parsedKeys,
+  expanded,
+  onToggle,
+}: {
+  title: string
+  keys: string[]
+  tone: 'new' | 'fill'
+  parsedKeys?: Record<string, string>
+  expanded: boolean
+  onToggle: () => void
+}) {
+  if (keys.length === 0) return null
+  const toneClass = tone === 'new'
+    ? 'bg-emerald-500/5 border-emerald-900/40 text-emerald-400'
+    : 'bg-blue-500/5 border-blue-900/40 text-blue-400'
+
+  return (
+    <div className="border-t border-zinc-800">
+      <button
+        type="button"
+        onClick={onToggle}
+        className={`w-full flex items-center justify-between px-3 py-2 text-xs border-b hover:bg-zinc-900/30 ${toneClass}`}
+      >
+        <span>
+          <span className="font-medium">{title}</span>
+          <span className="ml-1 text-zinc-500">({keys.length})</span>
+        </span>
+        {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+      </button>
+      {expanded && (
+        <div className="max-h-48 overflow-y-auto divide-y divide-zinc-800/50">
+          {keys.slice(0, MAX_PREVIEW_ROWS).map((dotKey) => (
+            <div key={dotKey} className="grid grid-cols-[1fr,1fr] gap-3 px-3 py-2 hover:bg-zinc-900/30">
+              <span className="text-[11px] font-mono text-zinc-300 min-w-0 truncate">{dotKey}</span>
+              <span className="text-[11px] text-zinc-500 min-w-0 truncate">{parsedKeys?.[dotKey] ?? ''}</span>
+            </div>
+          ))}
+          {keys.length > MAX_PREVIEW_ROWS && (
+            <div className="px-3 py-2 text-xs text-zinc-600">
+              … and {keys.length - MAX_PREVIEW_ROWS} more
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function ImportWizard({ project, branchId }: Props) {
   const [step, setStep] = useState(0)
   const [files, setFiles] = useState<FileEntry[]>([])
   const [namespace, setNamespace] = useState('')
+  const [jsonImportStructure, setJsonImportStructure] = useState<JsonImportStructure>('monolithic')
   const [conflictStrategy, setConflictStrategy] = useState<'overwrite' | 'skip'>('overwrite')
   const [snapshotName, setSnapshotName] = useState('')
   const [createNamedSnapshot, setCreateNamedSnapshot] = useState(false)
@@ -111,6 +174,7 @@ export function ImportWizard({ project, branchId }: Props) {
   const [overwriteMap, setOverwriteMap] = useState<Record<string, Set<string>>>({})
   // Which files have their duplicates section expanded
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set())
+  const [expandedPreviewGroups, setExpandedPreviewGroups] = useState<Set<string>>(new Set())
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -124,6 +188,7 @@ export function ImportWizard({ project, branchId }: Props) {
           file: f,
           format: detectFormat(f.name),
           localeId: autoDetectLocale(f.name, project.locales),
+          namespace: deriveNamespaceFromFilename(f.name),
         })
       }
       return next
@@ -144,7 +209,15 @@ export function ImportWizard({ project, branchId }: Props) {
     setFiles((prev) => prev.map((e) => e.key === key ? { ...e, ...patch } : e))
   }
 
-  const computeKeyCounts = useCallback(async (existingKeySet: Set<string>): Promise<{ entries: FileEntry[]; owMap: Record<string, Set<string>> }> => {
+  function updateAllLocales(localeId: string) {
+    if (!localeId) return
+    setFiles((prev) => prev.map((entry) => ({ ...entry, localeId })))
+  }
+
+  const computeKeyCounts = useCallback(async (
+    existingKeySet: Set<string>,
+    filledKeysByLocale: Map<string, Set<string>>
+  ): Promise<{ entries: FileEntry[]; owMap: Record<string, Set<string>> }> => {
     const owMap: Record<string, Set<string>> = {}
 
     const entries = await Promise.all(files.map(async (entry) => {
@@ -163,41 +236,61 @@ export function ImportWizard({ project, branchId }: Props) {
         keys = matching?.keys ?? {}
       }
 
-      const prefix = namespace.trim()
-      if (prefix) {
-        const prefixed: Record<string, string> = {}
-        for (const [k, v] of Object.entries(keys)) prefixed[`${prefix}.${k}`] = v
-        keys = prefixed
+      if (format === 'json' && jsonImportStructure === 'namespaced') {
+        keys = prefixKeysWithNamespace(keys, entry.namespace ?? deriveNamespaceFromFilename(file.name))
+      } else if (namespace.trim()) {
+        keys = prefixKeysWithNamespace(keys, namespace.trim())
       }
 
       const allKeys = Object.keys(keys)
-      const duplicateKeys = allKeys.filter((k) => existingKeySet.has(k))
-      const newCount = allKeys.length - duplicateKeys.length
+      const filledKeys = filledKeysByLocale.get(entry.localeId) ?? new Set<string>()
+      const duplicateKeys = allKeys.filter((k) => filledKeys.has(k))
+      const newKeys = allKeys.filter((k) => !existingKeySet.has(k))
+      const fillKeys = allKeys.filter((k) => existingKeySet.has(k) && !filledKeys.has(k))
+      const newCount = newKeys.length
+      const fillCount = fillKeys.length
 
       // Init overwrite set based on global strategy
       owMap[entry.key] = conflictStrategy === 'overwrite'
         ? new Set(duplicateKeys)
         : new Set()
 
-      return { ...entry, keyCount: allKeys.length, newCount, parsedKeys: keys, duplicateKeys }
+      return { ...entry, keyCount: allKeys.length, newCount, fillCount, parsedKeys: keys, newKeys, fillKeys, duplicateKeys }
     }))
 
     return { entries, owMap }
-  }, [files, namespace, project.locales, conflictStrategy])
+  }, [files, namespace, jsonImportStructure, project.locales, conflictStrategy])
 
   async function handleGoToPreview() {
     const params = new URLSearchParams({ projectId: project.id })
     if (branchId) params.set('branch', branchId)
     const resp = await fetch(`/api/keys?${params}`)
-    const json = await resp.json() as { data?: { key: string }[] }
+    const json = await resp.json() as {
+      data?: Array<{
+        key: string
+        translations?: Array<{ locale_id: string | null; value: string | null }>
+      }>
+    }
     const existingKeySet = new Set((json.data ?? []).map((k) => k.key))
+    const filledKeysByLocale = new Map<string, Set<string>>()
+    for (const key of json.data ?? []) {
+      for (const translation of key.translations ?? []) {
+        if (!translation.locale_id || !translation.value?.trim()) continue
+        if (!filledKeysByLocale.has(translation.locale_id)) filledKeysByLocale.set(translation.locale_id, new Set())
+        filledKeysByLocale.get(translation.locale_id)!.add(key.key)
+      }
+    }
 
-    const { entries, owMap } = await computeKeyCounts(existingKeySet)
+    const { entries, owMap } = await computeKeyCounts(existingKeySet, filledKeysByLocale)
     setFiles(entries)
     setOverwriteMap(owMap)
     // Auto-expand files that have duplicates
     const withDupes = new Set(entries.filter((e) => (e.duplicateKeys?.length ?? 0) > 0).map((e) => e.key))
     setExpandedFiles(withDupes)
+    setExpandedPreviewGroups(new Set(entries.flatMap((e) => [
+      ...(e.newKeys?.length ? [`${e.key}:new`] : []),
+      ...(e.fillKeys?.length ? [`${e.key}:fill`] : []),
+    ])))
     setStep(2)
   }
 
@@ -216,12 +309,20 @@ export function ImportWizard({ project, branchId }: Props) {
     }))
   }
 
+  function togglePreviewGroup(groupKey: string) {
+    setExpandedPreviewGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(groupKey)) next.delete(groupKey); else next.add(groupKey)
+      return next
+    })
+  }
+
   const handleImport = async () => {
     setResults([])
     setStep(3)
     const allResults: FileResult[] = []
     // Only send API requests for files that will actually write something
-    const filesToProcess = files.filter((e) => (e.newCount ?? 0) + (overwriteMap[e.key]?.size ?? 0) > 0)
+    const filesToProcess = files.filter((e) => (e.newCount ?? 0) + (e.fillCount ?? 0) + (overwriteMap[e.key]?.size ?? 0) > 0)
     setImportProgress({ current: 0, total: filesToProcess.length, filename: '' })
 
     for (let i = 0; i < filesToProcess.length; i++) {
@@ -244,7 +345,12 @@ export function ImportWizard({ project, branchId }: Props) {
         fd.append('localeId', localeId)
         fd.append('format', format)
         if (branchId) fd.append('branchId', branchId)
-        if (namespace.trim()) fd.append('namespace', namespace.trim())
+        if (format === 'json') fd.append('importStructure', jsonImportStructure)
+        if (format === 'json' && jsonImportStructure === 'namespaced') {
+          fd.append('namespace', sanitizeNamespaceSegment(entry.namespace ?? deriveNamespaceFromFilename(file.name)))
+        } else if (namespace.trim()) {
+          fd.append('namespace', namespace.trim())
+        }
         if (skipKeys.length > 0) fd.append('skipKeys', JSON.stringify(skipKeys))
         if (i > 0) fd.append('skipAutoSnapshot', 'true')
         if (i === 0 && createNamedSnapshot && snapshotName) fd.append('snapshotName', snapshotName)
@@ -278,21 +384,39 @@ export function ImportWizard({ project, branchId }: Props) {
     setStep(4)
   }
 
-  // Locales that appear more than once across the file list
+  // Locales that appear more than once across the file list. Multiple files for
+  // one locale are allowed only for namespaced JSON imports.
   const localeCounts = files.reduce<Record<string, number>>((acc, e) => {
     if (e.localeId) acc[e.localeId] = (acc[e.localeId] ?? 0) + 1
     return acc
   }, {})
-  const duplicatedLocales = new Set(Object.entries(localeCounts).filter(([, c]) => c > 1).map(([id]) => id))
+  const duplicatedLocales = new Set(
+    Object.entries(localeCounts)
+      .filter(([id, c]) => c > 1 && !files
+        .filter((e) => e.localeId === id)
+        .every((e) => e.format === 'json' && jsonImportStructure === 'namespaced'))
+      .map(([id]) => id)
+  )
+  const uploadDuplicatedLocales = new Set(
+    Object.entries(localeCounts)
+      .filter(([id, c]) => c > 1 && !files
+        .filter((e) => e.localeId === id)
+        .every((e) => e.format === 'json'))
+      .map(([id]) => id)
+  )
 
   const canContinue = files.length > 0
     && files.every((e) => e.format && e.localeId)
+    && (jsonImportStructure !== 'namespaced' || files.every((e) => e.format !== 'json' || sanitizeNamespaceSegment(e.namespace ?? '') !== ''))
     && duplicatedLocales.size === 0
+  const canContinueUpload = files.length > 0
+    && files.every((e) => e.format && e.localeId)
+    && uploadDuplicatedLocales.size === 0
 
   const totalDuplicates = files.reduce((sum, e) => sum + (e.duplicateKeys?.length ?? 0), 0)
   const totalOverwrites = Object.values(overwriteMap).reduce((sum, s) => sum + s.size, 0)
   // Files that will actually write something (new keys OR selected overwrites > 0)
-  const activeFiles = files.filter((e) => (e.newCount ?? 0) + (overwriteMap[e.key]?.size ?? 0) > 0)
+  const activeFiles = files.filter((e) => (e.newCount ?? 0) + (e.fillCount ?? 0) + (overwriteMap[e.key]?.size ?? 0) > 0)
 
   return (
     <div className="flex flex-col h-screen bg-zinc-950 text-zinc-100">
@@ -336,9 +460,29 @@ export function ImportWizard({ project, branchId }: Props) {
 
               {files.length > 0 && (
                 <>
+                  <div className="flex items-center justify-between gap-3 bg-zinc-900/60 border border-zinc-800 rounded-lg px-3 py-2">
+                    <div>
+                      <p className="text-xs font-medium text-zinc-300">Target language for all files</p>
+                      <p className="text-[10px] text-zinc-600">Use this when importing many namespace files for one locale.</p>
+                    </div>
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        updateAllLocales(e.target.value)
+                        e.currentTarget.value = ''
+                      }}
+                      className="h-7 text-xs bg-zinc-800 border border-zinc-700 rounded px-2 text-zinc-300 min-w-[150px]"
+                    >
+                      <option value="" disabled>Set all…</option>
+                      {project.locales.map((l) => (
+                        <option key={l.id} value={l.id}>{l.code} — {l.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
                   <div className="space-y-2">
                     {files.map((entry) => {
-                      const localeConflict = duplicatedLocales.has(entry.localeId)
+                      const localeConflict = uploadDuplicatedLocales.has(entry.localeId)
                       return (
                         <div
                           key={entry.key}
@@ -391,14 +535,14 @@ export function ImportWizard({ project, branchId }: Props) {
                     })}
                   </div>
 
-                  {duplicatedLocales.size > 0 && (
+                  {uploadDuplicatedLocales.size > 0 && (
                     <p className="text-xs text-red-400 text-center">
-                      Each locale can only be assigned to one file per import batch.
+                      Each locale can only be assigned to one file unless JSON namespaced import is selected.
                     </p>
                   )}
 
                   <div className="flex justify-end">
-                    <Button size="sm" disabled={!canContinue} onClick={() => setStep(1)}>
+                    <Button size="sm" disabled={!canContinueUpload} onClick={() => setStep(1)}>
                       Continue <ChevronRight className="h-3.5 w-3.5 ml-1" />
                     </Button>
                   </div>
@@ -410,6 +554,61 @@ export function ImportWizard({ project, branchId }: Props) {
           {/* Step 1: Configure */}
           {step === 1 && (
             <div className="space-y-6">
+              {files.some((e) => e.format === 'json') && (
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-zinc-400">JSON import structure</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      { value: 'monolithic', label: 'Monolithic', desc: 'Import keys exactly as they appear in each JSON file' },
+                      { value: 'namespaced', label: 'Namespaced', desc: 'Prefix JSON keys with each file name, e.g. authen.keyA' },
+                    ] as const).map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setJsonImportStructure(opt.value)}
+                        className={[
+                          'text-left px-3 py-2.5 rounded-lg border text-xs transition-colors',
+                          jsonImportStructure === opt.value
+                            ? 'bg-blue-600/15 border-blue-500 text-blue-200'
+                            : 'border-zinc-700 text-zinc-400 hover:border-zinc-600',
+                        ].join(' ')}
+                      >
+                        <div className="font-medium mb-0.5">{opt.label}</div>
+                        <div className="text-[10px] opacity-70">{opt.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {jsonImportStructure === 'namespaced' && files.some((e) => e.format === 'json') && (
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-zinc-400">JSON file namespaces</label>
+                  <div className="space-y-2">
+                    {files.filter((e) => e.format === 'json').map((entry) => (
+                      <div key={entry.key} className="grid grid-cols-[1fr,160px] gap-2 items-center">
+                        <span className="text-xs font-mono text-zinc-500 truncate">{entry.file.name}</span>
+                        <Input
+                          value={entry.namespace ?? ''}
+                          onChange={(e) => updateEntry(entry.key, { namespace: sanitizeNamespaceSegment(e.target.value) })}
+                          placeholder="namespace"
+                          className="h-7 text-xs bg-zinc-900 border-zinc-700 font-mono"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-zinc-600">
+                    Re-importing a single file like authen.json in namespaced mode updates authen.* keys.
+                  </p>
+                </div>
+              )}
+
+              {duplicatedLocales.size > 0 && (
+                <p className="text-xs text-red-400 bg-red-950/20 border border-red-900/50 rounded-lg px-3 py-2">
+                  Multiple files target the same locale. Select JSON namespaced import to continue with feature-split files.
+                </p>
+              )}
+
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-zinc-400">
                   Key namespace prefix <span className="text-zinc-600">(optional)</span>
@@ -418,8 +617,12 @@ export function ImportWizard({ project, branchId }: Props) {
                   value={namespace}
                   onChange={(e) => setNamespace(e.target.value)}
                   placeholder="e.g. onboarding → keys become onboarding.key_name"
+                  disabled={jsonImportStructure === 'namespaced'}
                   className="text-sm bg-zinc-900 border-zinc-700 font-mono"
                 />
+                {jsonImportStructure === 'namespaced' && (
+                  <p className="text-[10px] text-zinc-600">Disabled because JSON namespaced import uses per-file namespaces.</p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -474,7 +677,7 @@ export function ImportWizard({ project, branchId }: Props) {
 
               <div className="flex justify-between">
                 <Button variant="outline" size="sm" className="border-zinc-700" onClick={() => setStep(0)}>Back</Button>
-                <Button size="sm" onClick={handleGoToPreview}>
+                <Button size="sm" onClick={handleGoToPreview} disabled={!canContinue}>
                   Preview <ChevronRight className="h-3.5 w-3.5 ml-1" />
                 </Button>
               </div>
@@ -488,10 +691,12 @@ export function ImportWizard({ project, branchId }: Props) {
               <div className="space-y-3">
                 {files.map((entry) => {
                   const locale = project.locales.find((l) => l.id === entry.localeId)
+                  const newKeys = entry.newKeys ?? []
+                  const fillKeys = entry.fillKeys ?? []
                   const dupes = entry.duplicateKeys ?? []
                   const selected = overwriteMap[entry.key] ?? new Set<string>()
                   const isExpanded = expandedFiles.has(entry.key)
-                  const effectiveCount = (entry.newCount ?? 0) + selected.size
+                  const effectiveCount = (entry.newCount ?? 0) + (entry.fillCount ?? 0) + selected.size
                   const isEmpty = effectiveCount === 0
 
                   return (
@@ -511,10 +716,18 @@ export function ImportWizard({ project, branchId }: Props) {
                             <span className="text-zinc-600 italic">nothing to import</span>
                           ) : (
                             <>
-                              {entry.newCount !== undefined && entry.newCount > 0 && (
-                                <span className="text-emerald-400">{entry.newCount} new</span>
+                              {newKeys.length > 0 && (
+                                <span className="text-emerald-400">{newKeys.length} new</span>
                               )}
-                              {entry.newCount !== undefined && entry.newCount > 0 && dupes.length > 0 && (
+                              {fillKeys.length > 0 && (
+                                <>
+                                  {newKeys.length > 0 && (
+                                    <span className="text-zinc-700"> · </span>
+                                  )}
+                                  <span className="text-blue-400">{fillKeys.length} fill empty</span>
+                                </>
+                              )}
+                              {(newKeys.length > 0 || fillKeys.length > 0) && dupes.length > 0 && (
                                 <span className="text-zinc-700"> · </span>
                               )}
                               {dupes.length > 0 && (
@@ -525,7 +738,24 @@ export function ImportWizard({ project, branchId }: Props) {
                         </span>
                       </div>
 
-                      {/* Duplicate keys section */}
+                      <PreviewKeyList
+                        title="New keys"
+                        keys={newKeys}
+                        tone="new"
+                        parsedKeys={entry.parsedKeys}
+                        expanded={expandedPreviewGroups.has(`${entry.key}:new`)}
+                        onToggle={() => togglePreviewGroup(`${entry.key}:new`)}
+                      />
+
+                      <PreviewKeyList
+                        title="Fill empty translations"
+                        keys={fillKeys}
+                        tone="fill"
+                        parsedKeys={entry.parsedKeys}
+                        expanded={expandedPreviewGroups.has(`${entry.key}:fill`)}
+                        onToggle={() => togglePreviewGroup(`${entry.key}:fill`)}
+                      />
+
                       {dupes.length > 0 && (
                         <>
                           <button
@@ -548,6 +778,7 @@ export function ImportWizard({ project, branchId }: Props) {
                             <div className="border-t border-zinc-800">
                               {/* Select all / none */}
                               <div className="flex items-center gap-3 px-3 py-2 bg-zinc-900/60 border-b border-zinc-800/60">
+                                <span className="text-[10px] font-medium text-amber-400">Overwrite existing values</span>
                                 <span className="text-[10px] text-zinc-500 flex-1">Key</span>
                                 <span className="text-[10px] text-zinc-500 flex-1">New value</span>
                                 <div className="flex items-center gap-2">
@@ -700,7 +931,7 @@ export function ImportWizard({ project, branchId }: Props) {
                   variant="outline"
                   size="sm"
                   className="border-zinc-700"
-                  onClick={() => { setStep(0); setFiles([]); setResults([]); setOverwriteMap({}) }}
+                  onClick={() => { setStep(0); setFiles([]); setResults([]); setOverwriteMap({}); setExpandedPreviewGroups(new Set()) }}
                 >
                   Import More
                 </Button>

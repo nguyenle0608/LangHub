@@ -180,4 +180,48 @@ describe('buildExportLookup', () => {
     const byLocale = buildExportLookup(keys, [], 'all')
     expect(exportJSON(byLocale.get('locale-en') ?? {})).toBe('{}')
   })
+
+  it('can include every key with empty string fallback per selected locale', () => {
+    const byLocale = buildExportLookup(keys, [
+      { key_id: 'key-a', locale_id: 'locale-en', value: 'A', status: 'approved' },
+      { key_id: 'key-b', locale_id: 'locale-en', value: null, status: 'empty' },
+    ], 'all', { includeEmpty: true, localeIds: ['locale-en', 'locale-vi'] })
+
+    expect(byLocale.get('locale-en')).toEqual({
+      'messages.a': 'A',
+      'messages.b': '',
+      'messages.c': '',
+    })
+    expect(byLocale.get('locale-vi')).toEqual({
+      'messages.a': '',
+      'messages.b': '',
+      'messages.c': '',
+    })
+  })
+
+  it('keeps approved-only filter while including non-matching keys as empty strings', () => {
+    const byLocale = buildExportLookup(keys, translations, 'approved', {
+      includeEmpty: true,
+      localeIds: ['locale-en'],
+    })
+
+    expect(byLocale.get('locale-en')).toEqual({
+      'messages.a': 'A',
+      'messages.b': '',
+      'messages.c': '',
+    })
+  })
+
+  it('keeps reviewed-and-approved filter while including pending keys as empty strings', () => {
+    const byLocale = buildExportLookup(keys, translations, 'reviewed_approved', {
+      includeEmpty: true,
+      localeIds: ['locale-en'],
+    })
+
+    expect(byLocale.get('locale-en')).toEqual({
+      'messages.a': 'A',
+      'messages.b': '',
+      'messages.c': 'C',
+    })
+  })
 })

@@ -83,6 +83,25 @@ describe('POST /api/export', () => {
     expect(await response.text()).toBe('{}')
   })
 
+  it('includes empty values for monolithic JSON when requested', async () => {
+    vi.mocked(fetchExportData).mockResolvedValue({
+      keys: [
+        { id: 'key-title', key: 'app.title', description: null },
+        { id: 'key-subtitle', key: 'app.subtitle', description: null },
+      ],
+      translations: [
+        { key_id: 'key-title', locale_id: en.id, value: 'LangHub', status: 'approved' },
+      ],
+    })
+
+    const response = await POST(request({ includeEmpty: true }))
+
+    expect(response.status).toBe(200)
+    expect(JSON.parse(await response.text())).toEqual({
+      app: { title: 'LangHub', subtitle: '' },
+    })
+  })
+
   it('returns an error response instead of a file when export data retrieval fails', async () => {
     vi.mocked(fetchExportData).mockRejectedValue(
       new ExportDataQueryError('translations', 'request URI too large')
@@ -115,6 +134,77 @@ describe('POST /api/export', () => {
     expect(exportZIP).toHaveBeenCalledWith([
       { name: 'en.json', content: '{\n  "app": {\n    "title": "Title"\n  }\n}' },
       { name: 'vi.json', content: '{\n  "app": {\n    "title": "Tiêu đề"\n  }\n}' },
+    ])
+  })
+
+  it('exports one selected locale as namespaced JSON files in a ZIP', async () => {
+    vi.mocked(fetchExportData).mockResolvedValue({
+      keys: [
+        { id: 'key-auth', key: 'authen.login.title', description: null },
+        { id: 'key-home', key: 'home.title', description: null },
+        { id: 'key-root', key: 'appName', description: null },
+      ],
+      translations: [
+        { key_id: 'key-auth', locale_id: en.id, value: 'Sign in', status: 'approved' },
+        { key_id: 'key-home', locale_id: en.id, value: 'Home', status: 'approved' },
+        { key_id: 'key-root', locale_id: en.id, value: 'LangHub', status: 'approved' },
+      ],
+    })
+    vi.mocked(exportZIP).mockResolvedValue(Buffer.from([1, 2, 3]))
+
+    const response = await POST(request({ jsonStructure: 'namespaced' }))
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Content-Disposition')).toContain('filename="en-namespaces.zip"')
+    expect(exportZIP).toHaveBeenCalledWith([
+      { name: '_root.json', content: '{\n  "appName": "LangHub"\n}' },
+      { name: 'authen.json', content: '{\n  "login": {\n    "title": "Sign in"\n  }\n}' },
+      { name: 'home.json', content: '{\n  "title": "Home"\n}' },
+    ])
+  })
+
+  it('includes empty values in namespaced JSON files when requested', async () => {
+    vi.mocked(fetchExportData).mockResolvedValue({
+      keys: [
+        { id: 'key-auth-title', key: 'authen.login.title', description: null },
+        { id: 'key-auth-subtitle', key: 'authen.login.subtitle', description: null },
+        { id: 'key-home', key: 'home.title', description: null },
+      ],
+      translations: [
+        { key_id: 'key-auth-title', locale_id: en.id, value: 'Sign in', status: 'approved' },
+      ],
+    })
+    vi.mocked(exportZIP).mockResolvedValue(Buffer.from([1, 2, 3]))
+
+    const response = await POST(request({ jsonStructure: 'namespaced', includeEmpty: true }))
+
+    expect(response.status).toBe(200)
+    expect(exportZIP).toHaveBeenCalledWith([
+      {
+        name: 'authen.json',
+        content: '{\n  "login": {\n    "title": "Sign in",\n    "subtitle": ""\n  }\n}',
+      },
+      { name: 'home.json', content: '{\n  "title": ""\n}' },
+    ])
+  })
+
+  it('exports multiple locales with deterministic namespaced ZIP paths', async () => {
+    mockLocales([en, viLocale])
+    vi.mocked(fetchExportData).mockResolvedValue({
+      keys: [{ id: 'key-auth', key: 'authen.login.title', description: null }],
+      translations: [
+        { key_id: 'key-auth', locale_id: en.id, value: 'Sign in', status: 'approved' },
+        { key_id: 'key-auth', locale_id: viLocale.id, value: 'Đăng nhập', status: 'approved' },
+      ],
+    })
+    vi.mocked(exportZIP).mockResolvedValue(Buffer.from([1, 2, 3]))
+
+    const response = await POST(request({ localeIds: [en.id, viLocale.id], jsonStructure: 'namespaced' }))
+
+    expect(response.status).toBe(200)
+    expect(exportZIP).toHaveBeenCalledWith([
+      { name: 'en/authen.json', content: '{\n  "login": {\n    "title": "Sign in"\n  }\n}' },
+      { name: 'vi/authen.json', content: '{\n  "login": {\n    "title": "Đăng nhập"\n  }\n}' },
     ])
   })
 

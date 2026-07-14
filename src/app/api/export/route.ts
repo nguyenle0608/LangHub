@@ -8,6 +8,7 @@ import { exportYAML } from '@/lib/exporters/yaml'
 import { exportZIP } from '@/lib/exporters/zip'
 import { buildExportLookup, ExportDataQueryError, fetchExportData } from '@/lib/exporters/data'
 import { resolveBranchId } from '@/lib/branches/queries'
+import { splitKeysByNamespace, type JsonExportStructure } from '@/lib/localization-namespaces'
 
 // POST body: { projectId, branchId?, localeIds[], format, filter, nested? }
 export async function POST(req: NextRequest) {
@@ -22,11 +23,16 @@ export async function POST(req: NextRequest) {
     format: 'json' | 'arb' | 'csv' | 'yaml'
     filter: 'all' | 'approved' | 'reviewed_approved'
     nested?: boolean
+    jsonStructure?: JsonExportStructure
+    includeEmpty?: boolean
   }
 
-  const { projectId, localeIds, format, filter, nested = true } = body
+  const { projectId, localeIds, format, filter, nested = true, jsonStructure = 'monolithic', includeEmpty = false } = body
   if (!projectId || !localeIds?.length || !format) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+  }
+  if (jsonStructure !== 'monolithic' && jsonStructure !== 'namespaced') {
+    return NextResponse.json({ error: `Unsupported JSON export structure: ${jsonStructure}` }, { status: 400 })
   }
 
   const branchId = await resolveBranchId(projectId, body.branchId)
@@ -67,7 +73,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Build lookup: localeId → keyName → value
-  const byLocale = buildExportLookup(keys, translations, filter)
+  const byLocale = buildExportLookup(keys, translations, filter, { includeEmpty, localeIds })
 
   const descriptions = Object.fromEntries(
     keys.filter((k) => k.description).map((k) => [k.key, k.description as string])
@@ -98,6 +104,20 @@ export async function POST(req: NextRequest) {
   if (localeIds.length === 1) {
     const locale = locales[0]!
     const localeKeys = byLocale.get(locale.id) ?? {}
+
+    if (format === 'json' && jsonStructure === 'namespaced') {
+      const files = splitKeysByNamespace(localeKeys).map((group) => ({
+        name: group.filename,
+        content: exportJSON(group.keys, true),
+      }))
+      const zipBuffer = await exportZIP(files)
+      return new NextResponse(zipBuffer as unknown as BodyInit, {
+        headers: {
+          'Content-Type': 'application/zip',
+          'Content-Disposition': `attachment; filename="${locale.code}-namespaces.zip"`,
+        },
+      })
+    }
 
     let content: string
     let contentType = 'application/json'
@@ -130,6 +150,12 @@ export async function POST(req: NextRequest) {
     let ext: string
 
     if (format === 'json') {
+      if (jsonStructure === 'namespaced') {
+        for (const group of splitKeysByNamespace(localeKeys)) {
+          files.push({ name: `${locale.code}/${group.filename}`, content: exportJSON(group.keys, true) })
+        }
+        continue
+      }
       content = exportJSON(localeKeys, nested)
       ext = 'json'
     } else if (format === 'arb') {

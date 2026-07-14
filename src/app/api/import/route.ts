@@ -7,6 +7,12 @@ import { parseJSON } from '@/lib/parsers/json'
 import { parseARB } from '@/lib/parsers/arb'
 import { parseCSV } from '@/lib/parsers/csv'
 import { parseYAML } from '@/lib/parsers/yaml'
+import {
+  deriveNamespaceFromFilename,
+  prefixKeysWithNamespace,
+  sanitizeNamespaceSegment,
+  type JsonImportStructure,
+} from '@/lib/localization-namespaces'
 
 const SUPPORTED_FORMATS = ['json', 'arb', 'csv', 'yaml', 'yml'] as const
 
@@ -23,6 +29,7 @@ export async function POST(req: NextRequest) {
   const snapshotName = formData.get('snapshotName') as string | null
   const branchParam = formData.get('branchId') as string | null
   const namespace = (formData.get('namespace') as string | null)?.trim() || null
+  const importStructure = (formData.get('importStructure') as JsonImportStructure | null) ?? 'monolithic'
   const skipAutoSnapshot = formData.get('skipAutoSnapshot') === 'true'
   const skipKeysRaw = formData.get('skipKeys') as string | null
   const skipKeySet = skipKeysRaw ? new Set(JSON.parse(skipKeysRaw) as string[]) : null
@@ -35,6 +42,9 @@ export async function POST(req: NextRequest) {
   if (!branchId) return NextResponse.json({ error: 'No branch found for project' }, { status: 400 })
   if (!SUPPORTED_FORMATS.includes(format as typeof SUPPORTED_FORMATS[number])) {
     return NextResponse.json({ error: `Unsupported format: ${format}` }, { status: 400 })
+  }
+  if (importStructure !== 'monolithic' && importStructure !== 'namespaced') {
+    return NextResponse.json({ error: `Unsupported import structure: ${importStructure}` }, { status: 400 })
   }
 
   const content = await file.text()
@@ -63,11 +73,21 @@ export async function POST(req: NextRequest) {
     parsedKeys = r.keys
   }
 
-  // Apply namespace prefix
-  if (namespace) {
-    const prefixed: Record<string, string> = {}
-    for (const [k, v] of Object.entries(parsedKeys)) prefixed[`${namespace}.${k}`] = v
-    parsedKeys = prefixed
+  // Apply explicit JSON namespace transformation. Legacy namespace prefixes are
+  // still honored for monolithic imports, but namespaced JSON defaults to the
+  // file basename so re-importing `authen.json` updates `authen.*` keys.
+  if (format === 'json' && importStructure === 'namespaced') {
+    const effectiveNamespace = sanitizeNamespaceSegment(namespace ?? deriveNamespaceFromFilename(file.name))
+    if (!effectiveNamespace) {
+      return NextResponse.json({ error: 'Namespace is required for namespaced JSON import' }, { status: 400 })
+    }
+    parsedKeys = prefixKeysWithNamespace(parsedKeys, effectiveNamespace)
+  } else if (namespace) {
+    const effectiveNamespace = sanitizeNamespaceSegment(namespace)
+    if (!effectiveNamespace) {
+      return NextResponse.json({ error: 'Namespace is invalid' }, { status: 400 })
+    }
+    parsedKeys = prefixKeysWithNamespace(parsedKeys, effectiveNamespace)
   }
 
   // All keys in the file (including empty values) — used for key creation
