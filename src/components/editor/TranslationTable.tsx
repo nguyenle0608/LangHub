@@ -8,7 +8,7 @@ import {
   Sparkles, LogOut, ListFilter, Layers2, ChevronDown,
   Columns3, Eye, EyeOff, Pin, PinOff, Lock, Unlock, GripVertical, Undo2, Redo2,
   MoreHorizontal, Copy, History, GitBranch as GitBranchIcon, Loader2, ArrowUp,
-  Info, X,
+  Info, X, Folder, FolderOpen, FileKey2,
 } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { toast } from 'sonner'
@@ -38,6 +38,12 @@ import type { KeyWithTranslations } from '@/lib/supabase/queries/translations'
 import type { Branch } from '@/lib/branches/queries'
 import { localeFlag as getFlag } from '@/lib/locale-flag'
 import { signOut } from '@/lib/supabase/auth'
+import {
+  KEY_TREE_ROOT_ID,
+  buildTranslationKeyTree,
+  resolveCheckedTranslationKeyIds,
+  type TranslationKeyTreeNode,
+} from '@/lib/translation-key-tree'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -80,6 +86,120 @@ function groupBarClass(depth: number): string {
     'border-emerald-500/30 bg-emerald-950/80 text-emerald-200',
     'border-amber-500/30 bg-amber-950/80 text-amber-200',
   ][depth % 4] ?? 'border-zinc-700 bg-zinc-950/95 text-zinc-300'
+}
+
+function groupIconClass(depth: number): string {
+  return [
+    'text-blue-300',
+    'text-violet-300',
+    'text-emerald-300',
+    'text-amber-300',
+  ][depth % 4] ?? 'text-zinc-300'
+}
+
+type KeyTreeFilterProps = {
+  checkedNodeIds: Set<string>
+  expandedNodeIds: Set<string>
+  onToggleChecked: (nodeId: string) => void
+  onToggleExpanded: (nodeId: string) => void
+  onLeafClick: (keyId: string) => void
+  ambiguousKeyNames: Set<string>
+}
+
+function KeyTreeNodeRow({
+  node,
+  depth,
+  checkedNodeIds,
+  expandedNodeIds,
+  onToggleChecked,
+  onToggleExpanded,
+  onLeafClick,
+  ambiguousKeyNames,
+}: KeyTreeFilterProps & { node: TranslationKeyTreeNode; depth: number }) {
+  const hasChildren = node.children.length > 0
+  const isExpanded = expandedNodeIds.has(node.id)
+  const isChecked = checkedNodeIds.has(node.id)
+  const isRoot = node.kind === 'root'
+  const isFolderLike = node.kind === 'root' || node.kind === 'folder'
+  const leafIsAlsoFolder = !!node.keyName && ambiguousKeyNames.has(node.keyName)
+  const folderIconClass = isRoot ? 'text-zinc-400' : groupIconClass(Math.max(0, depth - 1))
+
+  return (
+    <div>
+      <div
+        className={cn(
+          'group flex min-w-0 items-center gap-1 rounded px-1.5 py-1 text-xs transition-colors',
+          node.kind === 'leaf' && 'cursor-pointer',
+          isChecked ? 'bg-blue-950/50 text-blue-100' : 'text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-200'
+        )}
+        style={{ paddingLeft: `${6 + depth * 12}px` }}
+        onClick={() => {
+          if (node.kind === 'leaf' && node.keyId) onLeafClick(node.keyId)
+        }}
+      >
+        <button
+          type="button"
+          className={cn(
+            'flex h-4 w-4 items-center justify-center rounded text-zinc-600 hover:text-zinc-300',
+            !hasChildren && 'invisible'
+          )}
+          onClick={() => onToggleExpanded(node.id)}
+          aria-label={isExpanded ? `Collapse ${node.label}` : `Expand ${node.label}`}
+        >
+          <ChevronDown className={cn('h-3 w-3 transition-transform', !isExpanded && '-rotate-90')} />
+        </button>
+        {isRoot ? (
+          <span className="h-3 w-3 flex-shrink-0" aria-hidden="true" />
+        ) : (
+          <input
+            type="checkbox"
+            checked={isChecked}
+            onClick={(e) => e.stopPropagation()}
+            onChange={() => onToggleChecked(node.id)}
+            className="h-3 w-3 flex-shrink-0 cursor-pointer accent-blue-500"
+            aria-label={`Filter by ${node.label}`}
+          />
+        )}
+        {isFolderLike ? (
+          isExpanded ? (
+            <FolderOpen className={cn('h-3.5 w-3.5 flex-shrink-0', folderIconClass)} />
+          ) : (
+            <Folder className={cn('h-3.5 w-3.5 flex-shrink-0', folderIconClass)} />
+          )
+        ) : (
+          <FileKey2 className="h-3.5 w-3.5 flex-shrink-0 text-zinc-500" />
+        )}
+        <span className="min-w-0 flex-1 truncate font-mono" title={node.kind === 'leaf' ? node.keyName : node.path || '{}'}>
+          {node.label}
+        </span>
+        {leafIsAlsoFolder && (
+          <span className="rounded border border-zinc-700 px-1 text-[9px] text-zinc-500" title="Exact key; separate from folder descendants">
+            key
+          </span>
+        )}
+        {isFolderLike && (
+          <span className="text-[10px] tabular-nums text-zinc-600">{node.descendantKeyIds.length}</span>
+        )}
+      </div>
+      {hasChildren && isExpanded && (
+        <div>
+          {node.children.map((child) => (
+            <KeyTreeNodeRow
+              key={child.id}
+              node={child}
+              depth={depth + 1}
+              checkedNodeIds={checkedNodeIds}
+              expandedNodeIds={expandedNodeIds}
+              onToggleChecked={onToggleChecked}
+              onToggleExpanded={onToggleExpanded}
+              onLeafClick={onLeafClick}
+              ambiguousKeyNames={ambiguousKeyNames}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -165,6 +285,8 @@ function serializeClipboardTable(grid: string[][]): string {
 
 export function TranslationTable({ project, initialKeys, totalKeyCount, branches: initialBranches, activeBranchId: initialBranchId, user }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const SIDEBAR_MIN_WIDTH = 180
+  const SIDEBAR_MAX_WIDTH = 420
 
   // Role-based permissions
   const canEdit = user.role !== 'viewer'         // edit translation content
@@ -191,6 +313,8 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   const [showExport, setShowExport] = useState(false)
   const [mergeSourceId, setMergeSourceId] = useState<string | null>(null)
   const [columnFilters, setColumnFilters] = useState<Map<string, FilterStatus>>(new Map())
+  const [checkedKeyTreeNodeIds, setCheckedKeyTreeNodeIds] = useState<Set<string>>(new Set())
+  const [expandedKeyTreeNodeIds, setExpandedKeyTreeNodeIds] = useState<Set<string>>(() => new Set([KEY_TREE_ROOT_ID]))
   const [groupBy, setGroupBy] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [hiddenCols, setHiddenCols] = useState<Set<string>>(new Set())
@@ -207,6 +331,9 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   const [tableScrolled, setTableScrolled] = useState(false)
   const [tableScrolledX, setTableScrolledX] = useState(false)
   const [tableScrollTop, setTableScrollTop] = useState(0)
+  const [sidebarWidth, setSidebarWidth] = useState(208)
+  const [resizingSidebar, setResizingSidebar] = useState(false)
+  const sidebarResizeRef = useRef<{ startX: number; startWidth: number } | null>(null)
 
   // Excel-like range selection (drag across locale cells, then copy/paste)
   const [selRange, setSelRange] = useState<{ anchor: Cell; focus: Cell } | null>(null)
@@ -270,6 +397,38 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     // Mount-only: initialKeys/initialBranchId are the server's first window.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (!resizingSidebar) return
+
+    const onMouseMove = (event: MouseEvent) => {
+      const start = sidebarResizeRef.current
+      if (!start) return
+      const nextWidth = Math.min(
+        SIDEBAR_MAX_WIDTH,
+        Math.max(SIDEBAR_MIN_WIDTH, start.startWidth + event.clientX - start.startX)
+      )
+      setSidebarWidth(nextWidth)
+    }
+
+    const stopResize = () => {
+      sidebarResizeRef.current = null
+      setResizingSidebar(false)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', stopResize)
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', stopResize)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [resizingSidebar, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH])
 
   // Load a whole branch in windows: first page replaces, rest stream in.
   const loadBranchWindowed = useCallback(async (branchId: string) => {
@@ -335,9 +494,62 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     return [...base, ...rest]
   }, [project.locales])
 
+  const keyTree = useMemo(
+    () => buildTranslationKeyTree(keys.map((key) => ({ id: key.id, key: key.key }))),
+    [keys]
+  )
+  const checkedTreeKeyIds = useMemo(
+    () => resolveCheckedTranslationKeyIds(keyTree, checkedKeyTreeNodeIds),
+    [keyTree, checkedKeyTreeNodeIds]
+  )
+  const folderPathNames = useMemo(() => {
+    const names = new Set<string>()
+    const visit = (node: TranslationKeyTreeNode) => {
+      if (node.kind === 'folder') names.add(node.path)
+      for (const child of node.children) visit(child)
+    }
+    visit(keyTree)
+    return names
+  }, [keyTree])
+  const expandableKeyTreeNodeIds = useMemo(() => {
+    const ids: string[] = []
+    const visit = (node: TranslationKeyTreeNode) => {
+      if (node.children.length > 0) ids.push(node.id)
+      for (const child of node.children) visit(child)
+    }
+    visit(keyTree)
+    return ids
+  }, [keyTree])
+  const toggleKeyTreeChecked = useCallback((nodeId: string) => {
+    setCheckedKeyTreeNodeIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(nodeId)) next.delete(nodeId)
+      else next.add(nodeId)
+      return next
+    })
+  }, [])
+  const toggleKeyTreeExpanded = useCallback((nodeId: string) => {
+    setExpandedKeyTreeNodeIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(nodeId)) next.delete(nodeId)
+      else next.add(nodeId)
+      return next
+    })
+  }, [])
+  const expandAllKeyTreeNodes = useCallback(() => {
+    setExpandedKeyTreeNodeIds(new Set(expandableKeyTreeNodeIds))
+  }, [expandableKeyTreeNodeIds])
+  const collapseAllKeyTreeNodes = useCallback(() => {
+    setExpandedKeyTreeNodeIds(new Set([KEY_TREE_ROOT_ID]))
+  }, [])
+
   // Filtered keys
   const filteredKeys = useMemo(() => {
     let result = keys
+
+    if (checkedTreeKeyIds) {
+      result = result.filter((k) => checkedTreeKeyIds.has(k.id))
+    }
 
     if (search) {
       const q = search.toLowerCase()
@@ -370,7 +582,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     })
 
     return result
-  }, [keys, search, filterStatus, selectedLocaleId, columnFilters, locales])
+  }, [keys, checkedTreeKeyIds, search, filterStatus, selectedLocaleId, columnFilters, locales])
 
   // Virtual rows (flat list of group headers + key rows for the virtualizer)
   const virtualRows = useMemo((): VirtualRow[] => {
@@ -451,7 +663,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   }, [rowOrder])
 
   // Clear any range selection when the visible set changes (coords would be stale)
-  useEffect(() => { setSelRange(null) }, [search, filterStatus, selectedLocaleId, groupBy])
+  useEffect(() => { setSelRange(null) }, [search, filterStatus, selectedLocaleId, checkedKeyTreeNodeIds, groupBy])
 
   // Stats
   const stats = useMemo(() => {
@@ -599,6 +811,46 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     measureElement: (el) => el.getBoundingClientRect().height,
     overscan: 8,
   })
+
+  const pendingTreeScrollKeyRef = useRef<string | null>(null)
+  const scrollToKey = useCallback((keyId: string) => {
+    const rowIndex = virtualRows.findIndex((row) => row.type === 'key' && row.item.id === keyId)
+    if (rowIndex < 0) {
+      const key = keys.find((item) => item.id === keyId)
+      const isVisibleAfterFilters = filteredKeys.some((item) => item.id === keyId)
+      if (!key || !isVisibleAfterFilters) {
+        toast.info('This key is hidden by the active filters')
+        return
+      }
+
+      if (groupBy) {
+        const parts = key.key.split('.').filter(Boolean)
+        const ancestorPaths = parts.slice(0, -1).map((_, index) => parts.slice(0, index + 1).join('.'))
+        if (ancestorPaths.length > 0) {
+          pendingTreeScrollKeyRef.current = keyId
+          setCollapsedGroups((prev) => {
+            const next = new Set(prev)
+            for (const path of ancestorPaths) next.delete(path)
+            return next
+          })
+          return
+        }
+      }
+
+      toast.info('This key is hidden by the active filters')
+      return
+    }
+    virtualizer.scrollToIndex(rowIndex, { align: 'center' })
+  }, [virtualRows, virtualizer, keys, filteredKeys, groupBy])
+
+  useEffect(() => {
+    const keyId = pendingTreeScrollKeyRef.current
+    if (!keyId) return
+    const rowIndex = virtualRows.findIndex((row) => row.type === 'key' && row.item.id === keyId)
+    if (rowIndex < 0) return
+    pendingTreeScrollKeyRef.current = null
+    virtualizer.scrollToIndex(rowIndex, { align: 'center' })
+  }, [virtualRows, virtualizer])
 
   // Cell editing
   const startEdit = useCallback(
@@ -1442,6 +1694,13 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     const loc = locales.find((l) => l.id === selectedLocaleId)
     activeFilters.push({ key: 'lang', label: `Needs work: ${loc?.name ?? '—'}`, onRemove: () => setSelectedLocaleId(null) })
   }
+  if (checkedKeyTreeNodeIds.size > 0) {
+    activeFilters.push({
+      key: 'key-tree',
+      label: `Key tree: ${checkedKeyTreeNodeIds.size} selected`,
+      onRemove: () => setCheckedKeyTreeNodeIds(new Set()),
+    })
+  }
   columnFilters.forEach((st, localeId) => {
     if (st === 'all') return
     const loc = locales.find((l) => l.id === localeId)
@@ -1455,6 +1714,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     setSearch('')
     setFilterStatus('all')
     setSelectedLocaleId(null)
+    setCheckedKeyTreeNodeIds(new Set())
     setColumnFilters(new Map())
   }
 
@@ -1842,9 +2102,12 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
       {/* ── Main content ── */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left sidebar */}
-        <aside className="w-52 border-r border-zinc-800 flex flex-col flex-shrink-0 overflow-y-auto bg-zinc-950">
+        <aside
+          className="flex flex-col flex-shrink-0 overflow-hidden bg-zinc-950"
+          style={{ width: sidebarWidth }}
+        >
           {/* Status filters */}
-          <div className="p-3">
+          <div className="flex-shrink-0 p-3">
             <div className="flex items-center justify-between mb-2 px-1">
               <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-zinc-600">
                 Status
@@ -1903,7 +2166,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
           </div>
 
           {/* Language focus */}
-          <div className="border-t border-zinc-800 p-3">
+          <div className="flex-shrink-0 border-t border-zinc-800 p-3">
             <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-zinc-600 mb-2 px-1">
               By language
               <Tooltip
@@ -1942,7 +2205,81 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
               )
             })}
           </div>
+
+          {/* Nested key tree */}
+          <div className="flex min-h-0 flex-1 flex-col border-t border-zinc-800 p-3">
+            <div className="mb-2 flex flex-shrink-0 items-center justify-between gap-2 px-1">
+              <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-zinc-600">
+                Key tree
+                <Tooltip
+                  side="right"
+                  content="Filter by nested key folders. Checking a folder includes all descendant keys; checking a leaf includes that exact key."
+                >
+                  <Info className="h-3 w-3 text-zinc-600 hover:text-zinc-400" />
+                </Tooltip>
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={expandAllKeyTreeNodes}
+                  className="rounded p-0.5 text-zinc-600 hover:bg-zinc-800 hover:text-zinc-300"
+                  title="Expand all folders"
+                  aria-label="Expand all key tree folders"
+                >
+                  <FolderOpen className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={collapseAllKeyTreeNodes}
+                  className="rounded p-0.5 text-zinc-600 hover:bg-zinc-800 hover:text-zinc-300"
+                  title="Collapse all folders"
+                  aria-label="Collapse all key tree folders"
+                >
+                  <Folder className="h-3.5 w-3.5" />
+                </button>
+                {checkedKeyTreeNodeIds.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setCheckedKeyTreeNodeIds(new Set())}
+                    className="text-[10px] text-zinc-600 hover:text-zinc-300"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+              <KeyTreeNodeRow
+                node={keyTree}
+                depth={0}
+                checkedNodeIds={checkedKeyTreeNodeIds}
+                expandedNodeIds={expandedKeyTreeNodeIds}
+                onToggleChecked={toggleKeyTreeChecked}
+                onToggleExpanded={toggleKeyTreeExpanded}
+                onLeafClick={scrollToKey}
+                ambiguousKeyNames={folderPathNames}
+              />
+            </div>
+          </div>
         </aside>
+
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize sidebar"
+          title="Drag to resize sidebar"
+          className={cn(
+            'group relative z-20 w-1 flex-shrink-0 cursor-col-resize bg-zinc-800 transition-colors hover:bg-blue-500/60',
+            resizingSidebar && 'bg-blue-500/80'
+          )}
+          onMouseDown={(event) => {
+            event.preventDefault()
+            sidebarResizeRef.current = { startX: event.clientX, startWidth: sidebarWidth }
+            setResizingSidebar(true)
+          }}
+        >
+          <div className="absolute inset-y-0 -left-1 -right-1" />
+        </div>
 
         {/* Table */}
         <div className="flex flex-col flex-1 overflow-hidden relative">
