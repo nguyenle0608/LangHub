@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button'
 import type { ProjectWithStats } from '@/types'
 import { localeFlag } from '@/lib/locale-flag'
+import type { JsonExportStructure } from '@/lib/localization-namespaces'
 
 type Format = 'json' | 'arb' | 'csv' | 'yaml'
 type Filter = 'all' | 'approved' | 'reviewed_approved'
@@ -25,6 +26,8 @@ export function ExportSheet({ open, project, branchId, onClose }: Props) {
   const [format, setFormat] = useState<Format>('json')
   const [filter, setFilter] = useState<Filter>('all')
   const [nested, setNested] = useState(true)
+  const [jsonStructure, setJsonStructure] = useState<JsonExportStructure>('monolithic')
+  const [includeEmpty, setIncludeEmpty] = useState(false)
   const [exporting, setExporting] = useState(false)
 
   const toggleLocale = (id: string) => {
@@ -38,8 +41,16 @@ export function ExportSheet({ open, project, branchId, onClose }: Props) {
 
   const fileCount = format === 'csv' ? 1 : selectedLocales.size
   const previewText = fileCount === 1
-    ? `1 file`
+    ? (format === 'json' && jsonStructure === 'namespaced' ? 'namespace ZIP' : `1 file`)
     : `${fileCount} files in ZIP`
+  const selectedLocaleCode = project.locales.find((l) => selectedLocales.has(l.id))?.code
+  const previewFilename = format === 'csv'
+    ? `translations-${Array.from(selectedLocales).map((id) => project.locales.find((l) => l.id === id)?.code).join('-')}.csv`
+    : format === 'json' && jsonStructure === 'namespaced'
+    ? (fileCount === 1 ? `${selectedLocaleCode}-namespaces.zip` : 'translations.zip')
+    : fileCount === 1
+    ? `${selectedLocaleCode}.${format === 'arb' ? 'arb' : format}`
+    : 'translations.zip'
 
   const handleExport = async () => {
     setExporting(true)
@@ -54,6 +65,8 @@ export function ExportSheet({ open, project, branchId, onClose }: Props) {
           format,
           filter,
           nested: format === 'json' ? nested : undefined,
+          jsonStructure: format === 'json' ? jsonStructure : undefined,
+          includeEmpty,
         }),
       })
 
@@ -136,15 +149,44 @@ export function ExportSheet({ open, project, branchId, onClose }: Props) {
               ))}
             </div>
             {format === 'json' && (
-              <label className="flex items-center gap-2 cursor-pointer mt-2">
-                <input
-                  type="checkbox"
-                  checked={nested}
-                  onChange={(e) => setNested(e.target.checked)}
-                  className="rounded border-zinc-600"
-                />
-                <span className="text-xs text-zinc-400">Nested output (rebuild dot.notation → object)</span>
-              </label>
+              <div className="space-y-2 mt-2">
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { value: 'monolithic', label: 'Monolithic', desc: 'One JSON file per locale' },
+                    { value: 'namespaced', label: 'Namespaced', desc: 'Split JSON files by first key segment' },
+                  ] as const).map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setJsonStructure(opt.value)}
+                      className={[
+                        'text-left px-3 py-2 rounded border text-xs transition-colors',
+                        jsonStructure === opt.value
+                          ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                          : 'border-zinc-700 text-zinc-400 hover:border-zinc-600',
+                      ].join(' ')}
+                    >
+                      <div className="font-medium">{opt.label}</div>
+                      <div className="text-[10px] opacity-70">{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+                {jsonStructure === 'monolithic' ? (
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={nested}
+                      onChange={(e) => setNested(e.target.checked)}
+                      className="rounded border-zinc-600"
+                    />
+                    <span className="text-xs text-zinc-400">Nested output (rebuild dot.notation → object)</span>
+                  </label>
+                ) : (
+                  <p className="text-[11px] text-zinc-500">
+                    Example: authen.login.title exports to authen.json as login.title.
+                  </p>
+                )}
+              </div>
             )}
             {format === 'csv' && (
               <p className="text-[11px] text-zinc-500">All locales combined in one file with columns per locale</p>
@@ -153,10 +195,10 @@ export function ExportSheet({ open, project, branchId, onClose }: Props) {
 
           {/* Section 3: Filter */}
           <div className="space-y-2">
-            <div className="text-xs font-medium text-zinc-400">Include translations</div>
+            <div className="text-xs font-medium text-zinc-400">Status filter</div>
             <div className="space-y-1">
               {([
-                ['all', 'All translations (including empty)'],
+                ['all', 'All statuses'],
                 ['reviewed_approved', 'Reviewed + Approved only'],
                 ['approved', 'Approved only'],
               ] as const).map(([val, label]) => (
@@ -173,6 +215,25 @@ export function ExportSheet({ open, project, branchId, onClose }: Props) {
                 </label>
               ))}
             </div>
+            <label className="flex items-start gap-2 cursor-pointer pt-2">
+              <input
+                type="checkbox"
+                checked={includeEmpty}
+                onChange={(e) => setIncludeEmpty(e.target.checked)}
+                className="rounded border-zinc-600 mt-0.5"
+              />
+              <span className="text-xs text-zinc-400">
+                Export all keys
+                <span className="block text-[10px] text-zinc-600">
+                  Export every key. Keys without a value matching the selected status filter become empty strings.
+                </span>
+              </span>
+            </label>
+            {!includeEmpty && (
+              <p className="text-[10px] text-zinc-600">
+                Without this, only non-empty translations matching the selected status are exported.
+              </p>
+            )}
           </div>
 
           {/* Section 4: Preview */}
@@ -180,11 +241,7 @@ export function ExportSheet({ open, project, branchId, onClose }: Props) {
             <div className="text-[11px] text-zinc-500 uppercase tracking-wide">Export preview</div>
             <p className="text-sm text-zinc-200 font-medium">{previewText}</p>
             <p className="text-xs text-zinc-500">
-              {format === 'csv'
-                ? `translations-${Array.from(selectedLocales).map((id) => project.locales.find((l) => l.id === id)?.code).join('-')}.csv`
-                : fileCount === 1
-                ? `${project.locales.find((l) => selectedLocales.has(l.id))?.code}.${format === 'arb' ? 'arb' : format}`
-                : 'translations.zip'}
+              {previewFilename}
             </p>
           </div>
         </div>

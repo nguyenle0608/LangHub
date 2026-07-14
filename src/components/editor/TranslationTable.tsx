@@ -60,6 +60,28 @@ type VirtualRow =
   | { type: 'group'; fullPath: string; label: string; depth: number; count: number }
   | { type: 'key'; item: KeyWithTranslations; depth: number }
 
+function virtualRowKey(row: VirtualRow): string {
+  return row.type === 'group' ? `group:${row.fullPath}` : `key:${row.item.id}`
+}
+
+function groupLevelClass(depth: number): string {
+  return [
+    'border-blue-500/40 bg-blue-500/10 text-blue-300',
+    'border-violet-500/40 bg-violet-500/10 text-violet-300',
+    'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
+    'border-amber-500/40 bg-amber-500/10 text-amber-300',
+  ][depth % 4] ?? 'border-zinc-600 bg-zinc-800 text-zinc-300'
+}
+
+function groupBarClass(depth: number): string {
+  return [
+    'border-blue-500/30 bg-blue-950/80 text-blue-200',
+    'border-violet-500/30 bg-violet-950/80 text-violet-200',
+    'border-emerald-500/30 bg-emerald-950/80 text-emerald-200',
+    'border-amber-500/30 bg-amber-950/80 text-amber-200',
+  ][depth % 4] ?? 'border-zinc-700 bg-zinc-950/95 text-zinc-300'
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -182,6 +204,9 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   const [selectedLocaleId, setSelectedLocaleId] = useState<string | null>(null)
   // Show a "scroll to top" button once the table is scrolled down a bit
   const [showScrollTop, setShowScrollTop] = useState(false)
+  const [tableScrolled, setTableScrolled] = useState(false)
+  const [tableScrolledX, setTableScrolledX] = useState(false)
+  const [tableScrollTop, setTableScrollTop] = useState(0)
 
   // Excel-like range selection (drag across locale cells, then copy/paste)
   const [selRange, setSelRange] = useState<{ anchor: Cell; focus: Cell } | null>(null)
@@ -402,9 +427,11 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
       }
     }
 
-    // Root-level keys (no dots — no namespace)
+    // Root-level keys (no dots — no namespace). Do not re-add namespaced
+    // keys that are hidden by a collapsed group, otherwise they leak back into
+    // the root and can appear duplicated in Group view.
     for (const key of filteredKeys) {
-      if (!addedIds.has(key.id)) {
+      if (!key.key.includes('.') && !addedIds.has(key.id)) {
         rows.push({ type: 'key', item: key, depth: 0 })
       }
     }
@@ -564,6 +591,10 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   const virtualizer = useVirtualizer({
     count: virtualRows.length,
     getScrollElement: () => scrollRef.current,
+    getItemKey: (i) => {
+      const row = virtualRows[i]
+      return row ? virtualRowKey(row) : `missing:${i}`
+    },
     estimateSize: (i) => virtualRows[i]?.type === 'group' ? 32 : 84,
     measureElement: (el) => el.getBoundingClientRect().height,
     overscan: 8,
@@ -1948,16 +1979,28 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
           <div
             ref={scrollRef}
             className="flex-1 overflow-auto"
-            onScroll={(e) => setShowScrollTop((e.target as HTMLDivElement).scrollTop > 400)}
+            onScroll={(e) => {
+              const target = e.target as HTMLDivElement
+              setShowScrollTop(target.scrollTop > 400)
+              setTableScrolled(target.scrollTop > 0)
+              setTableScrolledX(target.scrollLeft > 0)
+              setTableScrollTop(target.scrollTop)
+            }}
           >
             {/* Sticky header */}
             <div
-              className="sticky top-0 z-10 bg-zinc-900 border-b border-zinc-800 grid min-w-max"
+              className={cn(
+                'sticky top-0 z-30 grid min-w-max border-b border-zinc-800 bg-zinc-900/95 backdrop-blur supports-[backdrop-filter]:bg-zinc-900/85 transition-shadow',
+                tableScrolled && 'shadow-[0_10px_24px_rgba(0,0,0,0.45)] ring-1 ring-inset ring-white/5'
+              )}
               style={{ gridTemplateColumns: gridCols }}
             >
               {/* Checkbox — viewer excluded */}
               <div
-                className="flex items-center justify-center h-9 sticky z-20 bg-zinc-900"
+                className={cn(
+                  'flex items-center justify-center h-10 sticky z-40 bg-zinc-900/95 backdrop-blur',
+                  tableScrolledX && 'shadow-[6px_0_14px_rgba(0,0,0,0.35)]'
+                )}
                 style={{ left: stickyLeft.get('check') }}
               >
                 {canSelect && (
@@ -1973,8 +2016,9 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
               {showKey && (
                 <div
                   className={cn(
-                    'px-3 flex items-center h-9 gap-1.5 text-xs font-medium text-zinc-400 uppercase tracking-wide',
-                    stickyLeft.has('key') && 'sticky z-20 bg-zinc-900'
+                    'px-3 flex items-center h-10 gap-1.5 text-xs font-semibold text-zinc-300 uppercase tracking-wide border-r border-zinc-800/70',
+                    stickyLeft.has('key') && 'sticky z-40 bg-zinc-900/95 backdrop-blur',
+                    stickyLeft.has('key') && tableScrolledX && 'shadow-[6px_0_14px_rgba(0,0,0,0.35)]'
                   )}
                   style={stickyLeft.has('key') ? { left: stickyLeft.get('key') } : undefined}
                 >
@@ -2005,8 +2049,9 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                     onDrop={(e) => handleColDrop(e, locale.id)}
                     onDragEnd={handleColDragEnd}
                     className={cn(
-                      'px-2 flex items-center h-9 gap-1 text-xs font-medium text-zinc-400 select-none',
-                      isFrozen && 'sticky z-20 bg-zinc-900',
+                      'px-2 flex items-center h-10 gap-1 text-xs font-medium text-zinc-300 select-none border-r border-zinc-800/50',
+                      isFrozen && 'sticky z-40 bg-zinc-900/95 backdrop-blur',
+                      isFrozen && tableScrolledX && 'shadow-[6px_0_14px_rgba(0,0,0,0.35)]',
                       isDraggingThis && 'border-l-2 border-blue-500 bg-blue-950/20'
                     )}
                     style={isFrozen ? { left: stickyLeft.get(locale.id) } : undefined}
@@ -2094,7 +2139,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
               })}
               {/* Status */}
               {showStatus && (
-                <div className="px-3 flex items-center h-9 gap-1 text-xs font-medium text-zinc-400 uppercase tracking-wide">
+                <div className="px-3 flex items-center h-10 gap-1 text-xs font-semibold text-zinc-300 uppercase tracking-wide border-r border-zinc-800/50">
                   <span>Status</span>
                   <Popover>
                     <PopoverTrigger asChild>
@@ -2185,8 +2230,54 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
             {virtualRows.length > 0 && (() => {
               const vItems = virtualizer.getVirtualItems()
               if (!vItems.length) return null
+              const stickyParent = groupBy
+                ? (() => {
+                    const activeIndex = vItems.find((item) => item.end > tableScrollTop)?.index
+                    if (activeIndex == null) return null
+                    const activeRow = virtualRows[activeIndex]
+                    if (!activeRow) return null
+                    const activeGroupPath = activeRow.type === 'group'
+                      ? activeRow.fullPath
+                      : activeRow.item.key.split('.').slice(0, -1).join('.')
+                    if (!activeGroupPath) return null
+
+                    const activeGroupIndex = virtualRows.findIndex((row) => row.type === 'group' && row.fullPath === activeGroupPath)
+                    const activeGroupRow = activeGroupIndex >= 0 ? virtualRows[activeGroupIndex] : null
+                    const activeGroupItem = activeGroupIndex >= 0 ? vItems.find((item) => item.index === activeGroupIndex) : undefined
+                    const activeGroupIsVisible = !!activeGroupItem &&
+                      activeGroupItem.start >= tableScrollTop
+
+                    if (activeGroupIsVisible || activeGroupRow?.type !== 'group') return null
+                    return { path: activeGroupPath, depth: activeGroupRow.depth }
+                  })()
+                : null
+              const stickyParentParts = stickyParent?.path.split('.') ?? []
               return (
                 <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
+                  {stickyParent && (
+                    <div className={cn(
+                      'sticky top-10 z-20 -mb-8 flex h-8 min-w-max items-center gap-1 border-b px-3 font-mono text-xs shadow-[0_8px_20px_rgba(0,0,0,0.35)] backdrop-blur',
+                      groupBarClass(stickyParent.depth)
+                    )}>
+                      <span className="text-[10px] uppercase tracking-wider opacity-60">Current group</span>
+                      <span className={cn('flex h-5 min-w-5 items-center justify-center rounded border px-1 text-[10px] font-semibold', groupLevelClass(stickyParent.depth))}>
+                        L{stickyParent.depth + 1}
+                      </span>
+                      {stickyParentParts.map((part, index) => (
+                        <Fragment key={`${part}:${index}`}>
+                          {index > 0 && <span className="text-zinc-700">/</span>}
+                          <span className={cn(
+                            'rounded px-1.5 py-0.5',
+                            index === stickyParentParts.length - 1
+                              ? 'bg-white/10 text-current ring-1 ring-inset ring-white/20'
+                              : 'opacity-60'
+                          )}>
+                            {part}
+                          </span>
+                        </Fragment>
+                      ))}
+                    </div>
+                  )}
                   <div style={{ transform: `translateY(${vItems[0]!.start}px)` }}>
                     {vItems.map((virtualRow) => {
                       const row = virtualRows[virtualRow.index]
@@ -2195,13 +2286,16 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                       // Group header row
                       if (row.type === 'group') {
                         const isCollapsed = collapsedGroups.has(row.fullPath)
+                        const level = row.depth + 1
+                        const parentPath = row.fullPath.split('.').slice(0, -1).join('.')
+                        const levelClass = groupLevelClass(row.depth)
                         return (
                           <div
                             key={virtualRow.key}
                             ref={virtualizer.measureElement}
                             data-index={virtualRow.index}
-                            className="flex items-center gap-1.5 border-b border-zinc-800/50 bg-zinc-950 cursor-pointer select-none min-w-max"
-                            style={{ paddingLeft: `${12 + row.depth * 16}px`, height: '32px' }}
+                            className="flex items-center border-b border-zinc-800/50 bg-zinc-950 cursor-pointer select-none min-w-max hover:bg-zinc-900/70"
+                            style={{ height: '32px' }}
                             onClick={() =>
                               setCollapsedGroups((prev) => {
                                 const next = new Set(prev)
@@ -2211,9 +2305,26 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                               })
                             }
                           >
-                            <ChevronDown className={cn('h-3 w-3 text-zinc-500 transition-transform flex-shrink-0', isCollapsed && '-rotate-90')} />
-                            <span className="font-mono text-xs font-medium text-zinc-300">{row.label}</span>
-                            <span className="text-[10px] text-zinc-600">{row.count}</span>
+                            <div className="flex h-full items-center gap-1.5 pl-3">
+                              {Array.from({ length: row.depth }).map((_, depthIndex) => (
+                                <span
+                                  key={depthIndex}
+                                  className="h-5 w-px rounded-full bg-zinc-700/70"
+                                  aria-hidden="true"
+                                />
+                              ))}
+                              <span className={cn('flex h-5 min-w-5 items-center justify-center rounded border px-1 text-[10px] font-semibold', levelClass)}>
+                                L{level}
+                              </span>
+                              <ChevronDown className={cn('h-3 w-3 text-zinc-500 transition-transform flex-shrink-0', isCollapsed && '-rotate-90')} />
+                              <span className="font-mono text-xs font-medium text-zinc-300">{row.label}</span>
+                              {parentPath && (
+                                <span className="max-w-[220px] truncate font-mono text-[10px] text-zinc-600">
+                                  in {parentPath}
+                                </span>
+                              )}
+                              <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500">{row.count}</span>
+                            </div>
                           </div>
                         )
                       }
