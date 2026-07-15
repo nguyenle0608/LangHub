@@ -28,6 +28,40 @@ export async function getTranslationKeyCount(projectId: string, branchId: string
   return count ?? 0
 }
 
+export async function getTranslationKeysPage(
+  projectId: string,
+  branchId: string,
+  opts: { afterKey?: string; limit: number; includeCount?: boolean }
+): Promise<{ keys: KeyWithTranslations[]; total?: number }> {
+  const supabase = await createClient()
+
+  if (opts.includeCount) {
+    let q = supabase
+      .from('translation_keys')
+      .select(`*, translations(${GRID_TRANSLATION_COLS})`, { count: 'exact' })
+      .eq('project_id', projectId)
+      .eq('branch_id', branchId)
+      .eq('translations.branch_id', branchId)
+      .order('key', { ascending: true })
+      .limit(opts.limit)
+    if (opts.afterKey !== undefined) q = q.gt('key', opts.afterKey)
+    const { data, count } = await q
+    return { keys: (data ?? []) as KeyWithTranslations[], total: count ?? undefined }
+  }
+
+  let q = supabase
+    .from('translation_keys')
+    .select(`*, translations(${GRID_TRANSLATION_COLS})`)
+    .eq('project_id', projectId)
+    .eq('branch_id', branchId)
+    .eq('translations.branch_id', branchId)
+    .order('key', { ascending: true })
+    .limit(opts.limit)
+  if (opts.afterKey !== undefined) q = q.gt('key', opts.afterKey)
+  const { data } = await q
+  return { keys: (data ?? []) as KeyWithTranslations[] }
+}
+
 export async function getTranslationKeys(
   projectId: string,
   branchId: string,
@@ -52,10 +86,11 @@ export async function getTranslationKeys(
   // Windowed mode: fetch a single page after the cursor (no client-side
   // filtering — the editor filters in memory once all pages stream in).
   if (opts?.limit !== undefined) {
-    let q = baseQuery().limit(opts.limit)
-    if (opts.afterKey !== undefined) q = q.gt('key', opts.afterKey)
-    const { data } = await q
-    return (data ?? []) as KeyWithTranslations[]
+    const { keys } = await getTranslationKeysPage(projectId, branchId, {
+      afterKey: opts.afterKey,
+      limit: opts.limit,
+    })
+    return keys
   }
 
   // Full mode: paginate to bypass PostgREST's 1000-row default limit.

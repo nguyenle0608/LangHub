@@ -22,7 +22,7 @@ interface Props {
 
 function formatDate(s: string | null): string {
   if (!s) return ''
-  return new Date(s).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+  return new Date(s).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' })
 }
 
 export function BranchesPage({ project, initialBranches, canManage }: Props) {

@@ -2,15 +2,17 @@
 
 import { useState, useEffect, useRef, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import { LayoutGrid, List, LogOut, ArrowUpDown, Plus } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { toast } from 'sonner'
 import { ProjectCard } from './ProjectCard'
-import { CreateProjectDialog } from './CreateProjectDialog'
 import { OrgSwitcher } from '@/components/organizations/OrgSwitcher'
-import { CreateOrgDialog } from '@/components/organizations/CreateOrgDialog'
 import { Button } from '@/components/ui/button'
 import type { OrgWithStats, ProjectWithStats } from '@/types'
+
+const CreateProjectDialog = dynamic(() => import('./CreateProjectDialog').then((m) => m.CreateProjectDialog))
+const CreateOrgDialog = dynamic(() => import('@/components/organizations/CreateOrgDialog').then((m) => m.CreateOrgDialog))
 
 type SortKey = 'name' | 'percent' | 'keys' | 'updated'
 type ViewMode = 'grid' | 'list'
@@ -39,6 +41,7 @@ export function ProjectsPageClient({ projects, orgs, currentOrgId, userEmail, us
   const [sort, setSort] = useState<SortKey>('name')
   const [loggingOut, setLoggingOut] = useState(false)
   const [createOrgOpen, setCreateOrgOpen] = useState(false)
+  const [createProjectOpen, setCreateProjectOpen] = useState(false)
   const [isSwitchingOrg, startOrgSwitch] = useTransition()
   const [switchingToOrgId, setSwitchingToOrgId] = useState<string | null>(null)
 
@@ -81,11 +84,20 @@ export function ProjectsPageClient({ projects, orgs, currentOrgId, userEmail, us
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <CreateOrgDialog
-        open={createOrgOpen}
-        onOpenChange={setCreateOrgOpen}
-        onCreated={handleOrgCreated}
-      />
+      {createOrgOpen && (
+        <CreateOrgDialog
+          open={createOrgOpen}
+          onOpenChange={setCreateOrgOpen}
+          onCreated={handleOrgCreated}
+        />
+      )}
+      {createProjectOpen && (
+        <CreateProjectDialog
+          orgId={currentOrgId}
+          open={createProjectOpen}
+          onOpenChange={setCreateProjectOpen}
+        />
+      )}
       {/* Header */}
       <header className="border-b border-zinc-800 bg-zinc-900/50 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
@@ -152,12 +164,13 @@ export function ProjectsPageClient({ projects, orgs, currentOrgId, userEmail, us
               </button>
             </div>
 
-            <CreateProjectDialog orgId={currentOrgId}>
-              <Button className="bg-blue-600 hover:bg-blue-500 text-white gap-1.5 h-8 text-sm">
-                <Plus className="h-3.5 w-3.5" />
-                New Project
-              </Button>
-            </CreateProjectDialog>
+            <Button
+              className="bg-blue-600 hover:bg-blue-500 text-white gap-1.5 h-8 text-sm"
+              onClick={() => setCreateProjectOpen(true)}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New Project
+            </Button>
           </div>
         </div>
 
@@ -173,12 +186,13 @@ export function ProjectsPageClient({ projects, orgs, currentOrgId, userEmail, us
             <p className="text-zinc-500 text-sm max-w-sm mb-6">
               Create your first project to start managing translations for your app.
             </p>
-            <CreateProjectDialog orgId={currentOrgId}>
-              <Button className="bg-blue-600 hover:bg-blue-500 text-white gap-2">
-                <Plus className="h-4 w-4" />
-                Create first project
-              </Button>
-            </CreateProjectDialog>
+            <Button
+              className="bg-blue-600 hover:bg-blue-500 text-white gap-2"
+              onClick={() => setCreateProjectOpen(true)}
+            >
+              <Plus className="h-4 w-4" />
+              Create first project
+            </Button>
           </div>
         ) : view === 'grid' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

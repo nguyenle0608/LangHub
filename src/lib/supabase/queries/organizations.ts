@@ -7,6 +7,26 @@ import type { MemberRole, OrgMember, OrgWithStats } from '@/types'
 export async function getOrganizations(userId: string): Promise<OrgWithStats[]> {
   const supabase = await createClient()
 
+  const { data: orgRows, error: orgRowsError } = await supabase.rpc('get_user_organizations')
+  if (!orgRowsError && orgRows && orgRows.length > 0) {
+    return orgRows.map((org) => ({
+      id: org.id,
+      name: org.name,
+      slug: org.slug,
+      plan: org.plan,
+      created_at: org.created_at,
+      role: org.role as MemberRole,
+      member_count: Number(org.member_count ?? 0),
+      project_count: Number(org.project_count ?? 0),
+    })) satisfies OrgWithStats[]
+  }
+
+  if (process.env.NODE_ENV === 'development') {
+    console.warn(
+      `[perf] get_user_organizations RPC failed; falling back to client queries: ${orgRowsError?.message ?? 'unknown error'}`
+    )
+  }
+
   const { data: memberships } = await supabase
     .from('members')
     .select('org_id, role')
@@ -25,17 +45,16 @@ export async function getOrganizations(userId: string): Promise<OrgWithStats[]> 
 
   if (!orgs?.length) return []
 
-  // Get member counts per org
-  const { data: memberCounts } = await supabase
-    .from('members')
-    .select('org_id')
-    .in('org_id', orgIds)
-
-  // Get project counts per org
-  const { data: projectCounts } = await supabase
-    .from('projects')
-    .select('org_id')
-    .in('org_id', orgIds)
+  const [{ data: memberCounts }, { data: projectCounts }] = await Promise.all([
+    supabase
+      .from('members')
+      .select('org_id')
+      .in('org_id', orgIds),
+    supabase
+      .from('projects')
+      .select('org_id')
+      .in('org_id', orgIds),
+  ])
 
   const memberCountMap: Record<string, number> = {}
   for (const m of memberCounts ?? []) {

@@ -579,7 +579,78 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_branches_bootstrap: {
+        Args: {
+          p_project_id: string
+        }
+        Returns: {
+          project: Json
+          branches: Json
+          role: string | null
+        }[]
+      }
+      get_branches_dashboard: {
+        Args: {
+          p_project_id: string
+        }
+        Returns: {
+          id: string
+          project_id: string
+          name: string
+          parent_branch_id: string | null
+          is_default: boolean | null
+          is_locked: boolean | null
+          base_snapshot_id: string | null
+          created_by: string | null
+          created_at: string | null
+          key_count: number
+          locale_count: number
+          approved_percent: number
+        }[]
+      }
+      get_projects_dashboard: {
+        Args: {
+          p_org_id: string
+        }
+        Returns: {
+          id: string
+          org_id: string | null
+          name: string
+          slug: string
+          description: string | null
+          base_locale: string | null
+          created_at: string | null
+          key_count: number
+          locale_count: number
+          overall_percent: number
+          locales: Json
+        }[]
+      }
+      get_editor_bootstrap: {
+        Args: {
+          p_project_id: string
+          p_branch_id?: string | null
+        }
+        Returns: {
+          project: Json
+          branches: Json
+          active_branch_id: string | null
+          role: string | null
+        }[]
+      }
+      get_user_organizations: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          name: string
+          slug: string
+          plan: string
+          created_at: string | null
+          role: string
+          member_count: number
+          project_count: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

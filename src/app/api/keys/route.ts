@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createTranslationKey, getTranslationKeys, getTranslationKeyCount } from '@/lib/supabase/queries/translations'
+import { createTranslationKey, getTranslationKeys, getTranslationKeysPage } from '@/lib/supabase/queries/translations'
 import { resolveBranchId } from '@/lib/branches/queries'
 
 const PostSchema = z.object({
@@ -27,7 +27,11 @@ export async function GET(req: NextRequest) {
   const projectId = searchParams.get('projectId')
   if (!projectId) return NextResponse.json({ error: 'projectId required' }, { status: 400 })
 
-  const branchId = await resolveBranchId(projectId, searchParams.get('branch'))
+  // When the editor already passes an active branch id, avoid an extra branch
+  // lookup on every streaming page. The data query remains scoped by both
+  // project_id and branch_id, with RLS still applied.
+  const branchParam = searchParams.get('branch')
+  const branchId = branchParam ?? await resolveBranchId(projectId, null)
   if (!branchId) return NextResponse.json({ error: 'No branch found for project' }, { status: 400 })
 
   // Windowed mode (?limit=&after=): keyset/cursor pagination. `after` is the
@@ -37,11 +41,12 @@ export async function GET(req: NextRequest) {
   if (limitParam !== null) {
     const limit = Math.max(1, Math.min(2000, Number(limitParam) || 0))
     const after = searchParams.get('after') ?? undefined
-    const [data, total] = await Promise.all([
-      getTranslationKeys(projectId, branchId, { afterKey: after, limit }),
-      after === undefined ? getTranslationKeyCount(projectId, branchId) : Promise.resolve(undefined),
-    ])
-    return NextResponse.json({ data, total })
+    const { keys, total } = await getTranslationKeysPage(projectId, branchId, {
+      afterKey: after,
+      limit,
+      includeCount: after === undefined,
+    })
+    return NextResponse.json({ data: keys, total })
   }
 
   const data = await getTranslationKeys(projectId, branchId)

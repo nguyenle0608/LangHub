@@ -10,3 +10,9 @@ export const getUser = cache(async () => {
   const { data: { user } } = await supabase.auth.getUser()
   return user
 })
+
+export const getSession = cache(async () => {
+  const supabase = await createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+  return session
+})

@@ -1,9 +1,9 @@
 import { redirect, notFound } from 'next/navigation'
 import { getUser } from '@/lib/supabase/session'
-import { getProject } from '@/lib/supabase/queries/projects'
-import { getTranslationKeys, getTranslationKeyCount } from '@/lib/supabase/queries/translations'
+import { getEditorBootstrap, getProjectLite } from '@/lib/supabase/queries/projects'
+import { getTranslationKeysPage } from '@/lib/supabase/queries/translations'
 import { getUserOrgRole } from '@/lib/supabase/queries/organizations'
-import { listBranches, resolveBranchId } from '@/lib/branches/queries'
+import { listBranches } from '@/lib/branches/queries'
 import { TranslationTable } from '@/components/editor/TranslationTable'
 
 // First-paint window: ship this many keys server-side, stream the rest
@@ -16,28 +16,49 @@ interface Props {
 }
 
 export default async function EditorPage({ params, searchParams }: Props) {
+  const startedAt = Date.now()
   const { projectId } = await params
   const { branch: branchParam } = await searchParams
   const user = await getUser()
   if (!user) redirect('/login')
 
-  const project = await getProject(projectId)
-  if (!project) notFound()
+  const bootstrap = await getEditorBootstrap(projectId, branchParam)
+  let project = bootstrap?.project ?? null
+  let branches = bootstrap?.branches ?? []
+  let activeBranchId = bootstrap?.activeBranchId ?? null
+  let role = bootstrap?.role ?? null
 
-  const [branches, activeBranchId] = await Promise.all([
-    listBranches(projectId),
-    resolveBranchId(projectId, branchParam),
+  if (!bootstrap) {
+    const [fallbackProject, fallbackBranches] = await Promise.all([
+      getProjectLite(projectId),
+      listBranches(projectId),
+    ])
+    project = fallbackProject
+    branches = fallbackBranches
+    const requestedBranch = branchParam
+      ? branches.find((branch) => branch.id === branchParam)
+      : undefined
+    activeBranchId =
+      requestedBranch?.id ??
+      branches.find((branch) => branch.is_default)?.id ??
+      branches[0]?.id ??
+      null
+  }
+
+  if (!project || !activeBranchId) notFound()
+
+  const [{ keys, total }, fallbackRole] = await Promise.all([
+    getTranslationKeysPage(projectId, activeBranchId, { limit: INITIAL_KEYS, includeCount: true }),
+    role === null && project.org_id ? getUserOrgRole(project.org_id, user.id) : Promise.resolve(null),
   ])
-  if (!activeBranchId) notFound()
+  role ??= fallbackRole
+  const totalKeys = total ?? keys.length
 
-  const [keys, totalKeys] = await Promise.all([
-    getTranslationKeys(projectId, activeBranchId, { limit: INITIAL_KEYS }),
-    getTranslationKeyCount(projectId, activeBranchId),
-  ])
-
-  const role = project.org_id
-    ? await getUserOrgRole(project.org_id, user.id)
-    : null
+  if (process.env.NODE_ENV === 'development') {
+    console.info(
+      `[perf] /${projectId}/editor branches=${branches.length} keys=${keys.length}/${totalKeys} total=${Date.now() - startedAt}ms`
+    )
+  }
 
   return (
     <TranslationTable
