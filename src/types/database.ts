@@ -597,6 +597,18 @@ export type Database = {
           locales: Json
         }[]
       }
+      get_editor_bootstrap: {
+        Args: {
+          p_project_id: string
+          p_branch_id?: string | null
+        }
+        Returns: {
+          project: Json
+          branches: Json
+          active_branch_id: string | null
+          role: string | null
+        }[]
+      }
       get_user_organizations: {
         Args: Record<PropertyKey, never>
         Returns: {

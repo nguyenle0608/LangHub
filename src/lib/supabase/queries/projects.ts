@@ -2,9 +2,10 @@ import { cache } from 'react'
 import { createClient } from '../server'
 import { createAdminClient } from '../admin'
 import type { Database } from '@/types/database'
-import type { LocaleWithStats, ProjectWithStats } from '@/types'
+import type { LocaleWithStats, MemberRole, ProjectWithStats } from '@/types'
 
 type LocaleRow = Database['public']['Tables']['locales']['Row']
+type BranchRow = Database['public']['Tables']['branches']['Row']
 type ProjectsDashboardRow = Database['public']['Functions']['get_projects_dashboard']['Returns'][number]
 
 const LOCALE_NAMES: Record<string, string> = {
@@ -43,6 +44,35 @@ function mapProjectsDashboardRow(row: ProjectsDashboardRow): ProjectWithStats {
     overall_percent: Number(row.overall_percent ?? 0),
     locales,
   }
+}
+
+function isBranchRow(value: unknown): value is BranchRow {
+  if (!value || typeof value !== 'object') return false
+  const item = value as Partial<BranchRow>
+  return (
+    typeof item.id === 'string' &&
+    typeof item.project_id === 'string' &&
+    typeof item.name === 'string'
+  )
+}
+
+function isProjectWithStats(value: unknown): value is ProjectWithStats {
+  if (!value || typeof value !== 'object') return false
+  const item = value as Partial<ProjectWithStats>
+  return (
+    typeof item.id === 'string' &&
+    typeof item.name === 'string' &&
+    typeof item.slug === 'string' &&
+    Array.isArray(item.locales) &&
+    item.locales.every(isLocaleWithStats)
+  )
+}
+
+export type EditorBootstrap = {
+  project: ProjectWithStats
+  branches: BranchRow[]
+  activeBranchId: string
+  role: MemberRole
 }
 
 function computeLocaleStatsFromApproved(
@@ -292,6 +322,38 @@ export const getProjectLite = cache(async (projectId: string): Promise<ProjectWi
     locales: computeEmptyLocaleStats(locales),
   } satisfies ProjectWithStats
 })
+
+export async function getEditorBootstrap(
+  projectId: string,
+  branchId?: string | null
+): Promise<EditorBootstrap | null> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('get_editor_bootstrap', {
+    p_project_id: projectId,
+    p_branch_id: branchId ?? null,
+  })
+  const row = data?.[0]
+  if (error || !row) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(
+        `[perf] get_editor_bootstrap RPC failed; falling back to client queries: ${error?.message ?? 'no row'}`
+      )
+    }
+    return null
+  }
+
+  const project = isProjectWithStats(row.project) ? row.project : null
+  const branches = Array.isArray(row.branches) ? row.branches.filter(isBranchRow) : []
+  const activeBranchId = row.active_branch_id
+  if (!project || !activeBranchId) return null
+
+  return {
+    project,
+    branches,
+    activeBranchId,
+    role: (row.role ?? 'viewer') as MemberRole,
+  }
+}
 
 // ── Writes: admin client (service role) ──────────────────────────────────
 // API routes verify auth via getUser() before calling these functions.

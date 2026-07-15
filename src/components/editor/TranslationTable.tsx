@@ -19,11 +19,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import dynamic from 'next/dynamic'
 import { TranslationCell } from './TranslationCell'
 import { StatusBadge } from './StatusBadge'
-import { BulkActionBar } from './BulkActionBar'
-import { CellActionBar } from './CellActionBar'
 import { Tooltip } from '@/components/ui/tooltip'
 import { BranchSwitcher } from './BranchSwitcher'
-import { ManageLocalesDialog } from './ManageLocalesDialog'
 
 // Interaction-only modals/sheets — lazy-loaded so they stay out of the
 // editor's initial bundle and only fetch when the user opens them.
@@ -31,6 +28,9 @@ const MergeDialog = dynamic(() => import('./MergeDialog').then((m) => m.MergeDia
 const AddKeySheet = dynamic(() => import('./AddKeySheet').then((m) => m.AddKeySheet))
 const KeyDetailPanel = dynamic(() => import('./KeyDetailPanel').then((m) => m.KeyDetailPanel))
 const ExportSheet = dynamic(() => import('@/components/export/ExportSheet').then((m) => m.ExportSheet))
+const BulkActionBar = dynamic(() => import('./BulkActionBar').then((m) => m.BulkActionBar))
+const CellActionBar = dynamic(() => import('./CellActionBar').then((m) => m.CellActionBar))
+const ManageLocalesDialog = dynamic(() => import('./ManageLocalesDialog').then((m) => m.ManageLocalesDialog))
 import { useRealtime } from '@/hooks/useRealtime'
 import { usePresence } from '@/hooks/usePresence'
 import type { ProjectWithStats, MemberRole } from '@/types'
@@ -370,6 +370,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   // load — each load captures a seq and bails if a newer load superseded it.
   const LOAD_PAGE = 500
   const loadSeqRef = useRef(0)
+  const initialStreamStartedRef = useRef(false)
   const [loadingMore, setLoadingMore] = useState(initialKeys.length < totalKeyCount)
 
   // Append remaining pages for a branch using keyset pagination — each page is
@@ -401,6 +402,10 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   // On mount, stream the keys beyond the server's first window.
   useEffect(() => {
     if (initialKeys.length >= totalKeyCount || initialKeys.length === 0) return
+    // React dev StrictMode runs mount effects twice; guard this background
+    // stream so dev doesn't issue duplicate /api/keys page requests.
+    if (initialStreamStartedRef.current) return
+    initialStreamStartedRef.current = true
     const seq = ++loadSeqRef.current
     void streamRemaining(initialBranchId, initialKeys[initialKeys.length - 1]!.key, seq)
     // Mount-only: initialKeys/initialBranchId are the server's first window.

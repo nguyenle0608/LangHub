@@ -1,7 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { createSnapshot } from '@/lib/versions/snapshot'
-import { fetchBranchTranslations } from '@/lib/branches/fetch'
 import type { Database } from '@/types/database'
 
 export type Branch = Database['public']['Tables']['branches']['Row']
@@ -37,14 +36,22 @@ export async function listBranchesWithStats(projectId: string): Promise<BranchWi
 
   return Promise.all(
     branches.map(async (b) => {
-      const [{ count }, translations] = await Promise.all([
+      const [{ count }, approvedCounts] = await Promise.all([
         supabase.from('translation_keys').select('*', { count: 'exact', head: true }).eq('branch_id', b.id),
-        fetchBranchTranslations(supabase, b.id),
+        Promise.all(
+          Array.from(nonBaseLocaleIds).map(async (localeId) => {
+            const { count: approved } = await supabase
+              .from('translations')
+              .select('*', { count: 'exact', head: true })
+              .eq('branch_id', b.id)
+              .eq('locale_id', localeId)
+              .eq('status', 'approved')
+            return approved ?? 0
+          })
+        ),
       ])
       const keyCount = count ?? 0
-      const approved = translations.filter(
-        (t) => t.locale_id && nonBaseLocaleIds.has(t.locale_id) && t.status === 'approved'
-      ).length
+      const approved = approvedCounts.reduce((sum, n) => sum + n, 0)
       const total = keyCount * nonBaseLocaleIds.size
       const approvedPercent = total > 0 ? Math.round((approved / total) * 100) : 0
       return { ...b, keyCount, localeCount, approvedPercent }

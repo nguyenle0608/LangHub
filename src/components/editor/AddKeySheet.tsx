@@ -118,11 +118,39 @@ export function AddKeySheet({ open, projectId, branchId, locales, existingKeys, 
         })
         if (!t.ok) console.warn('Failed to save base value')
       }
-      // Fetch the full key with translations
-      const keyResp = await fetch(`/api/keys?projectId=${projectId}&branch=${branchId}`)
-      const keyData = await keyResp.json() as { data?: KeyWithTranslations[] }
-      const newKey = (keyData.data ?? []).find((k) => k.id === data.id)
-      if (newKey) onCreated(newKey)
+      // Avoid refetching the full key list after creation. Build the new row
+      // locally; subsequent edits replace optimistic translation IDs with real
+      // DB IDs returned by /api/translations.
+      if (data.id) {
+        const now = new Date().toISOString()
+        const trimmedBaseValue = baseValue.trim()
+        const newKey: KeyWithTranslations = {
+          id: data.id,
+          project_id: projectId,
+          branch_id: branchId,
+          key: keyName.trim(),
+          description: description.trim() || null,
+          tags,
+          platforms,
+          char_limit: charLimitEnabled ? charLimit : null,
+          is_plural: false,
+          plural_forms: null,
+          reference_key_id: null,
+          created_by: null,
+          created_at: now,
+          translations: localeIds.map((localeId) => {
+            const isBaseLocale = baseLocale?.id === localeId
+            return {
+              id: `optimistic-${localeId}`,
+              key_id: data.id!,
+              locale_id: localeId,
+              value: isBaseLocale && trimmedBaseValue ? trimmedBaseValue : null,
+              status: isBaseLocale && trimmedBaseValue ? 'pending' : 'empty',
+            }
+          }),
+        }
+        onCreated(newKey)
+      }
       toast.success(`Key "${keyName}" created`)
       reset(); onClose()
     } catch {
