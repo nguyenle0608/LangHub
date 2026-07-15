@@ -49,7 +49,7 @@ export function LocaleCombobox({ value, onChange, placeholder = 'Select language
           role="combobox"
           aria-expanded={open}
           disabled={disabled}
-          className="w-full justify-between bg-zinc-800 border-zinc-700 text-zinc-100 hover:bg-zinc-700 hover:text-zinc-100 font-normal"
+          className="w-full justify-between bg-background border-input text-foreground hover:bg-accent hover:text-accent-foreground font-normal"
         >
           {loading ? (
             <span className="flex items-center gap-2 text-zinc-400">
@@ -60,25 +60,25 @@ export function LocaleCombobox({ value, onChange, placeholder = 'Select language
             <span className="flex items-center gap-2">
               <span className="text-base leading-none">{selected.flag}</span>
               <span>{selected.name}</span>
-              <span className="text-zinc-500 text-xs">({selected.country})</span>
+              <span className="text-muted-foreground text-xs">({selected.country})</span>
             </span>
           ) : (
-            <span className="text-zinc-500">{placeholder}</span>
+            <span className="text-muted-foreground">{placeholder}</span>
           )}
-          <ChevronsUpDown className="h-4 w-4 text-zinc-500 ml-2 flex-shrink-0" />
+          <ChevronsUpDown className="h-4 w-4 text-muted-foreground ml-2 flex-shrink-0" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[340px] p-0 bg-zinc-900 border-zinc-700" align="start">
+      <PopoverContent className="w-[340px] p-0 bg-popover border-border" align="start">
         <Command className="bg-transparent">
-          <div className="flex items-center border-b border-zinc-700 px-3">
-            <Search className="h-3.5 w-3.5 text-zinc-500 mr-2 flex-shrink-0" />
+          <div className="flex items-center border-b border-border px-3">
+            <Search className="h-3.5 w-3.5 text-muted-foreground mr-2 flex-shrink-0" />
             <CommandInput
               placeholder="Search language or country…"
-              className="text-sm text-zinc-100 placeholder:text-zinc-500 border-0 bg-transparent focus:ring-0 h-9 px-0"
+              className="text-sm text-foreground placeholder:text-muted-foreground border-0 bg-transparent focus:ring-0 h-9 px-0"
             />
           </div>
           <CommandList className="max-h-64">
-            <CommandEmpty className="py-6 text-center text-sm text-zinc-500">
+            <CommandEmpty className="py-6 text-center text-sm text-muted-foreground">
               No language found.
             </CommandEmpty>
             <CommandGroup>
@@ -90,12 +90,12 @@ export function LocaleCombobox({ value, onChange, placeholder = 'Select language
                     onChange(locale.code, locale)
                     setOpen(false)
                   }}
-                  className="flex items-center gap-2.5 px-3 py-2 cursor-pointer text-zinc-300 aria-selected:bg-zinc-800 aria-selected:text-zinc-100 data-[selected=true]:bg-zinc-800"
+                  className="flex items-center gap-2.5 px-3 py-2 cursor-pointer text-popover-foreground aria-selected:bg-accent aria-selected:text-accent-foreground data-[selected=true]:bg-accent"
                 >
                   <span className="text-base w-5 text-center leading-none">{locale.flag}</span>
                   <div className="flex-1 min-w-0">
                     <span className="text-sm">{locale.name}</span>
-                    <span className="text-xs text-zinc-500 ml-1.5">{locale.country}</span>
+                    <span className="text-xs text-muted-foreground ml-1.5">{locale.country}</span>
                   </div>
                   <span className="text-[10px] text-zinc-600 font-mono">{locale.code}</span>
                   {value === locale.code && (

@@ -28,11 +28,11 @@ export function CellActionBar({
   return (
     <div
       data-cell-actions="1"
-      className="h-12 border-t border-zinc-800 bg-zinc-900/95 backdrop-blur flex items-center px-4 gap-3"
+      className="h-12 border-t border-border bg-card/95 backdrop-blur flex items-center px-4 gap-3"
     >
       <button
         onClick={onDeselect}
-        className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-100 transition-colors"
+        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         <X className="h-4 w-4" />
         {cellCount} cell{cellCount > 1 ? 's' : ''} selected
@@ -43,7 +43,7 @@ export function CellActionBar({
         <Button
           size="sm"
           variant="outline"
-          className="gap-1.5 h-8 text-xs border-zinc-700 text-blue-400 hover:text-blue-300 hover:bg-blue-950/40"
+          className="gap-1.5 h-8 text-xs border-border text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:text-blue-300 hover:bg-blue-100/70 dark:hover:bg-blue-950/40"
           onClick={onReview}
         >
           <Eye className="h-3.5 w-3.5" />
@@ -55,7 +55,7 @@ export function CellActionBar({
         <Button
           size="sm"
           variant="outline"
-          className="gap-1.5 h-8 text-xs border-zinc-700"
+          className="gap-1.5 h-8 text-xs border-border"
           onClick={onApprove}
         >
           <CheckCircle className="h-3.5 w-3.5" />
@@ -67,7 +67,7 @@ export function CellActionBar({
         <Button
           size="sm"
           variant="outline"
-          className="gap-1.5 h-8 text-xs border-zinc-700 text-zinc-400 hover:text-zinc-100"
+          className="gap-1.5 h-8 text-xs border-border text-muted-foreground hover:text-foreground"
           onClick={onClearContent}
         >
           <Eraser className="h-3.5 w-3.5" />

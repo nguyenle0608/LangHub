@@ -64,19 +64,19 @@ export default function SignupPage() {
 
   if (success) {
     return (
-      <Card className="bg-zinc-900 border-zinc-800">
+      <Card className="bg-card border-border">
         <CardContent className="pt-6 pb-8 text-center space-y-3">
           <div className="w-12 h-12 rounded-full bg-green-900/50 border border-green-800 flex items-center justify-center mx-auto">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-6 h-6 text-green-400">
               <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
             </svg>
           </div>
-          <h3 className="text-zinc-100 font-semibold">Check your email</h3>
-          <p className="text-zinc-400 text-sm">
-            We&apos;ve sent a confirmation link to <span className="text-zinc-200">{email}</span>.
+          <h3 className="text-foreground font-semibold">Check your email</h3>
+          <p className="text-muted-foreground text-sm">
+            We&apos;ve sent a confirmation link to <span className="text-foreground">{email}</span>.
             Click the link to activate your account.
           </p>
-          <Link href="/login" className="block mt-4 text-sm text-blue-400 hover:text-blue-300 transition-colors">
+          <Link href="/login" className="block mt-4 text-sm text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 transition-colors">
             Back to sign in
           </Link>
         </CardContent>
@@ -85,17 +85,17 @@ export default function SignupPage() {
   }
 
   return (
-    <Card className="bg-zinc-900 border-zinc-800">
+    <Card className="bg-card border-border">
       <CardHeader className="space-y-1">
-        <CardTitle className="text-xl text-zinc-100">Create an account</CardTitle>
-        <CardDescription className="text-zinc-400">
+        <CardTitle className="text-xl text-foreground">Create an account</CardTitle>
+        <CardDescription className="text-muted-foreground">
           Start managing your translations today
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <Button
           variant="outline"
-          className="w-full bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700 hover:text-zinc-100"
+          className="w-full bg-background border-input text-foreground hover:bg-accent hover:text-accent-foreground"
           onClick={handleGoogleSignIn}
           disabled={googleLoading || loading}
           type="button"
@@ -123,16 +123,16 @@ export default function SignupPage() {
 
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t border-zinc-700" />
+            <span className="w-full border-t border-border" />
           </div>
           <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-zinc-900 px-2 text-zinc-500">or</span>
+            <span className="bg-card px-2 text-muted-foreground">or</span>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="email" className="text-zinc-300 text-sm">Email</Label>
+            <Label htmlFor="email" className="text-foreground text-sm">Email</Label>
             <Input
               id="email"
               type="email"
@@ -141,11 +141,11 @@ export default function SignupPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="email"
-              className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-blue-600"
+              className="bg-background border-input text-foreground placeholder:text-muted-foreground focus-visible:ring-ring"
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="password" className="text-zinc-300 text-sm">Password</Label>
+            <Label htmlFor="password" className="text-foreground text-sm">Password</Label>
             <Input
               id="password"
               type="password"
@@ -154,11 +154,11 @@ export default function SignupPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="new-password"
-              className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-blue-600"
+              className="bg-background border-input text-foreground placeholder:text-muted-foreground focus-visible:ring-ring"
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="confirm-password" className="text-zinc-300 text-sm">Confirm password</Label>
+            <Label htmlFor="confirm-password" className="text-foreground text-sm">Confirm password</Label>
             <Input
               id="confirm-password"
               type="password"
@@ -167,12 +167,12 @@ export default function SignupPage() {
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
               autoComplete="new-password"
-              className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-blue-600"
+              className="bg-background border-input text-foreground placeholder:text-muted-foreground focus-visible:ring-ring"
             />
           </div>
 
           {error && (
-            <p className="text-sm text-red-400 bg-red-950/50 border border-red-900 rounded-md px-3 py-2">
+            <p className="text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2">
               {error}
             </p>
           )}
@@ -187,9 +187,9 @@ export default function SignupPage() {
         </form>
       </CardContent>
       <CardFooter>
-        <p className="text-sm text-zinc-500 text-center w-full">
+        <p className="text-sm text-muted-foreground text-center w-full">
           Already have an account?{' '}
-          <Link href="/login" className="text-blue-400 hover:text-blue-300 transition-colors">
+          <Link href="/login" className="text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 transition-colors">
             Sign in
           </Link>
         </p>

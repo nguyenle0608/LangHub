@@ -100,16 +100,16 @@ export function ExportSheet({ open, project, branchId, onClose }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
-      <DialogContent className="max-w-md p-0 bg-zinc-950 border-zinc-800 flex flex-col max-h-[90vh] [&>button]:hidden">
-        <DialogHeader className="px-6 py-4 border-b border-zinc-800 flex-shrink-0 flex flex-row items-center justify-between">
-          <DialogTitle className="text-zinc-100 text-base">Export Translations</DialogTitle>
-          <button type="button" onClick={onClose} className="text-zinc-500 hover:text-zinc-300"><X className="h-4 w-4" /></button>
+      <DialogContent className="max-w-md p-0 bg-background border-border flex flex-col max-h-[90vh] [&>button]:hidden">
+        <DialogHeader className="px-6 py-4 border-b border-border flex-shrink-0 flex flex-row items-center justify-between">
+          <DialogTitle className="text-foreground text-base">Export Translations</DialogTitle>
+          <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
           {/* Section 1: Locales */}
           <div className="space-y-2">
-            <div className="text-xs font-medium text-zinc-400">Locales</div>
+            <div className="text-xs font-medium text-muted-foreground">Locales</div>
             <div className="space-y-1">
               {project.locales.map((locale) => (
                 <label key={locale.id} className="flex items-center gap-3 py-1.5 cursor-pointer group">
@@ -117,14 +117,14 @@ export function ExportSheet({ open, project, branchId, onClose }: Props) {
                     type="checkbox"
                     checked={selectedLocales.has(locale.id)}
                     onChange={() => toggleLocale(locale.id)}
-                    className="rounded border-zinc-600"
+                    className="rounded border-border"
                   />
                   <span className="text-base">{localeFlag(locale.code)}</span>
                   <div className="flex-1 min-w-0">
-                    <span className="text-sm text-zinc-200">{locale.name}</span>
-                    <span className="ml-2 text-xs text-zinc-500 uppercase">{locale.code}</span>
+                    <span className="text-sm text-foreground">{locale.name}</span>
+                    <span className="ml-2 text-xs text-muted-foreground uppercase">{locale.code}</span>
                   </div>
-                  <span className="text-xs text-zinc-500">{locale.percent}%</span>
+                  <span className="text-xs text-muted-foreground">{locale.percent}%</span>
                 </label>
               ))}
             </div>
@@ -132,7 +132,7 @@ export function ExportSheet({ open, project, branchId, onClose }: Props) {
 
           {/* Section 2: Format */}
           <div className="space-y-2">
-            <div className="text-xs font-medium text-zinc-400">Format</div>
+            <div className="text-xs font-medium text-muted-foreground">Format</div>
             <div className="grid grid-cols-4 gap-2">
               {(['json', 'arb', 'csv', 'yaml'] as const).map((f) => (
                 <button
@@ -141,7 +141,7 @@ export function ExportSheet({ open, project, branchId, onClose }: Props) {
                   onClick={() => setFormat(f)}
                   className={[
                     'py-2 text-xs rounded border transition-colors uppercase',
-                    format === f ? 'bg-blue-600/20 border-blue-500 text-blue-300' : 'border-zinc-700 text-zinc-400 hover:border-zinc-600',
+                    format === f ? 'bg-blue-600/20 border-blue-500 text-blue-700 dark:text-blue-300' : 'border-border text-muted-foreground hover:border-border',
                   ].join(' ')}
                 >
                   {f}
@@ -162,8 +162,8 @@ export function ExportSheet({ open, project, branchId, onClose }: Props) {
                       className={[
                         'text-left px-3 py-2 rounded border text-xs transition-colors',
                         jsonStructure === opt.value
-                          ? 'bg-blue-600/20 border-blue-500 text-blue-300'
-                          : 'border-zinc-700 text-zinc-400 hover:border-zinc-600',
+                          ? 'bg-blue-600/20 border-blue-500 text-blue-700 dark:text-blue-300'
+                          : 'border-border text-muted-foreground hover:border-border',
                       ].join(' ')}
                     >
                       <div className="font-medium">{opt.label}</div>
@@ -177,25 +177,25 @@ export function ExportSheet({ open, project, branchId, onClose }: Props) {
                       type="checkbox"
                       checked={nested}
                       onChange={(e) => setNested(e.target.checked)}
-                      className="rounded border-zinc-600"
+                      className="rounded border-border"
                     />
-                    <span className="text-xs text-zinc-400">Nested output (rebuild dot.notation → object)</span>
+                    <span className="text-xs text-muted-foreground">Nested output (rebuild dot.notation → object)</span>
                   </label>
                 ) : (
-                  <p className="text-[11px] text-zinc-500">
+                  <p className="text-[11px] text-muted-foreground">
                     Example: authen.login.title exports to authen.json as login.title.
                   </p>
                 )}
               </div>
             )}
             {format === 'csv' && (
-              <p className="text-[11px] text-zinc-500">All locales combined in one file with columns per locale</p>
+              <p className="text-[11px] text-muted-foreground">All locales combined in one file with columns per locale</p>
             )}
           </div>
 
           {/* Section 3: Filter */}
           <div className="space-y-2">
-            <div className="text-xs font-medium text-zinc-400">Status filter</div>
+            <div className="text-xs font-medium text-muted-foreground">Status filter</div>
             <div className="space-y-1">
               {([
                 ['all', 'All statuses'],
@@ -209,9 +209,9 @@ export function ExportSheet({ open, project, branchId, onClose }: Props) {
                     value={val}
                     checked={filter === val}
                     onChange={() => setFilter(val)}
-                    className="border-zinc-600"
+                    className="border-border"
                   />
-                  <span className="text-sm text-zinc-300">{label}</span>
+                  <span className="text-sm text-foreground">{label}</span>
                 </label>
               ))}
             </div>
@@ -220,33 +220,33 @@ export function ExportSheet({ open, project, branchId, onClose }: Props) {
                 type="checkbox"
                 checked={includeEmpty}
                 onChange={(e) => setIncludeEmpty(e.target.checked)}
-                className="rounded border-zinc-600 mt-0.5"
+                className="rounded border-border mt-0.5"
               />
-              <span className="text-xs text-zinc-400">
+              <span className="text-xs text-muted-foreground">
                 Export all keys
-                <span className="block text-[10px] text-zinc-600">
+                <span className="block text-[10px] text-muted-foreground">
                   Export every key. Keys without a value matching the selected status filter become empty strings.
                 </span>
               </span>
             </label>
             {!includeEmpty && (
-              <p className="text-[10px] text-zinc-600">
+              <p className="text-[10px] text-muted-foreground">
                 Without this, only non-empty translations matching the selected status are exported.
               </p>
             )}
           </div>
 
           {/* Section 4: Preview */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 space-y-1">
-            <div className="text-[11px] text-zinc-500 uppercase tracking-wide">Export preview</div>
-            <p className="text-sm text-zinc-200 font-medium">{previewText}</p>
-            <p className="text-xs text-zinc-500">
+          <div className="bg-card border border-border rounded-lg p-4 space-y-1">
+            <div className="text-[11px] text-muted-foreground uppercase tracking-wide">Export preview</div>
+            <p className="text-sm text-foreground font-medium">{previewText}</p>
+            <p className="text-xs text-muted-foreground">
               {previewFilename}
             </p>
           </div>
         </div>
 
-        <div className="px-6 py-4 border-t border-zinc-800 flex-shrink-0">
+        <div className="px-6 py-4 border-t border-border flex-shrink-0">
           <Button
             className="w-full gap-2"
             onClick={handleExport}

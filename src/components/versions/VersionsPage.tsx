@@ -66,31 +66,31 @@ function CreateVersionDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="bg-zinc-900 border border-zinc-700 rounded-lg w-full max-w-md p-6 shadow-2xl">
-        <h3 className="text-sm font-semibold text-zinc-100 mb-4">Create Version Snapshot</h3>
+      <div className="bg-card border border-border rounded-lg w-full max-w-md p-6 shadow-2xl">
+        <h3 className="text-sm font-semibold text-foreground mb-4">Create Version Snapshot</h3>
         <form onSubmit={handleCreate} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-400">Version name *</label>
+            <label className="text-xs font-medium text-muted-foreground">Version name *</label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="v1.2.0 — Release candidate"
-              className="text-sm bg-zinc-800 border-zinc-700"
+              className="text-sm bg-muted border-border"
               autoFocus
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-400">Description</label>
+            <label className="text-xs font-medium text-muted-foreground">Description</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What changed in this version…"
               rows={2}
-              className="w-full text-sm bg-zinc-800 border border-zinc-700 rounded-md px-3 py-2 text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-blue-500 resize-none"
+              className="w-full text-sm bg-muted border border-border rounded-md px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-blue-500 resize-none"
             />
           </div>
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" size="sm" className="border-zinc-700" onClick={onClose}>
+            <Button type="button" variant="outline" size="sm" className="border-border" onClick={onClose}>
               Cancel
             </Button>
             <Button type="submit" size="sm" disabled={loading || !name.trim()}>
@@ -134,28 +134,28 @@ function VersionCard({
         }
       }}
       className={[
-        'w-full text-left rounded-lg border p-3.5 transition-colors hover:bg-zinc-800/40 space-y-2 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500/60',
-        isSelected ? 'border-blue-500/60 bg-blue-500/5' : 'border-zinc-800 bg-zinc-900/40',
+        'w-full text-left rounded-lg border p-3.5 transition-colors hover:bg-muted/40 space-y-2 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500/60',
+        isSelected ? 'border-blue-500/60 bg-blue-500/5' : 'border-border bg-card/40',
         !isManual && 'opacity-80',
       ].join(' ')}
     >
       <div className="flex items-start gap-2">
         <div className="mt-0.5">
           {isManual
-            ? <GitBranch className="h-3.5 w-3.5 text-blue-400" />
-            : <Zap className="h-3.5 w-3.5 text-zinc-500" />}
+            ? <GitBranch className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+            : <Zap className="h-3.5 w-3.5 text-muted-foreground" />}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
-            <span className={['text-sm font-medium truncate', isManual ? 'text-zinc-100' : 'text-zinc-400'].join(' ')}>
+            <span className={['text-sm font-medium truncate', isManual ? 'text-foreground' : 'text-muted-foreground'].join(' ')}>
               {version.name}
             </span>
             {!isManual && (
-              <Badge variant="outline" className="text-[9px] text-zinc-500 border-zinc-700 py-0 px-1">auto</Badge>
+              <Badge variant="outline" className="text-[9px] text-muted-foreground border-border py-0 px-1">auto</Badge>
             )}
           </div>
           {version.description && (
-            <p className="text-[11px] text-zinc-500 truncate mt-0.5">{version.description}</p>
+            <p className="text-[11px] text-muted-foreground truncate mt-0.5">{version.description}</p>
           )}
         </div>
         {isManual && (
@@ -163,35 +163,35 @@ function VersionCard({
             type="button"
             onClick={(e) => { e.stopPropagation(); onDelete() }}
             disabled={deleting}
-            className="text-zinc-700 hover:text-red-400 transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100 mt-0.5 disabled:opacity-100"
+            className="text-border hover:text-destructive transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100 mt-0.5 disabled:opacity-100"
           >
             {deleting
-              ? <Loader2 className="h-3 w-3 animate-spin text-red-400" />
+              ? <Loader2 className="h-3 w-3 animate-spin text-destructive" />
               : <Trash2 className="h-3 w-3" />}
           </button>
         )}
       </div>
 
-      <div className="text-[10px] text-zinc-600">{formatVersionDate(version.created_at)}</div>
+      <div className="text-[10px] text-muted-foreground">{formatVersionDate(version.created_at)}</div>
 
       {stats && (
         <>
-          <div className="text-[11px] text-zinc-500">
+          <div className="text-[11px] text-muted-foreground">
             {stats.total_keys ?? 0} keys · {stats.total_locales ?? 0} locales
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex-1 h-1 bg-zinc-800 rounded-full overflow-hidden">
+            <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
               <div
                 className="h-full bg-green-500 rounded-full transition-all"
                 style={{ width: `${pct}%` }}
               />
             </div>
-            <span className="text-[10px] text-zinc-500 tabular-nums">{pct}%</span>
+            <span className="text-[10px] text-muted-foreground tabular-nums">{pct}%</span>
           </div>
           <div className="flex gap-2 text-[10px]">
             <span className="text-green-400">{approved} ✅</span>
             <span className="text-yellow-400">{stats.pending_count ?? 0} ⏳</span>
-            <span className="text-zinc-500">{stats.empty_count ?? 0} ○</span>
+            <span className="text-muted-foreground">{stats.empty_count ?? 0} ○</span>
           </div>
         </>
       )}
@@ -241,15 +241,15 @@ export function VersionsPage({ project, initialVersions }: Props) {
   }
 
   return (
-    <div className="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden">
+    <div className="flex h-screen bg-background text-foreground overflow-hidden">
       {/* Left sidebar */}
-      <div className="w-80 flex-shrink-0 border-r border-zinc-800 flex flex-col">
+      <div className="w-80 flex-shrink-0 border-r border-border flex flex-col">
         {/* Nav */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800">
-          <Link href={`/${project.id}/editor`} className="text-zinc-500 hover:text-zinc-300">
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+          <Link href={`/${project.id}/editor`} className="text-muted-foreground hover:text-foreground">
             <ArrowLeft className="h-4 w-4" />
           </Link>
-          <span className="text-sm font-medium text-zinc-200 flex-1">Versions</span>
+          <span className="text-sm font-medium text-foreground flex-1">Versions</span>
           <Button
             size="sm"
             className="h-7 text-xs gap-1.5"
@@ -261,14 +261,14 @@ export function VersionsPage({ project, initialVersions }: Props) {
         </div>
 
         {/* Search */}
-        <div className="px-3 py-2 border-b border-zinc-800">
+        <div className="px-3 py-2 border-b border-border">
           <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-500" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search versions…"
-              className="pl-7 h-7 text-xs bg-zinc-900 border-zinc-700"
+              className="pl-7 h-7 text-xs bg-card border-border"
             />
           </div>
         </div>
@@ -279,16 +279,16 @@ export function VersionsPage({ project, initialVersions }: Props) {
             <div className="flex flex-col items-center py-10 px-4 text-center">
               {versions.length === 0 ? (
                 <>
-                  <GitBranch className="h-7 w-7 text-zinc-700 mb-3" />
-                  <p className="text-xs font-medium text-zinc-400 mb-1">No snapshots yet</p>
-                  <p className="text-[11px] text-zinc-600 mb-3">Create one before your next import to track changes</p>
+                  <GitBranch className="h-7 w-7 text-border mb-3" />
+                  <p className="text-xs font-medium text-muted-foreground mb-1">No snapshots yet</p>
+                  <p className="text-[11px] text-muted-foreground mb-3">Create one before your next import to track changes</p>
                   <Button size="sm" className="h-6 text-xs gap-1" onClick={() => setShowCreate(true)}>
                     <Plus className="h-3 w-3" />
                     New Snapshot
                   </Button>
                 </>
               ) : (
-                <p className="text-xs text-zinc-600">No results</p>
+                <p className="text-xs text-muted-foreground">No results</p>
               )}
             </div>
           ) : (
@@ -317,7 +317,7 @@ export function VersionsPage({ project, initialVersions }: Props) {
           onRestored={handleRestored}
         />
       ) : (
-        <div className="flex-1 flex items-center justify-center text-zinc-600">
+        <div className="flex-1 flex items-center justify-center text-muted-foreground">
           <div className="text-center space-y-2">
             <RotateCcw className="h-8 w-8 mx-auto opacity-20" />
             <p className="text-sm">{versions.length === 0 ? 'Create a snapshot to start tracking' : 'Select a version to compare'}</p>

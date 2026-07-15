@@ -40,20 +40,20 @@ function Section({ title, icon: Icon, collapsible, defaultOpen = true, children 
 }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="border-b border-zinc-800/60 last:border-0">
+    <div className="border-b border-border/60 last:border-0">
       <button
         type="button"
         className={cn(
           'w-full flex items-center gap-1.5 px-4 py-2.5 text-left',
-          collapsible && 'hover:bg-zinc-800/30 transition-colors'
+          collapsible && 'hover:bg-muted/30 transition-colors'
         )}
         onClick={() => collapsible && setOpen((v) => !v)}
         disabled={!collapsible}
       >
-        {Icon && <Icon className="h-3 w-3 text-zinc-500 flex-shrink-0" />}
-        <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 flex-1">{title}</span>
+        {Icon && <Icon className="h-3 w-3 text-muted-foreground flex-shrink-0" />}
+        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground flex-1">{title}</span>
         {collapsible && (
-          <ChevronDown className={cn('h-3 w-3 text-zinc-600 transition-transform', !open && '-rotate-90')} />
+          <ChevronDown className={cn('h-3 w-3 text-muted-foreground transition-transform', !open && '-rotate-90')} />
         )}
       </button>
       {open && <div className="px-4 pb-4">{children}</div>}
@@ -189,21 +189,21 @@ function TranslationsPane({
             key={locale.id}
             className={cn(
               'rounded-lg border overflow-hidden transition-colors',
-              isDirty ? 'border-blue-500/50 bg-blue-950/10' : 'border-zinc-800 bg-zinc-900/40'
+              isDirty ? 'border-blue-500/50 bg-blue-100/40 dark:bg-blue-950/10' : 'border-border bg-card/40'
             )}
           >
             {/* header */}
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-800/60">
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-border/60">
               <span className="text-base leading-none">{localeFlag(locale.code)}</span>
-              <span className="text-xs font-medium text-zinc-300">{locale.name}</span>
-              {locale.is_base && <span className="text-[9px] text-zinc-600 border border-zinc-700 rounded px-1">base</span>}
+              <span className="text-xs font-medium text-foreground">{locale.name}</span>
+              {locale.is_base && <span className="text-[9px] text-muted-foreground border border-border rounded px-1">base</span>}
               <div className="ml-auto flex items-center gap-2">
                 <StatusBadge
                   status={(isDirty ? 'pending' : (t?.status ?? 'empty')) as 'empty' | 'pending' | 'reviewed' | 'approved'}
                   size="xs"
                 />
                 {charLimit !== null && (
-                  <span className={cn('text-[10px] tabular-nums', overLimit ? 'text-red-400' : 'text-zinc-600')}>
+                  <span className={cn('text-[10px] tabular-nums', overLimit ? 'text-destructive' : 'text-muted-foreground')}>
                     {draft.length}/{charLimit}
                   </span>
                 )}
@@ -219,22 +219,22 @@ function TranslationsPane({
               placeholder={locale.is_base ? 'Source text…' : 'Translation…'}
               readOnly={!canEdit}
               className={cn(
-                'w-full bg-transparent text-sm text-zinc-100 px-3 py-2.5 resize-none focus:outline-none placeholder:text-zinc-600 leading-relaxed',
+                'w-full bg-transparent text-sm text-foreground px-3 py-2.5 resize-none focus:outline-none placeholder:text-muted-foreground leading-relaxed',
                 !canEdit && 'cursor-default select-text'
               )}
             />
 
             {/* footer */}
             {(isDirty || canReview || canApprove) && (
-              <div className="flex items-center justify-end px-3 py-1.5 border-t border-zinc-800/60 bg-zinc-950/30">
+              <div className="flex items-center justify-end px-3 py-1.5 border-t border-border/60 bg-background/30">
                 <div className="flex gap-1.5">
                   {isDirty && canEdit && (
-                    <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px] text-zinc-400 hover:text-zinc-200" onClick={() => void saveTranslation(locale.id)} disabled={isSaving}>
+                    <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground" onClick={() => void saveTranslation(locale.id)} disabled={isSaving}>
                       Save
                     </Button>
                   )}
                   {canReview && !isDirty && (
-                    <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px] text-blue-400 hover:text-blue-300 hover:bg-blue-950/40" onClick={() => void markReviewed(locale.id)} disabled={isReviewing || isSaving}>
+                    <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:text-blue-300 hover:bg-blue-100/70 dark:hover:bg-blue-950/40" onClick={() => void markReviewed(locale.id)} disabled={isReviewing || isSaving}>
                       {isReviewing
                         ? <span className="w-3 h-3 border border-blue-400 border-t-transparent rounded-full animate-spin inline-block" />
                         : 'Review'}
@@ -367,49 +367,49 @@ function DetailsPane({
   }
 
   return (
-    <div className="divide-y divide-zinc-800/60">
+    <div className="divide-y divide-border/60">
       {/* Key metadata */}
       <Section title="Key" icon={Info}>
         <div className="space-y-3 text-xs">
           {/* Key name */}
           <div>
-            <div className="flex items-center justify-between text-[10px] text-zinc-600 mb-1">
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
               <span>Name</span>
-              {canEditKeys && <button onClick={() => { setEditingKey(true); setKeyDraft(keyItem.key) }} className="hover:text-zinc-300"><Pencil className="h-2.5 w-2.5" /></button>}
+              {canEditKeys && <button onClick={() => { setEditingKey(true); setKeyDraft(keyItem.key) }} className="hover:text-foreground"><Pencil className="h-2.5 w-2.5" /></button>}
             </div>
             {editingKey ? (
               <div className="flex gap-1">
-                <Input value={keyDraft} onChange={(e) => setKeyDraft(e.target.value)} className="font-mono text-xs bg-zinc-950 border-zinc-700 h-6 flex-1 px-2" autoFocus onKeyDown={(e) => { if (e.key === 'Enter') void saveKey(); if (e.key === 'Escape') setEditingKey(false) }} />
+                <Input value={keyDraft} onChange={(e) => setKeyDraft(e.target.value)} className="font-mono text-xs bg-background border-border h-6 flex-1 px-2" autoFocus onKeyDown={(e) => { if (e.key === 'Enter') void saveKey(); if (e.key === 'Escape') setEditingKey(false) }} />
                 <button onClick={saveKey} disabled={savingKey} className="text-green-400"><Check className="h-3.5 w-3.5" /></button>
-                <button onClick={() => setEditingKey(false)} className="text-zinc-500"><X className="h-3.5 w-3.5" /></button>
+                <button onClick={() => setEditingKey(false)} className="text-muted-foreground"><X className="h-3.5 w-3.5" /></button>
               </div>
             ) : (
-              <p className="font-mono text-zinc-200 break-all leading-relaxed">{keyItem.key}</p>
+              <p className="font-mono text-foreground break-all leading-relaxed">{keyItem.key}</p>
             )}
           </div>
 
           {/* Description */}
           <div>
-            <div className="flex items-center justify-between text-[10px] text-zinc-600 mb-1">
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
               <span>Description</span>
-              {canEditKeys && !editingDesc && <button onClick={() => setEditingDesc(true)} className="hover:text-zinc-300"><Pencil className="h-2.5 w-2.5" /></button>}
+              {canEditKeys && !editingDesc && <button onClick={() => setEditingDesc(true)} className="hover:text-foreground"><Pencil className="h-2.5 w-2.5" /></button>}
             </div>
             {editingDesc ? (
               <div className="space-y-1.5">
-                <textarea value={descDraft} onChange={(e) => setDescDraft(e.target.value)} rows={2} autoFocus className="w-full bg-zinc-950 border border-zinc-700 rounded px-2 py-1.5 text-zinc-200 focus:outline-none focus:border-blue-500 resize-none text-xs" />
+                <textarea value={descDraft} onChange={(e) => setDescDraft(e.target.value)} rows={2} autoFocus className="w-full bg-background border border-border rounded px-2 py-1.5 text-foreground focus:outline-none focus:border-blue-500 resize-none text-xs" />
                 <div className="flex gap-2 justify-end text-[10px]">
-                  <button onClick={() => setEditingDesc(false)} className="text-zinc-500 hover:text-zinc-300">Cancel</button>
-                  <button onClick={saveDesc} disabled={savingDesc} className="text-blue-400 hover:text-blue-300">Save</button>
+                  <button onClick={() => setEditingDesc(false)} className="text-muted-foreground hover:text-foreground">Cancel</button>
+                  <button onClick={saveDesc} disabled={savingDesc} className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:text-blue-300">Save</button>
                 </div>
               </div>
             ) : (
-              <p className="text-zinc-400 leading-relaxed">{keyItem.description || <span className="text-zinc-600 italic">—</span>}</p>
+              <p className="text-muted-foreground leading-relaxed">{keyItem.description || <span className="text-muted-foreground italic">—</span>}</p>
             )}
           </div>
 
           {/* Tags */}
           <div>
-            <div className="flex items-center gap-1 text-[10px] text-zinc-600 mb-1.5"><Tag className="h-2.5 w-2.5" /> Tags</div>
+            <div className="flex items-center gap-1 text-[10px] text-muted-foreground mb-1.5"><Tag className="h-2.5 w-2.5" /> Tags</div>
             <div className="flex flex-wrap gap-1 mb-1.5">
               {(keyItem.tags ?? []).map((tag) => (
                 <Badge key={tag} variant="secondary" className="text-[10px] pr-1 gap-1">
@@ -418,12 +418,12 @@ function DetailsPane({
                 </Badge>
               ))}
             </div>
-            {canEditKeys && <Input value={tagInput} onChange={(e) => setTagInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const t = tagInput.trim().toLowerCase(); if (t && !(keyItem.tags ?? []).includes(t)) { void patchMeta({ tags: [...(keyItem.tags ?? []), t] }); setTagInput('') } } }} placeholder="Add tag…" className="text-[11px] h-6 bg-zinc-950 border-zinc-700 px-2" />}
+            {canEditKeys && <Input value={tagInput} onChange={(e) => setTagInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const t = tagInput.trim().toLowerCase(); if (t && !(keyItem.tags ?? []).includes(t)) { void patchMeta({ tags: [...(keyItem.tags ?? []), t] }); setTagInput('') } } }} placeholder="Add tag…" className="text-[11px] h-6 bg-background border-border px-2" />}
           </div>
 
           {/* Misc */}
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-zinc-600">
-            {keyItem.char_limit && <span>Char limit: <span className="text-zinc-400">{keyItem.char_limit}</span></span>}
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
+            {keyItem.char_limit && <span>Char limit: <span className="text-muted-foreground">{keyItem.char_limit}</span></span>}
             {(keyItem.platforms ?? []).length > 0 && (
               <span className="flex items-center gap-1">
                 {(keyItem.platforms ?? []).map((p) => (
@@ -444,26 +444,26 @@ function DetailsPane({
       {/* Comments */}
       <Section title="Comments" icon={Send}>
         {commentsLoading ? (
-          <div className="h-8 rounded bg-zinc-800/50 animate-pulse" />
+          <div className="h-8 rounded bg-muted/50 animate-pulse" />
         ) : (
           <div className="space-y-2">
-            {comments.length === 0 && <p className="text-[11px] text-zinc-600 text-center py-2">No comments yet</p>}
+            {comments.length === 0 && <p className="text-[11px] text-muted-foreground text-center py-2">No comments yet</p>}
             {comments.map((c) => (
-              <div key={c.id} className="rounded border border-zinc-800 bg-zinc-900/50 px-2.5 py-2 group">
+              <div key={c.id} className="rounded border border-border bg-card/50 px-2.5 py-2 group">
                 <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-[10px] text-zinc-600">{c.created_at ? timeAgo(c.created_at) : ''}</span>
+                  <span className="text-[10px] text-muted-foreground">{c.created_at ? timeAgo(c.created_at) : ''}</span>
                   {c.user_id === userId && (
-                    <button onClick={async () => { const r = await fetch(`/api/keys/${keyItem.id}/comments?commentId=${c.id}`, { method: 'DELETE' }); if (r.ok) setComments((p) => p.filter((x) => x.id !== c.id)) }} className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-400">
+                    <button onClick={async () => { const r = await fetch(`/api/keys/${keyItem.id}/comments?commentId=${c.id}`, { method: 'DELETE' }); if (r.ok) setComments((p) => p.filter((x) => x.id !== c.id)) }} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive">
                       <Trash2 className="h-2.5 w-2.5" />
                     </button>
                   )}
                 </div>
-                <p className="text-xs text-zinc-300 leading-relaxed break-words">{c.message}</p>
+                <p className="text-xs text-foreground leading-relaxed break-words">{c.message}</p>
               </div>
             ))}
             <div ref={bottomRef} />
             <div className="flex gap-1.5 pt-1">
-              <Input value={message} onChange={(e) => setMessage(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void submitComment() } }} placeholder="Add a comment…" className="text-xs bg-zinc-950 border-zinc-700 h-7 flex-1" />
+              <Input value={message} onChange={(e) => setMessage(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void submitComment() } }} placeholder="Add a comment…" className="text-xs bg-background border-border h-7 flex-1" />
               <Button size="sm" onClick={submitComment} disabled={submitting || !message.trim()} className="h-7 px-2">
                 <Send className="h-3 w-3" />
               </Button>
@@ -473,34 +473,34 @@ function DetailsPane({
       </Section>
 
       {/* History */}
-      <div className="border-b border-zinc-800/60 last:border-0">
+      <div className="border-b border-border/60 last:border-0">
         <button
           type="button"
-          className="w-full flex items-center gap-1.5 px-4 py-2.5 hover:bg-zinc-800/30 transition-colors text-left"
+          className="w-full flex items-center gap-1.5 px-4 py-2.5 hover:bg-muted/30 transition-colors text-left"
           onClick={() => setHistoryOpen((v) => !v)}
         >
-          <Clock className="h-3 w-3 text-zinc-500" />
-          <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 flex-1">History</span>
-          <ChevronDown className={cn('h-3 w-3 text-zinc-600 transition-transform', !historyOpen && '-rotate-90')} />
+          <Clock className="h-3 w-3 text-muted-foreground" />
+          <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground flex-1">History</span>
+          <ChevronDown className={cn('h-3 w-3 text-muted-foreground transition-transform', !historyOpen && '-rotate-90')} />
         </button>
         {historyOpen && (
           <div className="px-4 pb-4 space-y-2 max-h-72 overflow-y-auto">
             {historyLoading
-              ? [1, 2].map((i) => <div key={i} className="h-12 rounded bg-zinc-800/50 animate-pulse" />)
+              ? [1, 2].map((i) => <div key={i} className="h-12 rounded bg-muted/50 animate-pulse" />)
               : history.length === 0
-              ? <p className="text-[11px] text-zinc-600 text-center py-2">No history</p>
+              ? <p className="text-[11px] text-muted-foreground text-center py-2">No history</p>
               : history.map((h) => (
-                <div key={h.id} className="rounded border border-zinc-800 bg-zinc-900/50 px-2.5 py-2 space-y-1">
+                <div key={h.id} className="rounded border border-border bg-card/50 px-2.5 py-2 space-y-1">
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm leading-none">{localeFlag(h.locale.code)}</span>
-                    <span className="text-[10px] font-medium text-zinc-500 uppercase">{h.locale.code}</span>
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase">{h.locale.code}</span>
                     {h.new_status && <StatusBadge status={h.new_status as 'empty' | 'pending' | 'reviewed' | 'approved'} size="xs" />}
-                    <span className="ml-auto text-[10px] text-zinc-600">{h.changed_at ? timeAgo(h.changed_at) : ''}</span>
+                    <span className="ml-auto text-[10px] text-muted-foreground">{h.changed_at ? timeAgo(h.changed_at) : ''}</span>
                   </div>
                   {h.old_value !== null && (
-                    <p className="text-[10px] text-zinc-600 line-through break-words">{h.old_value || <span className="italic">empty</span>}</p>
+                    <p className="text-[10px] text-muted-foreground line-through break-words">{h.old_value || <span className="italic">empty</span>}</p>
                   )}
-                  <p className="text-[11px] text-zinc-300 break-words whitespace-pre-wrap">{h.new_value || <span className="text-zinc-600 italic">empty</span>}</p>
+                  <p className="text-[11px] text-foreground break-words whitespace-pre-wrap">{h.new_value || <span className="text-muted-foreground italic">empty</span>}</p>
                 </div>
               ))
             }
@@ -513,10 +513,10 @@ function DetailsPane({
         <div className="px-4 py-3">
           {confirmDelete ? (
             <div className="space-y-2">
-              <p className="text-xs text-red-400">Delete this key and all its translations?</p>
+              <p className="text-xs text-destructive">Delete this key and all its translations?</p>
               <div className="flex gap-2">
                 <Button size="sm" variant="destructive" className="h-7 text-xs flex-1" onClick={handleDelete} disabled={deleting}>{deleting ? 'Deleting…' : 'Confirm Delete'}</Button>
-                <Button size="sm" variant="outline" className="h-7 text-xs border-zinc-700" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+                <Button size="sm" variant="outline" className="h-7 text-xs border-border" onClick={() => setConfirmDelete(false)}>Cancel</Button>
               </div>
             </div>
           ) : (
@@ -547,13 +547,13 @@ interface Props {
 export function KeyDetailPanel({ keyItem, locales, userId, branchId, canEdit, canEditKeys, onClose, onKeyUpdated, onKeyDeleted }: Props) {
   return (
     <Dialog open={!!keyItem} onOpenChange={(v) => { if (!v) onClose() }}>
-      <DialogContent className="max-w-4xl p-0 bg-zinc-950 border-zinc-800 flex flex-col max-h-[88vh] [&>button]:hidden">
+      <DialogContent className="max-w-4xl p-0 bg-background border-border flex flex-col max-h-[88vh] [&>button]:hidden">
         {/* Header */}
-        <DialogHeader className="px-4 py-3 border-b border-zinc-800 flex-shrink-0 flex flex-row items-center justify-between space-y-0">
-          <DialogTitle className="font-mono text-sm text-zinc-200 truncate max-w-lg">
+        <DialogHeader className="px-4 py-3 border-b border-border flex-shrink-0 flex flex-row items-center justify-between space-y-0">
+          <DialogTitle className="font-mono text-sm text-foreground truncate max-w-lg">
             {keyItem?.key ?? ''}
           </DialogTitle>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 flex-shrink-0 ml-2">
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground flex-shrink-0 ml-2">
             <X className="h-4 w-4" />
           </button>
         </DialogHeader>
@@ -562,8 +562,8 @@ export function KeyDetailPanel({ keyItem, locales, userId, branchId, canEdit, ca
         {keyItem && (
           <div className="flex flex-1 overflow-hidden min-h-0">
             {/* Left: translations */}
-            <div className="flex-1 overflow-y-auto border-r border-zinc-800">
-              <p className="sticky top-0 z-10 bg-zinc-950 text-[10px] uppercase tracking-wider text-zinc-600 px-4 pt-3 pb-2">Translations</p>
+            <div className="flex-1 overflow-y-auto border-r border-border">
+              <p className="sticky top-0 z-10 bg-background text-[10px] uppercase tracking-wider text-muted-foreground px-4 pt-3 pb-2">Translations</p>
               <div className="px-4 pb-3">
                 <TranslationsPane
                   key={keyItem.id}

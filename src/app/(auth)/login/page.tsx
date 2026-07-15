@@ -54,17 +54,17 @@ export default function LoginPage() {
   }
 
   return (
-    <Card className="bg-zinc-900 border-zinc-800">
+    <Card className="bg-card border-border">
       <CardHeader className="space-y-1">
-        <CardTitle className="text-xl text-zinc-100">Sign in</CardTitle>
-        <CardDescription className="text-zinc-400">
+        <CardTitle className="text-xl text-foreground">Sign in</CardTitle>
+        <CardDescription className="text-muted-foreground">
           Enter your email and password to continue
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <Button
           variant="outline"
-          className="w-full bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700 hover:text-zinc-100"
+          className="w-full bg-background border-input text-foreground hover:bg-accent hover:text-accent-foreground"
           onClick={handleGoogleSignIn}
           disabled={googleLoading || loading}
           type="button"
@@ -104,16 +104,16 @@ export default function LoginPage() {
 
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t border-zinc-700" />
+            <span className="w-full border-t border-border" />
           </div>
           <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-zinc-900 px-2 text-zinc-500">or</span>
+            <span className="bg-card px-2 text-muted-foreground">or</span>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="email" className="text-zinc-300 text-sm">Email</Label>
+            <Label htmlFor="email" className="text-foreground text-sm">Email</Label>
             <Input
               id="email"
               type="email"
@@ -122,11 +122,11 @@ export default function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="email"
-              className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-blue-600"
+              className="bg-background border-input text-foreground placeholder:text-muted-foreground focus-visible:ring-ring"
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="password" className="text-zinc-300 text-sm">Password</Label>
+            <Label htmlFor="password" className="text-foreground text-sm">Password</Label>
             <Input
               id="password"
               type="password"
@@ -135,12 +135,12 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
-              className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-blue-600"
+              className="bg-background border-input text-foreground placeholder:text-muted-foreground focus-visible:ring-ring"
             />
           </div>
 
           {error && (
-            <p className="text-sm text-red-400 bg-red-950/50 border border-red-900 rounded-md px-3 py-2">
+            <p className="text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2">
               {error}
             </p>
           )}
@@ -155,9 +155,9 @@ export default function LoginPage() {
         </form>
       </CardContent>
       <CardFooter>
-        <p className="text-sm text-zinc-500 text-center w-full">
+        <p className="text-sm text-muted-foreground text-center w-full">
           Don&apos;t have an account?{' '}
-          <Link href="/signup" className="text-blue-400 hover:text-blue-300 transition-colors">
+          <Link href="/signup" className="text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 transition-colors">
             Sign up
           </Link>
         </p>

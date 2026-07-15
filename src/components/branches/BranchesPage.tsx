@@ -108,17 +108,17 @@ export function BranchesPage({ project, initialBranches, canManage }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+    <div className="min-h-screen bg-background text-foreground">
       {/* Header */}
-      <header className="border-b border-zinc-800 bg-zinc-900/50 sticky top-0 z-10">
+      <header className="border-b border-border bg-card/50 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-6 h-14 flex items-center gap-3">
-          <Link href={`/${project.id}/editor`} className="text-zinc-500 hover:text-zinc-200">
+          <Link href={`/${project.id}/editor`} className="text-muted-foreground hover:text-foreground">
             <ArrowLeft className="h-4 w-4" />
           </Link>
-          <GitBranch className="h-4 w-4 text-blue-400" />
-          <span className="text-sm font-medium text-zinc-200">Branches</span>
-          <span className="text-zinc-700">/</span>
-          <span className="text-sm text-zinc-400 truncate">{project.name}</span>
+          <GitBranch className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          <span className="text-sm font-medium text-foreground">Branches</span>
+          <span className="text-border">/</span>
+          <span className="text-sm text-muted-foreground truncate">{project.name}</span>
           <div className="flex-1" />
           {canManage && !creating && (
             <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => setCreating(true)}>
@@ -130,26 +130,26 @@ export function BranchesPage({ project, initialBranches, canManage }: Props) {
 
       <main className="max-w-4xl mx-auto px-6 py-8 space-y-4">
         <div>
-          <h1 className="text-xl font-bold text-zinc-100">Branches</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">
+          <h1 className="text-xl font-bold text-foreground">Branches</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
             {branches.length} branch{branches.length !== 1 ? 'es' : ''} · isolated key sets you can edit and merge
           </p>
         </div>
 
         {/* New branch form */}
         {creating && (
-          <form onSubmit={handleCreate} className="border border-zinc-800 rounded-xl p-4 bg-zinc-900/40 space-y-3">
+          <form onSubmit={handleCreate} className="border border-border rounded-xl p-4 bg-card/40 space-y-3">
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="flex-1 space-y-1">
-                <label className="text-[11px] uppercase tracking-wider text-zinc-500">Name</label>
-                <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="feature/checkout-copy" autoFocus className="h-8 text-sm bg-zinc-800 border-zinc-700" />
+                <label className="text-[11px] uppercase tracking-wider text-muted-foreground">Name</label>
+                <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="feature/checkout-copy" autoFocus className="h-8 text-sm bg-muted border-border" />
               </div>
               <div className="space-y-1">
-                <label className="text-[11px] uppercase tracking-wider text-zinc-500">Fork from</label>
+                <label className="text-[11px] uppercase tracking-wider text-muted-foreground">Fork from</label>
                 <select
                   value={sourceId}
                   onChange={(e) => setSourceId(e.target.value)}
-                  className="h-8 text-sm bg-zinc-800 border border-zinc-700 rounded-md px-2 text-zinc-200 w-full sm:w-48"
+                  className="h-8 text-sm bg-muted border border-border rounded-md px-2 text-foreground w-full sm:w-48"
                 >
                   {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                 </select>
@@ -167,9 +167,9 @@ export function BranchesPage({ project, initialBranches, canManage }: Props) {
         {/* Branch list */}
         <div className="space-y-2.5">
           {branches.map((b) => (
-            <div key={b.id} className="border border-zinc-800 rounded-xl p-4 bg-zinc-900/30 hover:bg-zinc-900/60 transition-colors">
+            <div key={b.id} className="border border-border rounded-xl p-4 bg-card/30 hover:bg-card/60 transition-colors">
               <div className="flex items-start gap-3">
-                <GitBranch className={cn('h-4 w-4 mt-0.5 flex-shrink-0', b.is_default ? 'text-blue-400' : 'text-zinc-500')} />
+                <GitBranch className={cn('h-4 w-4 mt-0.5 flex-shrink-0', b.is_default ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground')} />
 
                 <div className="flex-1 min-w-0">
                   {/* Name + badges */}
@@ -181,23 +181,23 @@ export function BranchesPage({ project, initialBranches, canManage }: Props) {
                         onKeyDown={(e) => { if (e.key === 'Enter') void handleRename(b); if (e.key === 'Escape') setRenamingId(null) }}
                         onBlur={() => void handleRename(b)}
                         autoFocus
-                        className="text-sm font-medium bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-zinc-100 font-mono"
+                        className="text-sm font-medium bg-muted border border-border rounded px-1.5 py-0.5 text-foreground font-mono"
                       />
                     ) : (
-                      <span className="text-sm font-medium text-zinc-100 font-mono truncate">{b.name}</span>
+                      <span className="text-sm font-medium text-foreground font-mono truncate">{b.name}</span>
                     )}
                     {b.is_default && (
-                      <span className="text-[9px] uppercase tracking-wide text-blue-300 bg-blue-500/15 border border-blue-500/30 rounded px-1.5 py-0.5">default</span>
+                      <span className="text-[9px] uppercase tracking-wide text-blue-700 dark:text-blue-300 bg-blue-500/15 border border-blue-500/30 rounded px-1.5 py-0.5">default</span>
                     )}
                     {b.is_locked && (
-                      <span className="text-[9px] uppercase tracking-wide text-zinc-400 border border-zinc-700 rounded px-1.5 py-0.5 flex items-center gap-1"><Lock className="h-2.5 w-2.5" />locked</span>
+                      <span className="text-[9px] uppercase tracking-wide text-muted-foreground border border-border rounded px-1.5 py-0.5 flex items-center gap-1"><Lock className="h-2.5 w-2.5" />locked</span>
                     )}
                   </div>
 
                   {/* Meta */}
-                  <div className="flex items-center gap-3 mt-1 text-[11px] text-zinc-500 flex-wrap">
+                  <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground flex-wrap">
                     {b.parent_branch_id && nameById[b.parent_branch_id] && (
-                      <span>forked from <span className="text-zinc-400 font-mono">{nameById[b.parent_branch_id]}</span></span>
+                      <span>forked from <span className="text-muted-foreground font-mono">{nameById[b.parent_branch_id]}</span></span>
                     )}
                     <span>{formatDate(b.created_at)}</span>
                     <span>{b.keyCount} keys · {b.localeCount} locales</span>
@@ -205,38 +205,38 @@ export function BranchesPage({ project, initialBranches, canManage }: Props) {
 
                   {/* Progress */}
                   <div className="flex items-center gap-2 mt-2 max-w-xs">
-                    <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                    <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                       <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${b.approvedPercent}%` }} />
                     </div>
-                    <span className="text-[10px] text-zinc-500 tabular-nums w-8 text-right">{b.approvedPercent}%</span>
+                    <span className="text-[10px] text-muted-foreground tabular-nums w-8 text-right">{b.approvedPercent}%</span>
                   </div>
                 </div>
 
                 {/* Actions */}
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <Link href={`/${project.id}/editor?branch=${b.id}`}>
-                    <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-zinc-400 hover:text-zinc-100" title="Open in editor">
+                    <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground" title="Open in editor">
                       <ExternalLink className="h-3.5 w-3.5" /> Open
                     </Button>
                   </Link>
                   {canManage && !b.is_default && (
                     <>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-blue-400" title={`Merge into ${defaultBranch?.name ?? 'main'}`} onClick={() => setMergeSource(b)}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-blue-600 dark:text-blue-400" title={`Merge into ${defaultBranch?.name ?? 'main'}`} onClick={() => setMergeSource(b)}>
                         <GitMerge className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-amber-400" title="Set as default" onClick={() => void handleSetDefault(b)} disabled={busy}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-amber-700 dark:text-amber-400" title="Set as default" onClick={() => void handleSetDefault(b)} disabled={busy}>
                         <Star className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" title="Rename" onClick={() => { setRenamingId(b.id); setRenameValue(b.name) }} disabled={busy}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" title="Rename" onClick={() => { setRenamingId(b.id); setRenameValue(b.name) }} disabled={busy}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-red-400" title="Delete" onClick={() => void handleDelete(b)} disabled={busy}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" title="Delete" onClick={() => void handleDelete(b)} disabled={busy}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </>
                   )}
                   {b.is_default && (
-                    <span className="text-[10px] text-zinc-600 flex items-center gap-1 px-2"><Check className="h-3 w-3" />main</span>
+                    <span className="text-[10px] text-muted-foreground flex items-center gap-1 px-2"><Check className="h-3 w-3" />main</span>
                   )}
                 </div>
               </div>

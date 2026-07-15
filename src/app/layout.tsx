@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import localFont from 'next/font/local'
-import { Toaster } from 'sonner'
+import { ThemeProvider } from '@/components/theme/ThemeProvider'
+import { ThemeToaster } from '@/components/theme/ThemeToaster'
+import { themeInitScript } from '@/lib/theme'
 import './globals.css'
 
 const geistSans = localFont({
@@ -25,10 +27,13 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        {children}
-        <Toaster theme="dark" position="bottom-right" />
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript() }} />
+        <ThemeProvider>
+          {children}
+          <ThemeToaster />
+        </ThemeProvider>
       </body>
     </html>
   )

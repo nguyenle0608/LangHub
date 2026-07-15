@@ -105,43 +105,43 @@ export function ProjectSettingsClient({ project }: { project: ProjectWithStats }
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+    <div className="min-h-screen bg-background text-foreground">
       {/* Header */}
-      <header className="border-b border-zinc-800 bg-zinc-900/50 sticky top-0 z-10">
+      <header className="border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-6 h-14 flex items-center gap-3">
-          <Link href="/projects" className="text-zinc-500 hover:text-zinc-300 transition-colors text-sm">
+          <Link href="/projects" className="text-muted-foreground hover:text-foreground transition-colors text-sm">
             Projects
           </Link>
-          <span className="text-zinc-700">/</span>
-          <Link href={`/${project.id}/editor`} className="text-zinc-500 hover:text-zinc-300 transition-colors text-sm">
+          <span className="text-border">/</span>
+          <Link href={`/${project.id}/editor`} className="text-muted-foreground hover:text-foreground transition-colors text-sm">
             {project.name}
           </Link>
-          <span className="text-zinc-700">/</span>
-          <span className="text-zinc-300 text-sm">Settings</span>
+          <span className="text-border">/</span>
+          <span className="text-foreground text-sm">Settings</span>
         </div>
       </header>
 
       <main className="max-w-3xl mx-auto px-6 py-10 space-y-10">
         {/* General */}
         <section>
-          <h2 className="text-lg font-semibold text-zinc-100 mb-4">General</h2>
-          <form onSubmit={handleSave} className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4">
+          <h2 className="text-lg font-semibold text-foreground mb-4">General</h2>
+          <form onSubmit={handleSave} className="bg-card border border-border rounded-xl p-6 space-y-4">
             <div className="space-y-1.5">
-              <Label className="text-zinc-300">Project name</Label>
+              <Label className="text-foreground">Project name</Label>
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                className="bg-zinc-800 border-zinc-700 text-zinc-100 focus-visible:ring-blue-600"
+                className="bg-muted border-border text-foreground focus-visible:ring-blue-600"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-zinc-300">Description</Label>
+              <Label className="text-foreground">Description</Label>
               <Input
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Optional description"
-                className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-blue-600"
+                className="bg-muted border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-blue-600"
               />
             </div>
             <div className="flex items-center gap-3">
@@ -159,27 +159,27 @@ export function ProjectSettingsClient({ project }: { project: ProjectWithStats }
 
         {/* Locales */}
         <section>
-          <h2 className="text-lg font-semibold text-zinc-100 mb-1">Languages</h2>
-          <p className="text-zinc-500 text-sm mb-4">Add or remove languages for this project.</p>
+          <h2 className="text-lg font-semibold text-foreground mb-1">Languages</h2>
+          <p className="text-muted-foreground text-sm mb-4">Add or remove languages for this project.</p>
 
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-5">
+          <div className="bg-card border border-border rounded-xl p-6 space-y-5">
             {/* Current locales */}
             <div className="space-y-1">
               {project.locales.map((locale) => {
                 const flag = flagMap[locale.code] ?? '🌐'
                 const percent = locale.percent
                 const percentColor =
-                  percent >= 80 ? 'text-green-400' : percent >= 50 ? 'text-yellow-400' : 'text-zinc-500'
+                  percent >= 80 ? 'text-green-400' : percent >= 50 ? 'text-yellow-400' : 'text-muted-foreground'
                 return (
-                  <div key={locale.id} className="flex items-center justify-between py-2.5 border-b border-zinc-800 last:border-0">
+                  <div key={locale.id} className="flex items-center justify-between py-2.5 border-b border-border last:border-0">
                     <div className="flex items-center gap-3">
                       <span className="text-xl">{flag}</span>
                       <div>
-                        <span className="text-zinc-200 text-sm font-medium">{locale.name}</span>
-                        <span className="text-zinc-600 text-xs ml-2 font-mono">{locale.code}</span>
+                        <span className="text-foreground text-sm font-medium">{locale.name}</span>
+                        <span className="text-muted-foreground text-xs ml-2 font-mono">{locale.code}</span>
                       </div>
                       {locale.is_base && (
-                        <Badge variant="secondary" className="text-xs bg-zinc-800 text-zinc-400 border-zinc-700">
+                        <Badge variant="secondary" className="text-xs bg-muted text-muted-foreground border-border">
                           Base
                         </Badge>
                       )}
@@ -190,7 +190,7 @@ export function ProjectSettingsClient({ project }: { project: ProjectWithStats }
                         <button
                           onClick={() => handleRemoveLocale(locale.id, locale.is_base)}
                           disabled={removingLocaleId === locale.id}
-                          className="text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50"
+                          className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
                           title="Remove locale"
                         >
                           {removingLocaleId === locale.id ? (
@@ -210,7 +210,7 @@ export function ProjectSettingsClient({ project }: { project: ProjectWithStats }
 
             {/* Add locale */}
             <div className="space-y-2 pt-1">
-              <p className="text-xs text-zinc-500 uppercase tracking-wider">Add language</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider">Add language</p>
               <div className="flex gap-2">
                 <div className="flex-1">
                   <LocaleCombobox
@@ -237,7 +237,7 @@ export function ProjectSettingsClient({ project }: { project: ProjectWithStats }
                 <p className="text-xs text-amber-400">This language is already added.</p>
               )}
               {localeError && (
-                <p className="text-sm text-red-400">{localeError}</p>
+                <p className="text-sm text-destructive">{localeError}</p>
               )}
             </div>
           </div>
@@ -246,23 +246,23 @@ export function ProjectSettingsClient({ project }: { project: ProjectWithStats }
         {/* Danger zone */}
         <section>
           <h2 className="text-lg font-semibold text-red-500 mb-4">Danger Zone</h2>
-          <div className="bg-zinc-900 border border-red-900/50 rounded-xl p-6 space-y-4">
+          <div className="bg-card border border-destructive/30 rounded-xl p-6 space-y-4">
             <div>
-              <p className="text-zinc-300 text-sm font-medium">Delete project</p>
-              <p className="text-zinc-500 text-sm mt-1">
-                This will permanently delete <span className="text-zinc-300">{project.name}</span> and all its translations. This cannot be undone.
+              <p className="text-foreground text-sm font-medium">Delete project</p>
+              <p className="text-muted-foreground text-sm mt-1">
+                This will permanently delete <span className="text-foreground">{project.name}</span> and all its translations. This cannot be undone.
               </p>
             </div>
             <div className="space-y-2">
-              <Label className="text-zinc-400 text-sm">
-                Type <span className="text-zinc-200 font-mono">{project.name}</span> to confirm
+              <Label className="text-muted-foreground text-sm">
+                Type <span className="text-foreground font-mono">{project.name}</span> to confirm
               </Label>
               <div className="flex gap-2">
                 <Input
                   value={deleteConfirm}
                   onChange={(e) => setDeleteConfirm(e.target.value)}
                   placeholder={project.name}
-                  className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-600 focus-visible:ring-red-600 max-w-xs"
+                  className="bg-muted border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-red-600 max-w-xs"
                 />
                 <Button
                   onClick={handleDelete}
