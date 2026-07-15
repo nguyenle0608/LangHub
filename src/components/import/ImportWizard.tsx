@@ -6,10 +6,6 @@ import { ArrowLeft, Upload, Check, ChevronRight, FileText, Info, X, Loader2, Che
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { parseJSON } from '@/lib/parsers/json'
-import { parseARB } from '@/lib/parsers/arb'
-import { parseCSV } from '@/lib/parsers/csv'
-import { parseYAML } from '@/lib/parsers/yaml'
 import {
   deriveNamespaceFromFilename,
   prefixKeysWithNamespace,
@@ -226,10 +222,17 @@ export function ImportWizard({ project, branchId }: Props) {
 
       const content = await file.text()
       let keys: Record<string, string> = {}
-      if (format === 'json') keys = parseJSON(content).keys
-      else if (format === 'arb') keys = parseARB(content).keys
-      else if (format === 'yaml') keys = parseYAML(content).keys
-      else if (format === 'csv') {
+      if (format === 'json') {
+        const { parseJSON } = await import('@/lib/parsers/json')
+        keys = parseJSON(content).keys
+      } else if (format === 'arb') {
+        const { parseARB } = await import('@/lib/parsers/arb')
+        keys = parseARB(content).keys
+      } else if (format === 'yaml') {
+        const { parseYAML } = await import('@/lib/parsers/yaml')
+        keys = parseYAML(content).keys
+      } else if (format === 'csv') {
+        const [{ parseCSV }] = await Promise.all([import('@/lib/parsers/csv')])
         const locale = project.locales.find((l) => l.id === entry.localeId)
         const csvResults = parseCSV(content)
         const matching = csvResults.find((r) => r.locale === locale?.code) ?? csvResults[0]

@@ -1,6 +1,5 @@
-import { redirect, notFound } from 'next/navigation'
-import { getUser } from '@/lib/supabase/session'
-import { getProject } from '@/lib/supabase/queries/projects'
+import { notFound } from 'next/navigation'
+import { getProjectLite } from '@/lib/supabase/queries/projects'
 import { ImportWizard } from '@/components/import/ImportWizard'
 
 export default async function ImportPage({
@@ -10,13 +9,16 @@ export default async function ImportPage({
   params: Promise<{ projectId: string }>
   searchParams: Promise<{ branch?: string }>
 }) {
+  const startedAt = Date.now()
   const { projectId } = await params
   const { branch } = await searchParams
-  const user = await getUser()
-  if (!user) redirect('/login')
 
-  const project = await getProject(projectId)
+  const project = await getProjectLite(projectId)
   if (!project) notFound()
+
+  if (process.env.NODE_ENV === 'development') {
+    console.info(`[perf] /${projectId}/import locales=${project.locales.length} total=${Date.now() - startedAt}ms`)
+  }
 
   return <ImportWizard project={project} branchId={branch} />
 }
