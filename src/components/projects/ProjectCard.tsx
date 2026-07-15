@@ -12,7 +12,7 @@ function ProgressBar({ percent }: { percent: number }) {
   const color =
     percent >= 80 ? 'bg-green-500' : percent >= 50 ? 'bg-yellow-500' : 'bg-red-500'
   return (
-    <div className="w-full bg-zinc-800 rounded-full h-1.5">
+    <div className="w-full bg-muted rounded-full h-1.5">
       <div className={`h-1.5 rounded-full transition-all ${color}`} style={{ width: `${percent}%` }} />
     </div>
   )
@@ -57,15 +57,15 @@ export function ProjectCard({ project, canDelete }: { project: ProjectWithStats;
   }
 
   return (
-    <div className="group relative bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-600 hover:bg-zinc-800/50 transition-all">
+    <div className="group relative bg-card border border-border rounded-xl p-5 hover:border-foreground/20 hover:bg-accent/40 transition-all">
       {/* Main clickable area */}
       <Link href={`/${project.id}/editor`} className="block">
         <div className="mb-3 pr-8">
-          <h3 className="font-semibold text-zinc-100 group-hover:text-white transition-colors truncate">
+          <h3 className="font-semibold text-foreground group-hover:text-foreground transition-colors truncate">
             {project.name}
           </h3>
           {project.description && (
-            <p className="text-zinc-500 text-sm mt-0.5 line-clamp-1">{project.description}</p>
+            <p className="text-muted-foreground text-sm mt-0.5 line-clamp-1">{project.description}</p>
           )}
         </div>
 
@@ -79,10 +79,10 @@ export function ProjectCard({ project, canDelete }: { project: ProjectWithStats;
               </span>
             ))}
             {project.locales.length > 6 && (
-              <span className="text-xs text-zinc-500 self-center">+{project.locales.length - 6}</span>
+              <span className="text-xs text-muted-foreground self-center">+{project.locales.length - 6}</span>
             )}
           </div>
-          <div className="ml-auto flex items-center gap-3 text-xs text-zinc-500">
+          <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
             <span>{project.key_count} keys</span>
             <span>{project.locale_count} locales</span>
             <span className={`font-semibold tabular-nums ${percentColor}`}>{project.overall_percent}%</span>
@@ -94,18 +94,18 @@ export function ProjectCard({ project, canDelete }: { project: ProjectWithStats;
       <div ref={menuRef} className="absolute top-3 right-3">
         <button
           onClick={(e) => { e.preventDefault(); setMenuOpen((v) => !v); setConfirmDelete(false) }}
-          className="w-7 h-7 flex items-center justify-center rounded text-zinc-600 hover:text-zinc-300 hover:bg-zinc-700 transition-colors opacity-0 group-hover:opacity-100"
+          className="w-7 h-7 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors opacity-0 group-hover:opacity-100"
         >
           <MoreHorizontal className="h-4 w-4" />
         </button>
 
         {menuOpen && (
-          <div className="absolute right-0 top-8 z-20 w-44 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl py-1 text-sm">
+          <div className="absolute right-0 top-8 z-20 w-44 bg-popover border border-border rounded-lg shadow-xl py-1 text-sm">
             {!confirmDelete ? (
               <>
                 <Link
                   href={`/${project.id}/editor`}
-                  className="flex items-center gap-2.5 px-3 py-2 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
+                  className="flex items-center gap-2.5 px-3 py-2 text-popover-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
                   onClick={() => setMenuOpen(false)}
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
@@ -115,13 +115,13 @@ export function ProjectCard({ project, canDelete }: { project: ProjectWithStats;
                   <>
                     <Link
                       href={`/${project.id}/settings`}
-                      className="flex items-center gap-2.5 px-3 py-2 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
+                      className="flex items-center gap-2.5 px-3 py-2 text-popover-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
                       onClick={() => setMenuOpen(false)}
                     >
                       <Settings className="h-3.5 w-3.5" />
                       Settings
                     </Link>
-                    <div className="border-t border-zinc-800 my-1" />
+                    <div className="border-t border-border my-1" />
                     <button
                       onClick={() => setConfirmDelete(true)}
                       className="w-full flex items-center gap-2.5 px-3 py-2 text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors"
@@ -134,7 +134,7 @@ export function ProjectCard({ project, canDelete }: { project: ProjectWithStats;
               </>
             ) : (
               <div className="px-3 py-2 space-y-2">
-                <p className="text-xs text-zinc-400">Delete <span className="text-zinc-200 font-medium">{project.name}</span>? This cannot be undone.</p>
+                <p className="text-xs text-muted-foreground">Delete <span className="text-foreground font-medium">{project.name}</span>? This cannot be undone.</p>
                 <div className="flex gap-1.5">
                   <button
                     onClick={handleDelete}
@@ -145,7 +145,7 @@ export function ProjectCard({ project, canDelete }: { project: ProjectWithStats;
                   </button>
                   <button
                     onClick={() => setConfirmDelete(false)}
-                    className="flex-1 text-xs border border-zinc-700 text-zinc-400 hover:text-zinc-200 rounded px-2 py-1 transition-colors"
+                    className="flex-1 text-xs border border-border text-muted-foreground hover:text-foreground rounded px-2 py-1 transition-colors"
                   >
                     Cancel
                   </button>

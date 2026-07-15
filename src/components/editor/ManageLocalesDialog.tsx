@@ -84,14 +84,14 @@ export function ManageLocalesDialog({ project, onLocalesChanged }: Props) {
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-zinc-400 hover:text-zinc-100">
+        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground">
           <Languages className="h-3.5 w-3.5" />
           <span className="hidden md:inline">Languages</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="bg-zinc-900 border-zinc-800 text-zinc-100 sm:max-w-sm">
+      <DialogContent className="bg-card border-border text-foreground sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle className="text-zinc-100 text-base">Manage Languages</DialogTitle>
+          <DialogTitle className="text-foreground text-base">Manage Languages</DialogTitle>
         </DialogHeader>
 
         {/* Existing locales */}
@@ -99,23 +99,23 @@ export function ManageLocalesDialog({ project, onLocalesChanged }: Props) {
           {locales.map((locale) => (
             <div
               key={locale.id}
-              className="flex items-center justify-between py-2 px-1 rounded hover:bg-zinc-800/50"
+              className="flex items-center justify-between py-2 px-1 rounded hover:bg-muted/50"
             >
               <div className="flex items-center gap-2.5">
                 <span className="text-base w-6 text-center">{localeFlag(locale.code)}</span>
                 <div>
-                  <span className="text-sm text-zinc-200">{locale.name}</span>
-                  <span className="text-[11px] text-zinc-500 font-mono ml-1.5">{locale.code}</span>
+                  <span className="text-sm text-foreground">{locale.name}</span>
+                  <span className="text-[11px] text-muted-foreground font-mono ml-1.5">{locale.code}</span>
                 </div>
                 {locale.is_base && (
-                  <span className="text-[10px] text-zinc-500 border border-zinc-700 rounded px-1">base</span>
+                  <span className="text-[10px] text-muted-foreground border border-border rounded px-1">base</span>
                 )}
               </div>
               {!locale.is_base && (
                 <button
                   onClick={() => handleRemove(locale.id, locale.name)}
                   disabled={removing === locale.id}
-                  className="text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-40"
+                  className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-40"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -125,8 +125,8 @@ export function ManageLocalesDialog({ project, onLocalesChanged }: Props) {
         </div>
 
         {/* Add language */}
-        <div className="border-t border-zinc-800 pt-3 space-y-2">
-          <p className="text-xs text-zinc-500">Add language</p>
+        <div className="border-t border-border pt-3 space-y-2">
+          <p className="text-xs text-muted-foreground">Add language</p>
           <div className="flex gap-2">
             <div className="flex-1">
               <LocaleCombobox

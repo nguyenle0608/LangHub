@@ -58,10 +58,10 @@ export function BulkActionBar({ selectedCount, projectId, canReview, canDelete, 
   }
 
   return (
-    <div className="h-12 border-t border-zinc-800 bg-zinc-900/95 backdrop-blur flex items-center px-4 gap-3">
+    <div className="h-12 border-t border-border bg-card/95 backdrop-blur flex items-center px-4 gap-3">
       <button
         onClick={() => { onClear(); setConfirmDelete(false) }}
-        className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-100 transition-colors"
+        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         <X className="h-4 w-4" />
         {selectedCount} selected
@@ -79,7 +79,7 @@ export function BulkActionBar({ selectedCount, projectId, canReview, canDelete, 
         <LoadingButton
           size="sm"
           variant="outline"
-          className="gap-1.5 h-8 text-xs border-zinc-700 text-blue-400 hover:text-blue-300 hover:bg-blue-950/40"
+          className="gap-1.5 h-8 text-xs border-border text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:text-blue-300 hover:bg-blue-100/70 dark:hover:bg-blue-950/40"
           onClick={onReview}
           disabled={confirmDelete}
         >
@@ -92,7 +92,7 @@ export function BulkActionBar({ selectedCount, projectId, canReview, canDelete, 
         <LoadingButton
           size="sm"
           variant="outline"
-          className="gap-1.5 h-8 text-xs border-zinc-700"
+          className="gap-1.5 h-8 text-xs border-border"
           onClick={onApprove}
           disabled={confirmDelete}
         >
@@ -106,7 +106,7 @@ export function BulkActionBar({ selectedCount, projectId, canReview, canDelete, 
           <Button
             size="sm"
             variant="outline"
-            className="h-8 text-xs border-zinc-700"
+            className="h-8 text-xs border-border"
             onClick={() => setConfirmDelete(false)}
             disabled={snapshotting}
           >
@@ -126,7 +126,7 @@ export function BulkActionBar({ selectedCount, projectId, canReview, canDelete, 
         <Button
           size="sm"
           variant="outline"
-          className="gap-1.5 h-8 text-xs border-red-900 text-red-400 hover:bg-red-950 hover:text-red-300"
+          className="gap-1.5 h-8 text-xs border-red-300 dark:border-red-900 text-destructive hover:bg-red-100 dark:hover:bg-red-950 hover:text-red-700 dark:text-red-300"
           onClick={handleDelete}
         >
           <Trash2 className="h-3.5 w-3.5" />

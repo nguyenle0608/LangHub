@@ -35,8 +35,8 @@ interface Props {
 
 function CellText({ value }: { value: string | null | undefined }) {
   return value
-    ? <span className="text-zinc-200 whitespace-pre-wrap break-words">{value}</span>
-    : <span className="text-zinc-600 italic">empty</span>
+    ? <span className="text-foreground whitespace-pre-wrap break-words">{value}</span>
+    : <span className="text-muted-foreground italic">empty</span>
 }
 
 export function MergeDialog({ projectId, sourceBranch, targetBranch, onClose, onMerged }: Props) {
@@ -110,32 +110,32 @@ export function MergeDialog({ projectId, sourceBranch, targetBranch, onClose, on
 
   return (
     <Dialog open onOpenChange={(v) => { if (!v) onClose() }}>
-      <DialogContent className="max-w-3xl p-0 bg-zinc-950 border-zinc-800 flex flex-col max-h-[85vh]">
-        <DialogHeader className="px-5 py-4 border-b border-zinc-800 flex-shrink-0">
-          <DialogTitle className="flex items-center gap-2 text-sm text-zinc-100">
-            <GitMerge className="h-4 w-4 text-blue-400" />
-            Merge <span className="font-mono text-blue-300">{sourceBranch.name}</span>
-            <span className="text-zinc-500">→</span>
-            <span className="font-mono text-zinc-200">{targetBranch.name}</span>
+      <DialogContent className="max-w-3xl p-0 bg-background border-border flex flex-col max-h-[85vh]">
+        <DialogHeader className="px-5 py-4 border-b border-border flex-shrink-0">
+          <DialogTitle className="flex items-center gap-2 text-sm text-foreground">
+            <GitMerge className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            Merge <span className="font-mono text-blue-700 dark:text-blue-300">{sourceBranch.name}</span>
+            <span className="text-muted-foreground">→</span>
+            <span className="font-mono text-foreground">{targetBranch.name}</span>
           </DialogTitle>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
           {loading ? (
-            <div className="flex items-center justify-center py-16 text-zinc-500">
+            <div className="flex items-center justify-center py-16 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin mr-2" /> Computing merge…
             </div>
           ) : nothingToDo ? (
             <div className="flex flex-col items-center py-16 text-center">
               <Check className="h-8 w-8 text-emerald-500 mb-3" />
-              <p className="text-sm text-zinc-300">Already up to date</p>
-              <p className="text-xs text-zinc-600 mt-1">No changes to merge from {sourceBranch.name}.</p>
+              <p className="text-sm text-foreground">Already up to date</p>
+              <p className="text-xs text-muted-foreground mt-1">No changes to merge from {sourceBranch.name}.</p>
             </div>
           ) : (
             <>
               <div className="flex items-center gap-4 text-xs">
-                <span className="text-emerald-400">{auto.length} auto-merge{auto.length !== 1 ? 's' : ''}</span>
-                <span className={cn(conflicts.length > 0 ? 'text-amber-400' : 'text-zinc-600')}>
+                <span className="text-emerald-700 dark:text-emerald-400">{auto.length} auto-merge{auto.length !== 1 ? 's' : ''}</span>
+                <span className={cn(conflicts.length > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground')}>
                   {conflicts.length} conflict{conflicts.length !== 1 ? 's' : ''}
                 </span>
               </div>
@@ -143,7 +143,7 @@ export function MergeDialog({ projectId, sourceBranch, targetBranch, onClose, on
               {/* Conflicts — pick a side */}
               {conflicts.length > 0 && (
                 <div className="space-y-3">
-                  <div className="flex items-center gap-1.5 text-[11px] text-amber-400/80">
+                  <div className="flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400/80">
                     <AlertTriangle className="h-3.5 w-3.5" />
                     Pick which side wins for each conflicting cell.
                   </div>
@@ -151,12 +151,12 @@ export function MergeDialog({ projectId, sourceBranch, targetBranch, onClose, on
                     const key = ck(c)
                     const choice = choices.get(key) ?? 'theirs'
                     return (
-                      <div key={key} className="border border-zinc-800 rounded-lg overflow-hidden">
-                        <div className="px-3 py-1.5 bg-zinc-900/60 border-b border-zinc-800 flex items-center gap-2">
-                          <span className="font-mono text-[11px] text-zinc-300 truncate">{c.keyName}</span>
-                          <span className="text-[10px] text-zinc-600 uppercase">{c.localeCode}</span>
+                      <div key={key} className="border border-border rounded-lg overflow-hidden">
+                        <div className="px-3 py-1.5 bg-card/60 border-b border-border flex items-center gap-2">
+                          <span className="font-mono text-[11px] text-foreground truncate">{c.keyName}</span>
+                          <span className="text-[10px] text-muted-foreground uppercase">{c.localeCode}</span>
                         </div>
-                        <div className="grid grid-cols-2 divide-x divide-zinc-800">
+                        <div className="grid grid-cols-2 divide-x divide-border">
                           {(['ours', 'theirs'] as Side[]).map((side) => {
                             const cell = side === 'ours' ? c.ours : c.theirs
                             const label = side === 'ours' ? targetBranch.name : sourceBranch.name
@@ -165,13 +165,13 @@ export function MergeDialog({ projectId, sourceBranch, targetBranch, onClose, on
                               <button
                                 key={side}
                                 onClick={() => setChoices((prev) => new Map(prev).set(key, side))}
-                                className={cn('text-left p-3 transition-colors text-xs', selected ? 'bg-blue-500/10' : 'hover:bg-zinc-900/50')}
+                                className={cn('text-left p-3 transition-colors text-xs', selected ? 'bg-blue-500/10' : 'hover:bg-card/50')}
                               >
                                 <div className="flex items-center gap-1.5 mb-1.5">
-                                  <span className={cn('h-3 w-3 rounded-full border flex items-center justify-center', selected ? 'border-blue-400 bg-blue-400' : 'border-zinc-600')}>
-                                    {selected && <Check className="h-2 w-2 text-zinc-950" />}
+                                  <span className={cn('h-3 w-3 rounded-full border flex items-center justify-center', selected ? 'border-blue-400 bg-blue-400' : 'border-border')}>
+                                    {selected && <Check className="h-2 w-2 text-background" />}
                                   </span>
-                                  <span className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</span>
+                                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</span>
                                 </div>
                                 <p className="line-clamp-4"><CellText value={cell?.value} /></p>
                               </button>
@@ -187,19 +187,19 @@ export function MergeDialog({ projectId, sourceBranch, targetBranch, onClose, on
               {/* Auto-merge overview — what will change in target with no conflict */}
               {auto.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-[11px] uppercase tracking-wider text-zinc-500">
+                  <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
                     Changes applied to {targetBranch.name}
                   </p>
-                  <div className="border border-zinc-800 rounded-lg divide-y divide-zinc-800/60 overflow-hidden">
+                  <div className="border border-border rounded-lg divide-y divide-border/60 overflow-hidden">
                     {auto.map((a) => (
                       <div key={ck(a)} className="px-3 py-2 text-xs">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="font-mono text-[11px] text-zinc-400 truncate">{a.keyName}</span>
-                          <span className="text-[10px] text-zinc-600 uppercase">{a.localeCode}</span>
+                          <span className="font-mono text-[11px] text-muted-foreground truncate">{a.keyName}</span>
+                          <span className="text-[10px] text-muted-foreground uppercase">{a.localeCode}</span>
                         </div>
                         <div className="flex items-start gap-2 text-[11px]">
-                          <span className="flex-1 min-w-0 line-clamp-2 text-zinc-500 line-through decoration-zinc-700"><CellText value={a.ours?.value} /></span>
-                          <ArrowRight className="h-3 w-3 text-zinc-600 flex-shrink-0 mt-0.5" />
+                          <span className="flex-1 min-w-0 line-clamp-2 text-muted-foreground line-through decoration-zinc-700"><CellText value={a.ours?.value} /></span>
+                          <ArrowRight className="h-3 w-3 text-muted-foreground flex-shrink-0 mt-0.5" />
                           <span className="flex-1 min-w-0 line-clamp-2"><CellText value={a.value} /></span>
                         </div>
                       </div>
@@ -211,16 +211,16 @@ export function MergeDialog({ projectId, sourceBranch, targetBranch, onClose, on
           )}
         </div>
 
-        <div className="px-5 py-3 border-t border-zinc-800 flex items-center justify-between gap-2 flex-shrink-0">
+        <div className="px-5 py-3 border-t border-border flex items-center justify-between gap-2 flex-shrink-0">
           {!sourceBranch.is_default ? (
-            <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer select-none">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={deleteSource}
                 onChange={(e) => setDeleteSource(e.target.checked)}
-                className="h-3.5 w-3.5 rounded border-zinc-600 bg-zinc-800 accent-blue-500"
+                className="h-3.5 w-3.5 rounded border-border bg-muted accent-blue-500"
               />
-              Delete <span className="font-mono text-zinc-300">{sourceBranch.name}</span> after merge
+              Delete <span className="font-mono text-foreground">{sourceBranch.name}</span> after merge
             </label>
           ) : <span />}
           <div className="flex gap-2">

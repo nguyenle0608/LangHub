@@ -76,14 +76,14 @@ export function TranslationCell({
               onCancel()
             }
           }}
-          className="w-full h-full resize-none overflow-y-auto select-text bg-zinc-800 text-zinc-100 text-sm px-3 py-2 focus:outline-none leading-relaxed"
+          className="w-full h-full resize-none overflow-y-auto select-text bg-muted text-foreground text-sm px-3 py-2 focus:outline-none leading-relaxed"
           placeholder="Enter translation…"
         />
         {charLimit !== null && (
           <div
             className={cn(
               'absolute bottom-1 right-2 text-[10px] pointer-events-none',
-              overLimit ? 'text-red-400' : 'text-zinc-500'
+              overLimit ? 'text-destructive' : 'text-muted-foreground'
             )}
           >
             {editValue.length}/{charLimit}
@@ -100,14 +100,14 @@ export function TranslationCell({
     <div
       className={cn(
         'relative h-full w-full px-3 py-2 flex flex-col justify-start text-sm transition-colors',
-        isReadonly ? 'cursor-default bg-zinc-900/30' : 'cursor-default hover:bg-zinc-800/60',
-        isEmpty ? 'text-zinc-600 italic' : 'text-zinc-200',
+        isReadonly ? 'cursor-default bg-card/30' : 'cursor-default hover:bg-muted/60',
+        isEmpty ? 'text-muted-foreground italic' : 'text-foreground',
         presenceColor && 'ring-inset ring-1'
       )}
       style={presenceColor ? { '--tw-ring-color': presenceColor } as React.CSSProperties : undefined}
     >
       {isSaving ? (
-        <span className="text-zinc-500 not-italic">Saving…</span>
+        <span className="text-muted-foreground not-italic">Saving…</span>
       ) : (
         <span className="whitespace-pre-wrap break-words leading-relaxed line-clamp-3">{isEmpty ? '—' : value}</span>
       )}
@@ -115,7 +115,7 @@ export function TranslationCell({
         <span className={cn('absolute bottom-1.5 right-1.5 w-1.5 h-1.5 rounded-full', dotColor)} />
       )}
       {isReadonly && (
-        <span className="absolute top-1.5 right-1.5 text-zinc-700">
+        <span className="absolute top-1.5 right-1.5 text-border">
           <Lock className="h-2.5 w-2.5" />
         </span>
       )}

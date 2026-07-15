@@ -55,16 +55,16 @@ export function CreateOrgDialog({ open, onOpenChange, onCreated }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) resetForm() }}>
-      <DialogContent className="bg-zinc-900 border-zinc-800 text-zinc-100 sm:max-w-sm">
+      <DialogContent className="bg-card border-border text-card-foreground sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle className="text-zinc-100">New workspace</DialogTitle>
-          <DialogDescription className="text-zinc-400">
+          <DialogTitle className="text-foreground">New workspace</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
             Create a workspace to group your projects and invite teammates.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
           <div className="space-y-1.5">
-            <Label htmlFor="org-name" className="text-zinc-300">Workspace name</Label>
+            <Label htmlFor="org-name" className="text-foreground">Workspace name</Label>
             <Input
               id="org-name"
               placeholder="e.g. Acme Corp"
@@ -72,12 +72,12 @@ export function CreateOrgDialog({ open, onOpenChange, onCreated }: Props) {
               onChange={(e) => setName(e.target.value)}
               required
               autoFocus
-              className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-blue-600"
+              className="bg-muted border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-blue-600"
             />
           </div>
 
           {error && (
-            <p className="text-sm text-red-400 bg-red-950/50 border border-red-900 rounded-md px-3 py-2">
+            <p className="text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2">
               {error}
             </p>
           )}
@@ -87,7 +87,7 @@ export function CreateOrgDialog({ open, onOpenChange, onCreated }: Props) {
               type="button"
               variant="outline"
               onClick={() => { onOpenChange(false); resetForm() }}
-              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+              className="border-border text-foreground hover:bg-accent hover:text-foreground"
             >
               Cancel
             </Button>

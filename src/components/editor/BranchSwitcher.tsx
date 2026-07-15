@@ -97,17 +97,17 @@ export function BranchSwitcher({
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 text-xs gap-1.5 text-zinc-300 hover:text-zinc-100 border border-zinc-800 hover:border-zinc-700"
+          className="h-7 text-xs gap-1.5 text-foreground hover:text-foreground border border-border hover:border-border"
           title="Switch branch"
         >
           {switching
-            ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400" />
-            : <GitBranch className="h-3.5 w-3.5 text-zinc-400" />}
+            ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600 dark:text-blue-400" />
+            : <GitBranch className="h-3.5 w-3.5 text-muted-foreground" />}
           <span className="font-medium max-w-[140px] truncate">{active?.name ?? 'main'}</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-64 p-1 bg-zinc-900 border-zinc-800" align="start">
-        <p className="text-[10px] uppercase tracking-wider text-zinc-600 px-2 py-1.5">Branches</p>
+      <PopoverContent className="w-64 p-1 bg-card border-border" align="start">
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 py-1.5">Branches</p>
 
         <div className="max-h-64 overflow-y-auto">
           {branches.map((b) => {
@@ -119,20 +119,20 @@ export function BranchSwitcher({
                 className={cn(
                   'group w-full flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer text-xs border-l-2',
                   isActive
-                    ? 'bg-blue-500/15 text-zinc-100 border-blue-500'
-                    : 'text-zinc-300 hover:bg-zinc-800/60 border-transparent'
+                    ? 'bg-blue-500/15 text-foreground border-blue-500'
+                    : 'text-foreground hover:bg-muted/60 border-transparent'
                 )}
               >
-                <GitBranch className={cn('h-3.5 w-3.5 flex-shrink-0', isActive ? 'text-blue-400' : 'text-zinc-500')} />
+                <GitBranch className={cn('h-3.5 w-3.5 flex-shrink-0', isActive ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground')} />
                 <span className="flex-1 truncate font-medium">{b.name}</span>
                 {b.is_default && (
-                  <span className="text-[9px] uppercase tracking-wide text-zinc-500 border border-zinc-700 rounded px-1">main</span>
+                  <span className="text-[9px] uppercase tracking-wide text-muted-foreground border border-border rounded px-1">main</span>
                 )}
-                {isActive && <Check className="h-3 w-3 text-blue-400 flex-shrink-0" />}
+                {isActive && <Check className="h-3 w-3 text-blue-600 dark:text-blue-400 flex-shrink-0" />}
                 {canManage && !isActive && onMerge && !b.is_default && (
                   <button
                     onClick={(e) => { e.stopPropagation(); setOpen(false); onMerge(b.id) }}
-                    className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-blue-400 transition-colors"
+                    className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-blue-600 dark:text-blue-400 transition-colors"
                     title={`Merge "${b.name}" into current`}
                   >
                     <GitMerge className="h-3 w-3" />
@@ -142,7 +142,7 @@ export function BranchSwitcher({
                   <button
                     onClick={(e) => handleDelete(b, e)}
                     disabled={busy}
-                    className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-400 transition-colors"
+                    className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-colors"
                     title="Delete branch"
                   >
                     <Trash2 className="h-3 w-3" />
@@ -155,7 +155,7 @@ export function BranchSwitcher({
 
         {canManage && (
           <>
-            <div className="border-t border-zinc-800 my-1" />
+            <div className="border-t border-border my-1" />
             {creating ? (
               <form onSubmit={handleCreate} className="p-1.5 space-y-1.5">
                 <Input
@@ -163,10 +163,10 @@ export function BranchSwitcher({
                   onChange={(e) => setNewName(e.target.value)}
                   placeholder="branch name"
                   autoFocus
-                  className="h-7 text-xs bg-zinc-800 border-zinc-700"
+                  className="h-7 text-xs bg-muted border-border"
                 />
-                <p className="text-[10px] text-zinc-600 px-0.5">
-                  Forks from <span className="text-zinc-400">{active?.name ?? 'main'}</span>
+                <p className="text-[10px] text-muted-foreground px-0.5">
+                  Forks from <span className="text-muted-foreground">{active?.name ?? 'main'}</span>
                 </p>
                 <div className="flex gap-1.5">
                   <Button type="submit" size="sm" disabled={busy || !newName.trim()} className="h-6 text-xs flex-1">
@@ -180,22 +180,22 @@ export function BranchSwitcher({
             ) : (
               <button
                 onClick={() => setCreating(true)}
-                className="w-full text-left text-xs text-zinc-300 hover:text-zinc-100 px-2 py-1.5 rounded hover:bg-zinc-800/60 flex items-center gap-2"
+                className="w-full text-left text-xs text-foreground hover:text-foreground px-2 py-1.5 rounded hover:bg-muted/60 flex items-center gap-2"
               >
-                <Plus className="h-3.5 w-3.5 text-zinc-500" />
+                <Plus className="h-3.5 w-3.5 text-muted-foreground" />
                 New branch
               </button>
             )}
           </>
         )}
 
-        <div className="border-t border-zinc-800 my-1" />
+        <div className="border-t border-border my-1" />
         <Link
           href={`/${projectId}/branches`}
           onClick={() => setOpen(false)}
-          className="w-full text-left text-xs text-zinc-400 hover:text-zinc-100 px-2 py-1.5 rounded hover:bg-zinc-800/60 flex items-center gap-2"
+          className="w-full text-left text-xs text-muted-foreground hover:text-foreground px-2 py-1.5 rounded hover:bg-muted/60 flex items-center gap-2"
         >
-          <Settings2 className="h-3.5 w-3.5 text-zinc-500" />
+          <Settings2 className="h-3.5 w-3.5 text-muted-foreground" />
           Manage branches
         </Link>
       </PopoverContent>

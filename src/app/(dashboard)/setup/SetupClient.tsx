@@ -44,10 +44,10 @@ export function SetupClient() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4 relative">
+    <div className="min-h-screen bg-background flex items-center justify-center px-4 relative">
       <button
         onClick={() => void signOut()}
-        className="absolute top-4 right-4 flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+        className="absolute top-4 right-4 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
         title="Sign out"
       >
         <LogOut className="h-3.5 w-3.5" />
@@ -57,18 +57,18 @@ export function SetupClient() {
         {/* Logo */}
         <div className="flex items-center justify-center gap-2 mb-8">
           <Logo size={32} />
-          <span className="text-xl font-bold text-zinc-100 tracking-tight">LangHub</span>
+          <span className="text-xl font-bold text-foreground tracking-tight">LangHub</span>
         </div>
 
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-xl">
+        <div className="bg-card border border-border rounded-xl p-6 shadow-xl">
           <div className="mb-6 text-center">
-            <h1 className="text-xl font-semibold text-zinc-100 mb-1">Welcome to LangHub</h1>
-            <p className="text-sm text-zinc-400">Create your first workspace to get started</p>
+            <h1 className="text-xl font-semibold text-foreground mb-1">Welcome to LangHub</h1>
+            <p className="text-sm text-muted-foreground">Create your first workspace to get started</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="ws-name" className="text-zinc-300">Workspace name</Label>
+              <Label htmlFor="ws-name" className="text-foreground">Workspace name</Label>
               <Input
                 id="ws-name"
                 placeholder="e.g. Acme Corp, My Team"
@@ -76,15 +76,15 @@ export function SetupClient() {
                 onChange={(e) => setName(e.target.value)}
                 required
                 autoFocus
-                className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-blue-600"
+                className="bg-muted border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-ring"
               />
-              <p className="text-[11px] text-zinc-600">
+              <p className="text-[11px] text-muted-foreground">
                 You can add projects and invite teammates after creating your workspace.
               </p>
             </div>
 
             {error && (
-              <p className="text-sm text-red-400 bg-red-950/50 border border-red-900 rounded-md px-3 py-2">
+              <p className="text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2">
                 {error}
               </p>
             )}

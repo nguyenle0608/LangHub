@@ -20,6 +20,7 @@ import dynamic from 'next/dynamic'
 import { TranslationCell } from './TranslationCell'
 import { StatusBadge } from './StatusBadge'
 import { Tooltip } from '@/components/ui/tooltip'
+import { ThemeHeaderButton } from '@/components/theme/ThemeHeaderButton'
 import { BranchSwitcher } from './BranchSwitcher'
 
 // Interaction-only modals/sheets — lazy-loaded so they stay out of the
@@ -72,29 +73,29 @@ function virtualRowKey(row: VirtualRow): string {
 
 function groupLevelClass(depth: number): string {
   return [
-    'border-blue-500/40 bg-blue-500/10 text-blue-300',
+    'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300',
     'border-violet-500/40 bg-violet-500/10 text-violet-300',
     'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
-    'border-amber-500/40 bg-amber-500/10 text-amber-300',
-  ][depth % 4] ?? 'border-zinc-600 bg-zinc-800 text-zinc-300'
+    'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  ][depth % 4] ?? 'border-border bg-muted text-foreground'
 }
 
 function groupBarClass(depth: number): string {
   return [
-    'border-blue-500/30 bg-blue-950/80 text-blue-200',
-    'border-violet-500/30 bg-violet-950/80 text-violet-200',
-    'border-emerald-500/30 bg-emerald-950/80 text-emerald-200',
-    'border-amber-500/30 bg-amber-950/80 text-amber-200',
-  ][depth % 4] ?? 'border-zinc-700 bg-zinc-950/95 text-zinc-300'
+    'border-blue-500/30 bg-blue-50/90 text-blue-700 dark:bg-blue-950/80 dark:text-blue-200',
+    'border-violet-500/30 bg-violet-50/90 text-violet-700 dark:bg-violet-950/80 dark:text-violet-200',
+    'border-emerald-500/30 bg-emerald-50/90 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-200',
+    'border-amber-500/30 bg-amber-50/90 text-amber-700 dark:bg-amber-950/80 dark:text-amber-200',
+  ][depth % 4] ?? 'border-border bg-background/95 text-foreground'
 }
 
 function groupIconClass(depth: number): string {
   return [
-    'text-blue-300',
+    'text-blue-700 dark:text-blue-300',
     'text-violet-300',
     'text-emerald-300',
-    'text-amber-300',
-  ][depth % 4] ?? 'text-zinc-300'
+    'text-amber-700 dark:text-amber-300',
+  ][depth % 4] ?? 'text-foreground'
 }
 
 type KeyTreeFilterProps = {
@@ -122,7 +123,7 @@ function KeyTreeNodeRow({
   const isRoot = node.kind === 'root'
   const isFolderLike = node.kind === 'root' || node.kind === 'folder'
   const leafIsAlsoFolder = !!node.keyName && ambiguousKeyNames.has(node.keyName)
-  const folderIconClass = isRoot ? 'text-zinc-400' : groupIconClass(Math.max(0, depth - 1))
+  const folderIconClass = isRoot ? 'text-muted-foreground' : groupIconClass(Math.max(0, depth - 1))
 
   return (
     <div>
@@ -130,7 +131,7 @@ function KeyTreeNodeRow({
         className={cn(
           'group flex min-w-0 items-center gap-1 rounded px-1.5 py-1 text-xs transition-colors',
           node.kind === 'leaf' && 'cursor-pointer',
-          isChecked ? 'bg-blue-950/50 text-blue-100' : 'text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-200'
+          isChecked ? 'bg-blue-100/70 dark:bg-blue-950/50 text-blue-700 dark:text-blue-100' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
         )}
         style={{ paddingLeft: `${6 + depth * 12}px` }}
         onClick={() => {
@@ -140,7 +141,7 @@ function KeyTreeNodeRow({
         <button
           type="button"
           className={cn(
-            'flex h-4 w-4 items-center justify-center rounded text-zinc-600 hover:text-zinc-300',
+            'flex h-4 w-4 items-center justify-center rounded text-muted-foreground hover:text-foreground',
             !hasChildren && 'invisible'
           )}
           onClick={() => onToggleExpanded(node.id)}
@@ -167,18 +168,18 @@ function KeyTreeNodeRow({
             <Folder className={cn('h-3.5 w-3.5 flex-shrink-0', folderIconClass)} />
           )
         ) : (
-          <FileKey2 className="h-3.5 w-3.5 flex-shrink-0 text-zinc-500" />
+          <FileKey2 className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         )}
         <span className="min-w-0 flex-1 truncate font-mono" title={node.kind === 'leaf' ? node.keyName : node.path || '{}'}>
           {node.label}
         </span>
         {leafIsAlsoFolder && (
-          <span className="rounded border border-zinc-700 px-1 text-[9px] text-zinc-500" title="Exact key; separate from folder descendants">
+          <span className="rounded border border-border px-1 text-[9px] text-muted-foreground" title="Exact key; separate from folder descendants">
             key
           </span>
         )}
         {isFolderLike && (
-          <span className="text-[10px] tabular-nums text-zinc-600">{node.descendantKeyIds.length}</span>
+          <span className="text-[10px] tabular-nums text-muted-foreground">{node.descendantKeyIds.length}</span>
         )}
       </div>
       {hasChildren && isExpanded && (
@@ -1799,22 +1800,22 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   }
 
   return (
-    <div className="flex flex-col h-screen bg-[#0d1117] text-zinc-100 overflow-hidden">
+    <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
       {/* ── TopNav ── */}
-      <header className="h-12 border-b border-zinc-800 flex items-center px-4 gap-3 flex-shrink-0 bg-[#0d1117]">
+      <header className="h-12 border-b border-border flex items-center px-4 gap-3 flex-shrink-0 bg-background/95 backdrop-blur">
         {/* Logo + breadcrumb */}
         <Link href="/projects" className="flex items-center gap-2 shrink-0 group">
           <Logo size={24} />
-          <span className="font-semibold text-sm text-zinc-100 group-hover:text-white transition-colors hidden lg:block">
+          <span className="font-semibold text-sm text-foreground group-hover:text-foreground transition-colors hidden lg:block">
             LangHub
           </span>
         </Link>
-        <span className="text-zinc-700 text-sm select-none px-0.5">/</span>
-        <span className="text-sm text-zinc-400 truncate max-w-[160px]" title={project.name}>
+        <span className="text-border text-sm select-none px-0.5">/</span>
+        <span className="text-sm text-muted-foreground truncate max-w-[160px]" title={project.name}>
           {project.name}
         </span>
-        <span className="text-zinc-700 text-sm select-none px-0.5">/</span>
-        <span className="text-sm text-zinc-200 font-medium">Editor</span>
+        <span className="text-border text-sm select-none px-0.5">/</span>
+        <span className="text-sm text-foreground font-medium">Editor</span>
 
         <div className="ml-2">
           <BranchSwitcher
@@ -1834,15 +1835,15 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
 
         {/* Saving indicator — queued/in-flight translation writes */}
         {pendingWrites > 0 && (
-          <span className="flex items-center gap-1.5 text-xs text-zinc-400 mr-1" title="Saving your changes…">
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground mr-1" title="Saving your changes…">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             <span className="hidden sm:inline">Saving…</span>
           </span>
         )}
 
         {/* Progress */}
-        <div className="hidden sm:flex items-center gap-2 text-xs text-zinc-400 mr-1">
-          <div className="w-24 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+        <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground mr-1">
+          <div className="w-24 h-1.5 rounded-full bg-muted overflow-hidden">
             <div
               className="h-full bg-emerald-500 transition-all"
               style={{ width: `${overallPercent}%` }}
@@ -1851,25 +1852,25 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
           <span>{overallPercent}%</span>
         </div>
 
-        <div className="w-px h-4 bg-zinc-800" />
+        <div className="w-px h-4 bg-muted" />
 
         {/* Data operations */}
         <div className="flex items-center">
           {canManage && (
             <Link href={`/${project.id}/import?branch=${activeBranchId}`}>
-              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-zinc-400 hover:text-zinc-100">
+              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground">
                 <Upload className="h-3.5 w-3.5" />
                 <span className="hidden md:inline">Import</span>
               </Button>
             </Link>
           )}
-          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-zinc-400 hover:text-zinc-100" onClick={() => setShowExport(true)}>
+          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground" onClick={() => setShowExport(true)}>
             <Download className="h-3.5 w-3.5" />
             <span className="hidden md:inline">Export</span>
           </Button>
         </div>
 
-        <div className="w-px h-4 bg-zinc-800" />
+        <div className="w-px h-4 bg-muted" />
 
         {/* Languages config */}
         {canManage && <ManageLocalesDialog project={project} onLocalesChanged={() => {}} />}
@@ -1877,43 +1878,45 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
         {/* Overflow menu: Duplicates, Versions, AI Translate */}
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-400 hover:text-zinc-100" title="More options">
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" title="More options">
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-48 p-1 bg-zinc-900 border-zinc-800" align="end">
-            <p className="text-[10px] uppercase tracking-wider text-zinc-600 px-2 py-1.5">Navigate</p>
+          <PopoverContent className="w-48 p-1 bg-card border-border" align="end">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 py-1.5">Navigate</p>
             <Link href={`/${project.id}/keys`}>
-              <button className="w-full text-left text-xs text-zinc-300 hover:text-zinc-100 px-2 py-1.5 rounded hover:bg-zinc-800/60 flex items-center gap-2">
-                <Copy className="h-3.5 w-3.5 text-zinc-500" />
+              <button className="w-full text-left text-xs text-foreground hover:text-foreground px-2 py-1.5 rounded hover:bg-muted/60 flex items-center gap-2">
+                <Copy className="h-3.5 w-3.5 text-muted-foreground" />
                 Duplicates
               </button>
             </Link>
             <Link href={`/${project.id}/branches`}>
-              <button className="w-full text-left text-xs text-zinc-300 hover:text-zinc-100 px-2 py-1.5 rounded hover:bg-zinc-800/60 flex items-center gap-2">
-                <GitBranchIcon className="h-3.5 w-3.5 text-zinc-500" />
+              <button className="w-full text-left text-xs text-foreground hover:text-foreground px-2 py-1.5 rounded hover:bg-muted/60 flex items-center gap-2">
+                <GitBranchIcon className="h-3.5 w-3.5 text-muted-foreground" />
                 Branches
               </button>
             </Link>
             <Link href={`/${project.id}/versions`}>
-              <button className="w-full text-left text-xs text-zinc-300 hover:text-zinc-100 px-2 py-1.5 rounded hover:bg-zinc-800/60 flex items-center gap-2">
-                <History className="h-3.5 w-3.5 text-zinc-500" />
+              <button className="w-full text-left text-xs text-foreground hover:text-foreground px-2 py-1.5 rounded hover:bg-muted/60 flex items-center gap-2">
+                <History className="h-3.5 w-3.5 text-muted-foreground" />
                 Versions
               </button>
             </Link>
-            <div className="border-t border-zinc-800 my-1" />
+            <div className="border-t border-border my-1" />
             <button
-              className="w-full text-left text-xs text-zinc-600 cursor-not-allowed px-2 py-1.5 rounded flex items-center gap-2"
+              className="w-full text-left text-xs text-muted-foreground cursor-not-allowed px-2 py-1.5 rounded flex items-center gap-2"
               onClick={() => toast.info('AI Translation — Coming Soon')}
             >
               <Sparkles className="h-3.5 w-3.5" />
               AI Translate
-              <span className="ml-auto text-[10px] bg-zinc-800 text-zinc-500 rounded px-1">Soon</span>
+              <span className="ml-auto text-[10px] bg-muted text-muted-foreground rounded px-1">Soon</span>
             </button>
           </PopoverContent>
         </Popover>
 
-        <div className="w-px h-4 bg-zinc-800" />
+        <ThemeHeaderButton />
+
+        <div className="w-px h-4 bg-muted" />
 
         {/* User avatar */}
         <Popover>
@@ -1926,7 +1929,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
               {(user.email?.[0] ?? '?').toUpperCase()}
             </button>
           </PopoverTrigger>
-          <PopoverContent className="w-56 p-3 bg-zinc-900 border-zinc-800" align="end">
+          <PopoverContent className="w-56 p-3 bg-card border-border" align="end">
             {/* Email */}
             <div className="flex items-center gap-2.5 mb-3">
               <div
@@ -1936,26 +1939,26 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                 {(user.email?.[0] ?? '?').toUpperCase()}
               </div>
               <div className="min-w-0">
-                <p className="text-xs text-zinc-100 truncate font-medium">{user.email ?? 'Unknown'}</p>
+                <p className="text-xs text-foreground truncate font-medium">{user.email ?? 'Unknown'}</p>
                 <span className={cn(
                   'inline-block text-[10px] px-1.5 py-0.5 rounded-full font-medium mt-0.5',
-                  user.role === 'owner'      ? 'bg-purple-950 text-purple-300' :
-                  user.role === 'admin'      ? 'bg-blue-950 text-blue-300' :
-                  user.role === 'translator' ? 'bg-amber-950 text-amber-300' :
-                                               'bg-zinc-800 text-zinc-400'
+                  user.role === 'owner'      ? 'bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300' :
+                  user.role === 'admin'      ? 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300' :
+                  user.role === 'translator' ? 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300' :
+                                               'bg-muted text-muted-foreground'
                 )}>
                   {user.role}
                 </span>
               </div>
             </div>
-            <div className="border-t border-zinc-800 -mx-3 mb-2" />
-            <Link href="/projects" className="flex items-center gap-2 text-xs text-zinc-400 hover:text-zinc-100 px-1 py-1 rounded hover:bg-zinc-800/60 transition-colors">
+            <div className="border-t border-border -mx-3 mb-2" />
+            <Link href="/projects" className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground px-1 py-1 rounded hover:bg-muted/60 transition-colors">
               <LogOut className="h-3.5 w-3.5" />
               Back to projects
             </Link>
             <button
               onClick={() => void signOut()}
-              className="w-full text-left flex items-center gap-2 text-xs text-red-400 hover:text-red-300 px-1 py-1 rounded hover:bg-zinc-800/60 transition-colors mt-0.5"
+              className="w-full text-left flex items-center gap-2 text-xs text-destructive hover:text-red-700 dark:text-red-300 px-1 py-1 rounded hover:bg-muted/60 transition-colors mt-0.5"
             >
               <LogOut className="h-3.5 w-3.5 rotate-180" />
               Sign out
@@ -1965,22 +1968,22 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
       </header>
 
       {/* ── Toolbar ── */}
-      <div className="h-11 border-b border-zinc-800 flex items-center px-4 gap-2 flex-shrink-0 bg-[#0d1117]">
+      <div className="h-11 border-b border-border flex items-center px-4 gap-2 flex-shrink-0 bg-card/60">
         <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-500 pointer-events-none" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search keys or values…"
-            className="h-7 pl-8 pr-3 text-xs w-56 bg-zinc-900 border-zinc-700 placeholder:text-zinc-600"
+            className="h-7 pl-8 pr-3 text-xs w-56 bg-card border-border placeholder:text-muted-foreground"
           />
         </div>
 
         {/* Streaming indicator — search/filter act on loaded keys only until done */}
         {loadingMore && (
-          <span className="flex items-center gap-1.5 text-[11px] text-zinc-500" title="Loading remaining keys — search and filters cover loaded keys only until this finishes">
-            <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
-            Loading {keys.length}<span className="text-zinc-700">/{totalKeyCount}</span>
+          <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground" title="Loading remaining keys — search and filters cover loaded keys only until this finishes">
+            <Loader2 className="h-3 w-3 animate-spin text-blue-600 dark:text-blue-400" />
+            Loading {keys.length}<span className="text-border">/{totalKeyCount}</span>
           </span>
         )}
 
@@ -1990,7 +1993,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
         <div className="flex items-center">
           <Button
             variant="ghost" size="sm"
-            className="h-7 w-7 p-0 text-zinc-400 hover:text-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed"
+            className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
             onClick={() => undo()}
             disabled={undoRef.current.length === 0 || pendingWrites > 0}
             title="Undo (Ctrl/Cmd+Z)"
@@ -1999,7 +2002,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
           </Button>
           <Button
             variant="ghost" size="sm"
-            className="h-7 w-7 p-0 text-zinc-400 hover:text-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed"
+            className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
             onClick={() => redo()}
             disabled={redoRef.current.length === 0 || pendingWrites > 0}
             title="Redo (Ctrl/Cmd+Shift+Z)"
@@ -2008,7 +2011,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
           </Button>
         </div>
 
-        <div className="w-px h-4 bg-zinc-800" />
+        <div className="w-px h-4 bg-muted" />
 
         <Popover>
           <PopoverTrigger asChild>
@@ -2018,8 +2021,8 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
               className={cn(
                 'h-7 text-xs gap-1.5',
                 (hiddenCols.size > 0 || lockedCols.size > 0 || frozenCols.size > 1 || localeOrder.length > 0 || keyColWidth !== DEFAULT_COLS.key || localeColWidths.size > 0)
-                  ? 'text-blue-400 bg-blue-950/40 hover:bg-blue-950/60'
-                  : 'text-zinc-400 hover:text-zinc-100'
+                  ? 'text-blue-600 dark:text-blue-400 bg-blue-100/70 dark:bg-blue-950/40 hover:bg-blue-100/70 dark:hover:bg-blue-950/60'
+                  : 'text-muted-foreground hover:text-foreground'
               )}
               title="Configure columns"
             >
@@ -2027,25 +2030,25 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
               Columns
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-56 p-1 bg-zinc-900 border-zinc-800" align="end">
-            <p className="text-[10px] uppercase tracking-wider text-zinc-600 px-2 py-1.5">Columns</p>
+          <PopoverContent className="w-56 p-1 bg-card border-border" align="end">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 py-1.5">Columns</p>
             {/* Key column */}
             {(() => {
               const hidden = hiddenCols.has('key')
               const frozen = frozenCols.has('key')
               return (
-                <div className="flex items-center gap-0.5 px-2 py-1 rounded hover:bg-zinc-800/60">
-                  <span className="flex-1 text-xs text-zinc-300">Key name</span>
+                <div className="flex items-center gap-0.5 px-2 py-1 rounded hover:bg-muted/60">
+                  <span className="flex-1 text-xs text-foreground">Key name</span>
                   <button
                     onClick={() => setFrozenCols((p) => { const n = new Set(p); if (frozen) n.delete('key'); else n.add('key'); return n })}
-                    className={cn('p-1 rounded', frozen ? 'text-blue-400 hover:text-blue-300' : 'text-zinc-600 hover:text-zinc-300')}
+                    className={cn('p-1 rounded', frozen ? 'text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:text-blue-300' : 'text-muted-foreground hover:text-foreground')}
                     title={frozen ? 'Unfreeze column' : 'Freeze column (stays visible when scrolling)'}
                   >
                     {frozen ? <Pin className="h-3 w-3" /> : <PinOff className="h-3 w-3" />}
                   </button>
                   <button
                     onClick={() => setHiddenCols((p) => { const n = new Set(p); if (hidden) n.delete('key'); else n.add('key'); return n })}
-                    className={cn('p-1 rounded', hidden ? 'text-zinc-600 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-200')}
+                    className={cn('p-1 rounded', hidden ? 'text-muted-foreground hover:text-foreground' : 'text-muted-foreground hover:text-foreground')}
                     title={hidden ? 'Show' : 'Hide'}
                   >
                     {hidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
@@ -2057,11 +2060,11 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
             {(() => {
               const hidden = hiddenCols.has('status')
               return (
-                <div className="flex items-center gap-1 px-2 py-1 rounded hover:bg-zinc-800/60">
-                  <span className="flex-1 text-xs text-zinc-300">Status</span>
+                <div className="flex items-center gap-1 px-2 py-1 rounded hover:bg-muted/60">
+                  <span className="flex-1 text-xs text-foreground">Status</span>
                   <button
                     onClick={() => setHiddenCols((p) => { const n = new Set(p); if (hidden) n.delete('status'); else n.add('status'); return n })}
-                    className={cn('p-1 rounded', hidden ? 'text-zinc-600 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-200')}
+                    className={cn('p-1 rounded', hidden ? 'text-muted-foreground hover:text-foreground' : 'text-muted-foreground hover:text-foreground')}
                     title={hidden ? 'Show' : 'Hide'}
                   >
                     {hidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
@@ -2069,33 +2072,33 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                 </div>
               )
             })()}
-            <div className="border-t border-zinc-800 my-1" />
-            <p className="text-[10px] uppercase tracking-wider text-zinc-600 px-2 py-1">Languages</p>
+            <div className="border-t border-border my-1" />
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 py-1">Languages</p>
             {locales.map((locale) => {
               const hidden = hiddenCols.has(locale.id)
               const frozen = frozenCols.has(locale.id)
               const locked = lockedCols.has(locale.id)
               return (
-                <div key={locale.id} className="flex items-center gap-0.5 px-2 py-1 rounded hover:bg-zinc-800/60">
+                <div key={locale.id} className="flex items-center gap-0.5 px-2 py-1 rounded hover:bg-muted/60">
                   <span className="text-sm">{getFlag(locale.code)}</span>
-                  <span className="flex-1 text-xs text-zinc-300 truncate ml-1">{locale.name}</span>
+                  <span className="flex-1 text-xs text-foreground truncate ml-1">{locale.name}</span>
                   <button
                     onClick={() => setFrozenCols((p) => { const n = new Set(p); if (frozen) n.delete(locale.id); else n.add(locale.id); return n })}
-                    className={cn('p-1 rounded', frozen ? 'text-blue-400 hover:text-blue-300' : 'text-zinc-600 hover:text-zinc-300')}
+                    className={cn('p-1 rounded', frozen ? 'text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:text-blue-300' : 'text-muted-foreground hover:text-foreground')}
                     title={frozen ? 'Unfreeze column' : 'Freeze column (stays visible when scrolling)'}
                   >
                     {frozen ? <Pin className="h-3 w-3" /> : <PinOff className="h-3 w-3" />}
                   </button>
                   <button
                     onClick={() => setLockedCols((p) => { const n = new Set(p); if (locked) n.delete(locale.id); else n.add(locale.id); return n })}
-                    className={cn('p-1 rounded', locked ? 'text-orange-400 hover:text-orange-300' : 'text-zinc-600 hover:text-zinc-300')}
+                    className={cn('p-1 rounded', locked ? 'text-orange-400 hover:text-orange-300' : 'text-muted-foreground hover:text-foreground')}
                     title={locked ? 'Unlock (allow editing)' : 'Lock (read-only)'}
                   >
                     {locked ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
                   </button>
                   <button
                     onClick={() => setHiddenCols((p) => { const n = new Set(p); if (hidden) n.delete(locale.id); else n.add(locale.id); return n })}
-                    className={cn('p-1 rounded', hidden ? 'text-zinc-600 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-200')}
+                    className={cn('p-1 rounded', hidden ? 'text-muted-foreground hover:text-foreground' : 'text-muted-foreground hover:text-foreground')}
                     title={hidden ? 'Show' : 'Hide'}
                   >
                     {hidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
@@ -2103,26 +2106,26 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                 </div>
               )
             })}
-            <div className="border-t border-zinc-800 my-1" />
-            <p className="text-[10px] uppercase tracking-wider text-zinc-600 px-2 py-1">Widths</p>
+            <div className="border-t border-border my-1" />
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 py-1">Widths</p>
             <button
               onClick={resetColumnWidths}
-              className="w-full text-left text-xs text-zinc-400 hover:text-zinc-200 px-2 py-1.5 rounded hover:bg-zinc-800/60"
+              className="w-full text-left text-xs text-muted-foreground hover:text-foreground px-2 py-1.5 rounded hover:bg-muted/60"
             >
               Reset widths
             </button>
             <button
               onClick={equalizeLocaleColumnWidths}
-              className="w-full text-left text-xs text-zinc-400 hover:text-zinc-200 px-2 py-1.5 rounded hover:bg-zinc-800/60"
+              className="w-full text-left text-xs text-muted-foreground hover:text-foreground px-2 py-1.5 rounded hover:bg-muted/60"
             >
               Equalize language widths
             </button>
             {(hiddenCols.size > 0 || lockedCols.size > 0 || frozenCols.size > 1 || localeOrder.length > 0 || keyColWidth !== DEFAULT_COLS.key || localeColWidths.size > 0) && (
               <>
-                <div className="border-t border-zinc-800 my-1" />
+                <div className="border-t border-border my-1" />
                 <button
                   onClick={() => { setHiddenCols(new Set()); setFrozenCols(new Set(['key'])); setLockedCols(new Set()); setLocaleOrder([]); resetColumnWidths() }}
-                  className="w-full text-left text-xs text-zinc-500 hover:text-zinc-300 px-2 py-1.5 rounded hover:bg-zinc-800/60"
+                  className="w-full text-left text-xs text-muted-foreground hover:text-foreground px-2 py-1.5 rounded hover:bg-muted/60"
                 >
                   Reset all
                 </button>
@@ -2135,7 +2138,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
           variant="ghost"
           className={cn(
             'h-7 text-xs gap-1.5',
-            groupBy ? 'text-blue-400 bg-blue-950/40 hover:bg-blue-950/60' : 'text-zinc-400 hover:text-zinc-100'
+            groupBy ? 'text-blue-600 dark:text-blue-400 bg-blue-100/70 dark:bg-blue-950/40 hover:bg-blue-100/70 dark:hover:bg-blue-950/60' : 'text-muted-foreground hover:text-foreground'
           )}
           onClick={() => setGroupBy((v) => !v)}
           title="Group by namespace"
@@ -2144,7 +2147,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
           Group
         </Button>
 
-        <div className="w-px h-4 bg-zinc-800" />
+        <div className="w-px h-4 bg-muted" />
 
         {canManage && (
           <Button
@@ -2164,10 +2167,10 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
         const active = presences.filter((p) => p.keyId)
         const visible = active.length > 0
         return (
-          <div className="h-7 border-b border-zinc-800/50 flex-shrink-0 overflow-hidden relative">
+          <div className="h-7 border-b border-border/50 flex-shrink-0 overflow-hidden relative">
             <div
               className={cn(
-                'absolute inset-0 bg-blue-950/30 flex items-center px-4 gap-2 transition-opacity duration-300',
+                'absolute inset-0 bg-blue-100/60 dark:bg-blue-950/30 flex items-center px-4 gap-2 transition-opacity duration-300',
                 visible ? 'opacity-100' : 'opacity-0 pointer-events-none'
               )}
             >
@@ -2175,7 +2178,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                 {active.slice(0, 4).map((p) => (
                   <div
                     key={p.userId}
-                    className="w-4 h-4 rounded-full border border-zinc-900 flex items-center justify-center text-[8px] font-bold"
+                    className="w-4 h-4 rounded-full border border-border flex items-center justify-center text-[8px] font-bold"
                     style={{ backgroundColor: p.color }}
                     title={p.email}
                   >
@@ -2183,7 +2186,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                   </div>
                 ))}
               </div>
-              <span className="text-xs text-blue-300/70">
+              <span className="text-xs text-blue-700 dark:text-blue-300/70">
                 {active.length === 1
                   ? `${active[0]!.email} is editing`
                   : `${active.length} people editing`}
@@ -2197,24 +2200,24 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
       <div className="flex flex-1 overflow-hidden">
         {/* Left sidebar */}
         <aside
-          className="flex flex-col flex-shrink-0 overflow-hidden bg-zinc-950"
+          className="flex flex-col flex-shrink-0 overflow-hidden bg-background"
           style={{ width: sidebarWidth }}
         >
           {/* Status filters */}
           <div className="flex-shrink-0 p-3">
             <div className="flex items-center justify-between mb-2 px-1">
-              <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-zinc-600">
+              <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
                 Status
                 <Tooltip
                   side="right"
                   content="Filters by each key's overall status across all target languages. Selecting one clears the language filter below."
                 >
-                  <Info className="h-3 w-3 text-zinc-600 hover:text-zinc-400" />
+                  <Info className="h-3 w-3 text-muted-foreground hover:text-muted-foreground" />
                 </Tooltip>
               </span>
               {filteredKeys.length !== stats.total && (
-                <span className="text-[10px] text-zinc-600">
-                  {filteredKeys.length}<span className="text-zinc-700"> / {stats.total}</span>
+                <span className="text-[10px] text-muted-foreground">
+                  {filteredKeys.length}<span className="text-border"> / {stats.total}</span>
                 </span>
               )}
             </div>
@@ -2237,7 +2240,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                   onClick={() => { setFilterStatus(item.id); setSelectedLocaleId(null) }}
                   className={cn(
                     'w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors',
-                    isActive ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
+                    isActive ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
                   )}
                 >
                   {dotColor
@@ -2248,8 +2251,8 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                   {item.count > 0 && (
                     <span className={cn(
                       'text-[10px] tabular-nums',
-                      item.id === 'empty' ? 'text-amber-400' :
-                      item.id === 'approved' ? 'text-emerald-500/70' : 'text-zinc-600'
+                      item.id === 'empty' ? 'text-amber-700 dark:text-amber-400' :
+                      item.id === 'approved' ? 'text-emerald-500/70' : 'text-muted-foreground'
                     )}>
                       {item.count}
                     </span>
@@ -2260,14 +2263,14 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
           </div>
 
           {/* Language focus */}
-          <div className="flex-shrink-0 border-t border-zinc-800 p-3">
-            <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-zinc-600 mb-2 px-1">
+          <div className="flex-shrink-0 border-t border-border p-3">
+            <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground mb-2 px-1">
               By language
               <Tooltip
                 side="right"
                 content="Click a language to show only keys that still need work (empty or pending) in it. The number is how many remain. This resets the Status filter to All."
               >
-                <Info className="h-3 w-3 text-zinc-600 hover:text-zinc-400" />
+                <Info className="h-3 w-3 text-muted-foreground hover:text-muted-foreground" />
               </Tooltip>
             </div>
             {locales.map((locale) => {
@@ -2282,16 +2285,16 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                   }}
                   className={cn(
                     'w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors',
-                    isActive ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
+                    isActive ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
                   )}
                 >
                   <span className="text-sm leading-none">{getFlag(locale.code)}</span>
                   <span className="flex-1 text-left truncate">{locale.name}</span>
                   {locale.is_base && (
-                    <span className="text-[9px] text-zinc-600 border border-zinc-700 rounded px-1">base</span>
+                    <span className="text-[9px] text-muted-foreground border border-border rounded px-1">base</span>
                   )}
                   {needsWork > 0 ? (
-                    <span className="text-[10px] text-amber-400 tabular-nums">{needsWork}</span>
+                    <span className="text-[10px] text-amber-700 dark:text-amber-400 tabular-nums">{needsWork}</span>
                   ) : (
                     <span className="text-[10px] text-emerald-500/70">✓</span>
                   )}
@@ -2301,22 +2304,22 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
           </div>
 
           {/* Nested key tree */}
-          <div className="flex min-h-0 flex-1 flex-col border-t border-zinc-800 p-3">
+          <div className="flex min-h-0 flex-1 flex-col border-t border-border p-3">
             <div className="mb-2 flex flex-shrink-0 items-center justify-between gap-2 px-1">
-              <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-zinc-600">
+              <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
                 Key tree
                 <Tooltip
                   side="right"
                   content="Filter by nested key folders. Checking a folder includes all descendant keys; checking a leaf includes that exact key."
                 >
-                  <Info className="h-3 w-3 text-zinc-600 hover:text-zinc-400" />
+                  <Info className="h-3 w-3 text-muted-foreground hover:text-muted-foreground" />
                 </Tooltip>
               </span>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={expandAllKeyTreeNodes}
-                  className="rounded p-0.5 text-zinc-600 hover:bg-zinc-800 hover:text-zinc-300"
+                  className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                   title="Expand all folders"
                   aria-label="Expand all key tree folders"
                 >
@@ -2325,7 +2328,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                 <button
                   type="button"
                   onClick={collapseAllKeyTreeNodes}
-                  className="rounded p-0.5 text-zinc-600 hover:bg-zinc-800 hover:text-zinc-300"
+                  className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                   title="Collapse all folders"
                   aria-label="Collapse all key tree folders"
                 >
@@ -2335,7 +2338,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                   <button
                     type="button"
                     onClick={() => setCheckedKeyTreeNodeIds(new Set())}
-                    className="text-[10px] text-zinc-600 hover:text-zinc-300"
+                    className="text-[10px] text-muted-foreground hover:text-foreground"
                   >
                     Clear
                   </button>
@@ -2363,7 +2366,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
           aria-label="Resize sidebar"
           title="Drag to resize sidebar"
           className={cn(
-            'group relative z-20 w-1 flex-shrink-0 cursor-col-resize bg-zinc-800 transition-colors hover:bg-blue-500/60',
+            'group relative z-20 w-1 flex-shrink-0 cursor-col-resize bg-muted transition-colors hover:bg-blue-500/60',
             resizingSidebar && 'bg-blue-500/80'
           )}
           onMouseDown={(event) => {
@@ -2379,29 +2382,29 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
         <div className="flex flex-col flex-1 overflow-hidden relative">
           {/* Active filters — makes the combined (AND) filter state visible */}
           {activeFilters.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap px-3 py-1.5 border-b border-zinc-800 bg-zinc-950/60">
-              <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-zinc-600">
+            <div className="flex items-center gap-2 flex-wrap px-3 py-1.5 border-b border-border bg-background/60">
+              <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
                 Filters
                 <Tooltip
                   side="bottom"
                   content="All active filters apply together (AND). Remove one with ×, or Clear all to reset everything."
                 >
-                  <Info className="h-3 w-3 text-zinc-600 hover:text-zinc-400" />
+                  <Info className="h-3 w-3 text-muted-foreground hover:text-muted-foreground" />
                 </Tooltip>
               </span>
               {activeFilters.map((f) => (
                 <button
                   key={f.key}
                   onClick={f.onRemove}
-                  className="group flex items-center gap-1 rounded-full border border-zinc-700 bg-zinc-800/60 pl-2 pr-1 py-0.5 text-xs text-zinc-300 hover:border-zinc-600 hover:bg-zinc-800"
+                  className="group flex items-center gap-1 rounded-full border border-border bg-muted/60 pl-2 pr-1 py-0.5 text-xs text-foreground hover:border-border hover:bg-muted"
                 >
                   <span className="max-w-[200px] truncate">{f.label}</span>
-                  <X className="h-3 w-3 text-zinc-500 group-hover:text-zinc-200" />
+                  <X className="h-3 w-3 text-muted-foreground group-hover:text-foreground" />
                 </button>
               ))}
               <button
                 onClick={clearAllFilters}
-                className="ml-auto text-xs text-zinc-500 hover:text-zinc-200 transition-colors"
+                className="ml-auto text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 Clear all
               </button>
@@ -2421,16 +2424,16 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
             {/* Sticky header */}
             <div
               className={cn(
-                'sticky top-0 z-30 grid min-w-max border-b border-zinc-800 bg-zinc-900/95 backdrop-blur supports-[backdrop-filter]:bg-zinc-900/85 transition-shadow',
-                tableScrolled && 'shadow-[0_10px_24px_rgba(0,0,0,0.45)] ring-1 ring-inset ring-white/5'
+                'sticky top-0 z-30 grid min-w-max border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/85 transition-shadow',
+                tableScrolled && 'shadow-[0_10px_24px_rgba(15,23,42,0.08)] ring-1 ring-inset ring-slate-900/5 dark:shadow-[0_10px_24px_rgba(0,0,0,0.45)] dark:ring-white/5'
               )}
               style={{ gridTemplateColumns: gridCols }}
             >
               {/* Checkbox — viewer excluded */}
               <div
                 className={cn(
-                  'flex items-center justify-center h-10 sticky z-40 bg-zinc-900/95 backdrop-blur',
-                  tableScrolledX && 'shadow-[6px_0_14px_rgba(0,0,0,0.35)]'
+                  'flex items-center justify-center h-10 sticky z-40 bg-card/95 backdrop-blur',
+                  tableScrolledX && 'shadow-[6px_0_14px_rgba(15,23,42,0.08)] dark:shadow-[6px_0_14px_rgba(0,0,0,0.35)]'
                 )}
                 style={{ left: stickyLeft.get('check') }}
               >
@@ -2447,9 +2450,9 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
               {showKey && (
                 <div
                   className={cn(
-                    'relative px-3 flex items-center h-10 gap-1.5 text-xs font-semibold text-zinc-300 uppercase tracking-wide border-r border-zinc-800/70',
-                    stickyLeft.has('key') && 'sticky z-40 bg-zinc-900/95 backdrop-blur',
-                    stickyLeft.has('key') && tableScrolledX && 'shadow-[6px_0_14px_rgba(0,0,0,0.35)]'
+                    'relative px-3 flex items-center h-10 gap-1.5 text-xs font-semibold text-foreground uppercase tracking-wide border-r border-border/70',
+                    stickyLeft.has('key') && 'sticky z-40 bg-card/95 backdrop-blur',
+                    stickyLeft.has('key') && tableScrolledX && 'shadow-[6px_0_14px_rgba(15,23,42,0.08)] dark:shadow-[6px_0_14px_rgba(0,0,0,0.35)]'
                   )}
                   style={stickyLeft.has('key') ? { left: stickyLeft.get('key') } : undefined}
                 >
@@ -2497,27 +2500,27 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                     onDrop={(e) => handleColDrop(e, locale.id)}
                     onDragEnd={handleColDragEnd}
                     className={cn(
-                      'relative px-2 flex items-center h-10 gap-1 text-xs font-medium text-zinc-300 select-none border-r border-zinc-800/50',
-                      isFrozen && 'sticky z-40 bg-zinc-900/95 backdrop-blur',
-                      isFrozen && tableScrolledX && 'shadow-[6px_0_14px_rgba(0,0,0,0.35)]',
-                      isDraggingThis && 'border-l-2 border-blue-500 bg-blue-950/20'
+                      'relative px-2 flex items-center h-10 gap-1 text-xs font-medium text-foreground select-none border-r border-border/50',
+                      isFrozen && 'sticky z-40 bg-card/95 backdrop-blur',
+                      isFrozen && tableScrolledX && 'shadow-[6px_0_14px_rgba(15,23,42,0.08)] dark:shadow-[6px_0_14px_rgba(0,0,0,0.35)]',
+                      isDraggingThis && 'border-l-2 border-blue-500 bg-blue-100/50 dark:bg-blue-950/20'
                     )}
                     style={isFrozen ? { left: stickyLeft.get(locale.id) } : undefined}
                   >
-                    <GripVertical className="h-3.5 w-3.5 text-zinc-700 hover:text-zinc-400 cursor-grab flex-shrink-0" />
+                    <GripVertical className="h-3.5 w-3.5 text-border hover:text-muted-foreground cursor-grab flex-shrink-0" />
                     <Tooltip side="bottom" content="Click to select the entire column">
                       <button
                         type="button"
                         data-keep-selection="1"
                         onClick={() => selectColumn(colIndex)}
-                        className="flex items-center gap-1 rounded px-1 py-0.5 cursor-pointer bg-zinc-800/60 ring-1 ring-inset ring-zinc-700/70 hover:bg-zinc-700/70 hover:text-zinc-100 hover:ring-zinc-600 transition-colors"
+                        className="flex items-center gap-1 rounded px-1 py-0.5 cursor-pointer bg-muted/60 ring-1 ring-inset ring-zinc-700/70 hover:bg-accent/70 hover:text-foreground hover:ring-zinc-600 transition-colors"
                       >
                         <span>{getFlag(locale.code)}</span>
                         <span className="uppercase">{locale.code}</span>
                       </button>
                     </Tooltip>
                     {locale.is_base && (
-                      <span className="text-[9px] text-zinc-600 border border-zinc-700 rounded px-0.5">base</span>
+                      <span className="text-[9px] text-muted-foreground border border-border rounded px-0.5">base</span>
                     )}
                     {isFrozen && <Pin className="h-2.5 w-2.5 text-blue-500 flex-shrink-0" />}
                     {isLocked && <Lock className="h-2.5 w-2.5 text-orange-400 flex-shrink-0" />}
@@ -2540,15 +2543,15 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                             className={cn(
                               'p-0.5 rounded transition-colors',
                               isFiltered
-                                ? 'text-blue-400 hover:text-blue-300'
-                                : 'text-zinc-600 hover:text-zinc-300'
+                                ? 'text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:text-blue-300'
+                                : 'text-muted-foreground hover:text-foreground'
                             )}
                             title="Filter this column by status. Combines (AND) with other active filters — may show no rows if they conflict."
                           >
                             <ListFilter className="h-3 w-3" />
                           </button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-36 p-1 bg-zinc-900 border-zinc-800" align="start">
+                        <PopoverContent className="w-36 p-1 bg-card border-border" align="start">
                           {COL_STATUS_OPTIONS.map((opt) => (
                             <button
                               key={opt.id}
@@ -2563,8 +2566,8 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                               className={cn(
                                 'w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors',
                                 colStatus === opt.id
-                                  ? 'bg-zinc-800 text-zinc-100'
-                                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+                                  ? 'bg-muted text-foreground'
+                                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
                               )}
                             >
                               {opt.id !== 'all' && (
@@ -2607,7 +2610,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
               })}
               {/* Status */}
               {showStatus && (
-                <div className="px-3 flex items-center h-10 gap-1 text-xs font-semibold text-zinc-300 uppercase tracking-wide border-r border-zinc-800/50">
+                <div className="px-3 flex items-center h-10 gap-1 text-xs font-semibold text-foreground uppercase tracking-wide border-r border-border/50">
                   <span>Status</span>
                   <Popover>
                     <PopoverTrigger asChild>
@@ -2615,15 +2618,15 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                         className={cn(
                           'p-0.5 rounded transition-colors',
                           filterStatus !== 'all'
-                            ? 'text-blue-400 hover:text-blue-300'
-                            : 'text-zinc-600 hover:text-zinc-300'
+                            ? 'text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:text-blue-300'
+                            : 'text-muted-foreground hover:text-foreground'
                         )}
                         title="Filter by each key's overall status across all target languages. Same filter as the sidebar Status list."
                       >
                         <ListFilter className="h-3 w-3" />
                       </button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-40 p-1 bg-zinc-900 border-zinc-800" align="end">
+                    <PopoverContent className="w-40 p-1 bg-card border-border" align="end">
                       {([
                         { id: 'all', label: 'All' },
                         { id: 'empty', label: 'Untranslated' },
@@ -2637,8 +2640,8 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                           className={cn(
                             'w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs normal-case tracking-normal transition-colors',
                             filterStatus === opt.id
-                              ? 'bg-zinc-800 text-zinc-100'
-                              : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+                              ? 'bg-muted text-foreground'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
                           )}
                         >
                           {opt.id !== 'all' && (
@@ -2661,15 +2664,15 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
 
             {/* Empty state */}
             {filteredKeys.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-24 text-zinc-600">
+              <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
                 {keys.length === 0 ? (
                   <>
                     <Upload className="h-8 w-8 mb-3 opacity-20" />
-                    <p className="text-sm font-medium text-zinc-400 mb-1">No keys yet</p>
-                    <p className="text-xs text-zinc-600 mb-4">Import a file or add your first key manually</p>
+                    <p className="text-sm font-medium text-muted-foreground mb-1">No keys yet</p>
+                    <p className="text-xs text-muted-foreground mb-4">Import a file or add your first key manually</p>
                     <div className="flex gap-2">
                       <Link href={`/${project.id}/import?branch=${activeBranchId}`}>
-                        <Button size="sm" variant="outline" className="border-zinc-700 gap-1.5">
+                        <Button size="sm" variant="outline" className="border-border gap-1.5">
                           <Upload className="h-3.5 w-3.5" />
                           Import File
                         </Button>
@@ -2682,7 +2685,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                         >
                           <Plus className="h-3.5 w-3.5" />
                           Add Key
-                          <span className="text-blue-200/60 text-[10px] ml-1">⌘K</span>
+                          <span className="text-blue-700 dark:text-blue-200/60 text-[10px] ml-1">⌘K</span>
                         </Button>
                       )}
                     </div>
@@ -2724,7 +2727,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                 <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
                   {stickyParent && (
                     <div className={cn(
-                      'sticky top-10 z-20 -mb-8 flex h-8 min-w-max items-center gap-1 border-b px-3 font-mono text-xs shadow-[0_8px_20px_rgba(0,0,0,0.35)] backdrop-blur',
+                      'sticky top-10 z-20 -mb-8 flex h-8 min-w-max items-center gap-1 border-b px-3 font-mono text-xs shadow-[0_8px_20px_rgba(15,23,42,0.08)] dark:shadow-[0_8px_20px_rgba(0,0,0,0.35)] backdrop-blur',
                       groupBarClass(stickyParent.depth)
                     )}>
                       <span className="text-[10px] uppercase tracking-wider opacity-60">Current group</span>
@@ -2733,7 +2736,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                       </span>
                       {stickyParentParts.map((part, index) => (
                         <Fragment key={`${part}:${index}`}>
-                          {index > 0 && <span className="text-zinc-700">/</span>}
+                          {index > 0 && <span className="text-border">/</span>}
                           <span className={cn(
                             'rounded px-1.5 py-0.5',
                             index === stickyParentParts.length - 1
@@ -2762,7 +2765,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                             key={virtualRow.key}
                             ref={virtualizer.measureElement}
                             data-index={virtualRow.index}
-                            className="flex items-center border-b border-zinc-800/50 bg-zinc-950 cursor-pointer select-none min-w-max hover:bg-zinc-900/70"
+                            className="flex items-center border-b border-border/50 bg-background cursor-pointer select-none min-w-max hover:bg-card/70"
                             style={{ height: '32px' }}
                             onClick={() =>
                               setCollapsedGroups((prev) => {
@@ -2777,21 +2780,21 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                               {Array.from({ length: row.depth }).map((_, depthIndex) => (
                                 <span
                                   key={depthIndex}
-                                  className="h-5 w-px rounded-full bg-zinc-700/70"
+                                  className="h-5 w-px rounded-full bg-accent/70"
                                   aria-hidden="true"
                                 />
                               ))}
                               <span className={cn('flex h-5 min-w-5 items-center justify-center rounded border px-1 text-[10px] font-semibold', levelClass)}>
                                 L{level}
                               </span>
-                              <ChevronDown className={cn('h-3 w-3 text-zinc-500 transition-transform flex-shrink-0', isCollapsed && '-rotate-90')} />
-                              <span className="font-mono text-xs font-medium text-zinc-300">{row.label}</span>
+                              <ChevronDown className={cn('h-3 w-3 text-muted-foreground transition-transform flex-shrink-0', isCollapsed && '-rotate-90')} />
+                              <span className="font-mono text-xs font-medium text-foreground">{row.label}</span>
                               {parentPath && (
-                                <span className="max-w-[220px] truncate font-mono text-[10px] text-zinc-600">
+                                <span className="max-w-[220px] truncate font-mono text-[10px] text-muted-foreground">
                                   in {parentPath}
                                 </span>
                               )}
-                              <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500">{row.count}</span>
+                              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{row.count}</span>
                             </div>
                           </div>
                         )
@@ -2810,9 +2813,9 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                           ref={virtualizer.measureElement}
                           data-index={virtualRow.index}
                           className={cn(
-                            'group grid border-b border-zinc-800/50 min-w-max transition-colors cursor-default',
-                            isActive ? 'bg-zinc-800' : 'hover:bg-zinc-800/40',
-                            isSelected && 'bg-blue-950/40'
+                            'group grid border-b border-border/50 min-w-max transition-colors cursor-default',
+                            isActive ? 'bg-muted' : 'hover:bg-muted/40',
+                            isSelected && 'bg-blue-100/70 dark:bg-blue-950/40'
                           )}
                           style={{ gridTemplateColumns: gridCols, minHeight: '84px' }}
                         >
@@ -2820,8 +2823,8 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                           <div
                             className={cn(
                               'flex items-start justify-center pt-2.5 sticky z-10',
-                              isActive ? 'bg-zinc-800' : 'bg-zinc-950 group-hover:bg-zinc-800',
-                              isSelected && 'bg-blue-950'
+                              isActive ? 'bg-muted' : 'bg-background group-hover:bg-muted',
+                              isSelected && 'bg-blue-100 dark:bg-blue-950'
                             )}
                             style={{ left: stickyLeft.get('check') }}
                             onClick={(e) => canSelect && toggleRow(keyItem.id, e)}
@@ -2836,8 +2839,8 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                                 'flex flex-col justify-start pt-2 cursor-pointer pr-3',
                                 frozenCols.has('key') && cn(
                                   'sticky z-10',
-                                  isActive ? 'bg-zinc-800' : 'bg-zinc-950 group-hover:bg-zinc-800',
-                                  isSelected && 'bg-blue-950'
+                                  isActive ? 'bg-muted' : 'bg-background group-hover:bg-muted',
+                                  isSelected && 'bg-blue-100 dark:bg-blue-950'
                                 )
                               )}
                               style={{
@@ -2846,9 +2849,9 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                               }}
                               onClick={() => setSelectedKeyId(isActive ? null : keyItem.id)}
                             >
-                              <span className="font-mono text-xs text-zinc-200 truncate">{displayKey}</span>
+                              <span className="font-mono text-xs text-foreground truncate">{displayKey}</span>
                               {keyItem.description && (
-                                <span className="text-[10px] text-zinc-600 truncate">{keyItem.description}</span>
+                                <span className="text-[10px] text-muted-foreground truncate">{keyItem.description}</span>
                               )}
                             </div>
                           )}
@@ -2874,8 +2877,8 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                                   data-col={colIndex}
                                   className={cn('relative h-[84px] select-none', isFrozen && cn(
                                     'sticky z-10',
-                                    isActive ? 'bg-zinc-800' : 'bg-zinc-950 group-hover:bg-zinc-800',
-                                    isSelected && 'bg-blue-950'
+                                    isActive ? 'bg-muted' : 'bg-background group-hover:bg-muted',
+                                    isSelected && 'bg-blue-100 dark:bg-blue-950'
                                   ))}
                                   style={isFrozen ? { left: stickyLeft.get(locale.id) } : undefined}
                                   onMouseDown={(e) => {
@@ -2954,7 +2957,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
               onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
               title="Scroll to top"
               aria-label="Scroll to top"
-              className="absolute bottom-4 right-4 z-30 flex h-9 w-9 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900/90 text-zinc-300 shadow-lg backdrop-blur transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+              className="absolute bottom-4 right-4 z-30 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card/90 text-foreground shadow-lg backdrop-blur transition-colors hover:bg-muted hover:text-foreground"
             >
               <ArrowUp className="h-4 w-4" />
             </button>

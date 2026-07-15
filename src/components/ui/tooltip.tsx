@@ -57,8 +57,8 @@ export function Tooltip({ content, side = 'top', className, contentClassName, ch
           role="tooltip"
           style={{ position: 'fixed', top: pos.top, left: pos.left, transform }}
           className={cn(
-            'z-50 max-w-[260px] rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-1.5',
-            'text-xs leading-relaxed text-zinc-200 shadow-lg pointer-events-none',
+            'z-50 max-w-[260px] rounded-md border border-border bg-popover px-2.5 py-1.5',
+            'text-xs leading-relaxed text-popover-foreground shadow-lg pointer-events-none',
             contentClassName
           )}
         >

@@ -103,51 +103,51 @@ export function CreateProjectDialog({ children, orgId, open, onOpenChange }: Pro
   return (
     <Dialog open={actualOpen} onOpenChange={(v) => { setOpen(v); if (!v) resetForm() }}>
       {children}
-      <DialogContent className="bg-zinc-900 border-zinc-800 text-zinc-100 sm:max-w-md">
+      <DialogContent className="bg-card border-border text-card-foreground sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-zinc-100">New Project</DialogTitle>
-          <DialogDescription className="text-zinc-400">
+          <DialogTitle className="text-foreground">New Project</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
             Create a new localization project
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
           <div className="space-y-1.5">
-            <Label htmlFor="proj-name" className="text-zinc-300">Project name</Label>
+            <Label htmlFor="proj-name" className="text-foreground">Project name</Label>
             <Input
               id="proj-name"
               placeholder="e.g. My Mobile App"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-blue-600"
+              className="bg-muted border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-blue-600"
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="proj-desc" className="text-zinc-300">
-              Description <span className="text-zinc-500 font-normal">(optional)</span>
+            <Label htmlFor="proj-desc" className="text-foreground">
+              Description <span className="text-muted-foreground font-normal">(optional)</span>
             </Label>
             <Input
               id="proj-desc"
               placeholder="Brief description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-blue-600"
+              className="bg-muted border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-blue-600"
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-zinc-300">Base language</Label>
+            <Label className="text-foreground">Base language</Label>
             <LocaleCombobox
               value={baseLocale}
               onChange={handleBaseLocaleChange}
               placeholder="Select base language…"
             />
-            <p className="text-[11px] text-zinc-600">Source language — all other languages are translated from it.</p>
+            <p className="text-[11px] text-muted-foreground">Source language — all other languages are translated from it.</p>
           </div>
 
           {/* Target languages */}
           <div className="space-y-2">
-            <Label className="text-zinc-300">
-              Target languages <span className="text-zinc-500 font-normal">(optional)</span>
+            <Label className="text-foreground">
+              Target languages <span className="text-muted-foreground font-normal">(optional)</span>
             </Label>
 
             {targetLocales.length > 0 && (
@@ -155,13 +155,13 @@ export function CreateProjectDialog({ children, orgId, open, onOpenChange }: Pro
                 {targetLocales.map((l) => (
                   <span
                     key={l.code}
-                    className="inline-flex items-center gap-1 text-xs bg-zinc-800 text-zinc-300 border border-zinc-700 rounded px-2 py-0.5"
+                    className="inline-flex items-center gap-1 text-xs bg-muted text-foreground border border-border rounded px-2 py-0.5"
                   >
                     {l.flag} {l.name}
                     <button
                       type="button"
                       onClick={() => removeTarget(l.code)}
-                      className="text-zinc-500 hover:text-zinc-200 ml-0.5"
+                      className="text-muted-foreground hover:text-foreground ml-0.5"
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -183,7 +183,7 @@ export function CreateProjectDialog({ children, orgId, open, onOpenChange }: Pro
                 type="button"
                 onClick={handleAddTarget}
                 disabled={!addingCode || usedCodes.has(addingCode)}
-                className="bg-zinc-700 hover:bg-zinc-600 text-zinc-100 flex-shrink-0"
+                className="bg-secondary hover:bg-secondary/80 text-secondary-foreground flex-shrink-0"
                 size="sm"
               >
                 <Plus className="h-4 w-4" />
@@ -192,7 +192,7 @@ export function CreateProjectDialog({ children, orgId, open, onOpenChange }: Pro
           </div>
 
           {error && (
-            <p className="text-sm text-red-400 bg-red-950/50 border border-red-900 rounded-md px-3 py-2">
+            <p className="text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2">
               {error}
             </p>
           )}
@@ -202,7 +202,7 @@ export function CreateProjectDialog({ children, orgId, open, onOpenChange }: Pro
               type="button"
               variant="outline"
               onClick={() => { setOpen(false); resetForm() }}
-              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+              className="border-border text-foreground hover:bg-accent hover:text-foreground"
             >
               Cancel
             </Button>

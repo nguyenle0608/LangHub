@@ -70,15 +70,15 @@ function RestoreDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="bg-zinc-900 border border-zinc-700 rounded-lg w-full max-w-md p-6 shadow-2xl space-y-5">
+      <div className="bg-card border border-border rounded-lg w-full max-w-md p-6 shadow-2xl space-y-5">
         <div>
-          <h3 className="text-sm font-semibold text-zinc-100 mb-1">Restore to &ldquo;{version.name}&rdquo;</h3>
-          <p className="text-xs text-zinc-500">This will overwrite current translations.</p>
+          <h3 className="text-sm font-semibold text-foreground mb-1">Restore to &ldquo;{version.name}&rdquo;</h3>
+          <p className="text-xs text-muted-foreground">This will overwrite current translations.</p>
         </div>
 
         {/* Scope */}
         <div className="space-y-2">
-          <label className="text-xs font-medium text-zinc-400">Scope</label>
+          <label className="text-xs font-medium text-muted-foreground">Scope</label>
           <div className="flex gap-2">
             {(['all', 'locale'] as const).map((s) => (
               <button
@@ -88,8 +88,8 @@ function RestoreDialog({
                 className={[
                   'flex-1 py-2 text-xs rounded border transition-colors capitalize',
                   scope === s
-                    ? 'bg-blue-600/20 border-blue-500 text-blue-300'
-                    : 'border-zinc-700 text-zinc-400 hover:border-zinc-600',
+                    ? 'bg-blue-600/20 border-blue-500 text-blue-700 dark:text-blue-300'
+                    : 'border-border text-muted-foreground hover:border-border',
                 ].join(' ')}
               >
                 {s === 'all' ? 'All locales' : 'Specific locale'}
@@ -100,7 +100,7 @@ function RestoreDialog({
             <select
               value={localeCode}
               onChange={(e) => setLocaleCode(e.target.value)}
-              className="w-full text-xs bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-zinc-200"
+              className="w-full text-xs bg-muted border border-border rounded px-2 py-1.5 text-foreground"
             >
               {locales.map((l) => (
                 <option key={l} value={l}>{l.toUpperCase()}</option>
@@ -112,22 +112,22 @@ function RestoreDialog({
         {/* Backup toggle */}
         <label className="flex items-center gap-3 cursor-pointer">
           <div
-            className={['w-8 h-4 rounded-full transition-colors relative', createBackup ? 'bg-blue-600' : 'bg-zinc-700'].join(' ')}
+            className={['w-8 h-4 rounded-full transition-colors relative', createBackup ? 'bg-blue-600' : 'bg-accent'].join(' ')}
             onClick={() => setCreateBackup((v) => !v)}
           >
             <span className={['absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all', createBackup ? 'left-[18px]' : 'left-0.5'].join(' ')} />
           </div>
-          <span className="text-xs text-zinc-300">Create backup snapshot first</span>
+          <span className="text-xs text-foreground">Create backup snapshot first</span>
         </label>
 
         {createBackup && (
-          <p className="text-[11px] text-zinc-500 bg-zinc-800/50 rounded px-3 py-2 border border-zinc-700">
+          <p className="text-[11px] text-muted-foreground bg-muted/50 rounded px-3 py-2 border border-border">
             ⚡ An &ldquo;Auto: Before restoring snapshot&rdquo; snapshot will be created automatically.
           </p>
         )}
 
         <div className="flex gap-2 pt-1">
-          <Button type="button" variant="outline" size="sm" className="border-zinc-700 flex-1" onClick={onClose}>
+          <Button type="button" variant="outline" size="sm" className="border-border flex-1" onClick={onClose}>
             Cancel
           </Button>
           <Button size="sm" className="flex-1" onClick={handleRestore} disabled={restoring}>
@@ -191,17 +191,17 @@ export function VersionDiffView({ projectId, versionA, versions, onRestored }: P
   const compareName = compareWithId === 'current' ? 'Current State' : (compareVersion?.name ?? compareWithId)
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-zinc-950">
+    <div className="flex-1 flex flex-col overflow-hidden bg-background">
       {/* Controls bar */}
-      <div className="px-5 py-3 border-b border-zinc-800 space-y-2 flex-shrink-0">
+      <div className="px-5 py-3 border-b border-border space-y-2 flex-shrink-0">
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2 text-sm text-zinc-300">
-            <span className="text-zinc-500 text-xs truncate max-w-[140px]">{versionA.name}</span>
-            <ArrowLeftRight className="h-3.5 w-3.5 text-zinc-500" />
+          <div className="flex items-center gap-2 text-sm text-foreground">
+            <span className="text-muted-foreground text-xs truncate max-w-[140px]">{versionA.name}</span>
+            <ArrowLeftRight className="h-3.5 w-3.5 text-muted-foreground" />
             <select
               value={compareWithId}
               onChange={(e) => setCompareWithId(e.target.value)}
-              className="text-xs bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-zinc-200"
+              className="text-xs bg-card border border-border rounded px-2 py-1 text-foreground"
             >
               <option value="current">Current State</option>
               {versions.filter((v) => v.id !== versionA.id).map((v) => (
@@ -213,7 +213,7 @@ export function VersionDiffView({ projectId, versionA, versions, onRestored }: P
             <Button
               size="sm"
               variant="outline"
-              className="border-zinc-700 h-7 text-xs gap-1.5"
+              className="border-border h-7 text-xs gap-1.5"
               onClick={() => setShowRestoreDialog(true)}
             >
               <RotateCcw className="h-3 w-3" />
@@ -233,8 +233,8 @@ export function VersionDiffView({ projectId, versionA, versions, onRestored }: P
                 className={[
                   'flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-full border transition-colors',
                   filterType === type
-                    ? 'bg-zinc-700 border-zinc-500 text-zinc-200'
-                    : 'border-zinc-800 text-zinc-500 hover:border-zinc-700',
+                    ? 'bg-accent border-zinc-500 text-foreground'
+                    : 'border-border text-muted-foreground hover:border-border',
                 ].join(' ')}
               >
                 <span className={['w-1.5 h-1.5 rounded-full', TYPE_STYLES[type].dot].join(' ')} />
@@ -247,18 +247,18 @@ export function VersionDiffView({ projectId, versionA, versions, onRestored }: P
         {/* Filters row */}
         <div className="flex gap-2">
           <div className="relative flex-1 max-w-xs">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-500" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search keys…"
-              className="pl-7 h-7 text-xs bg-zinc-900 border-zinc-700"
+              className="pl-7 h-7 text-xs bg-card border-border"
             />
           </div>
           <select
             value={filterLocale}
             onChange={(e) => setFilterLocale(e.target.value)}
-            className="text-xs bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-zinc-200"
+            className="text-xs bg-card border border-border rounded px-2 py-1 text-foreground"
           >
             <option value="all">All locales</option>
             {locales.map((l) => (
@@ -273,17 +273,17 @@ export function VersionDiffView({ projectId, versionA, versions, onRestored }: P
         {loading ? (
           <div className="space-y-2 p-5">
             {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="h-12 bg-zinc-800/40 rounded animate-pulse" />
+              <div key={i} className="h-12 bg-muted/40 rounded animate-pulse" />
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          <div className="flex items-center justify-center h-40 text-zinc-600 text-sm">
+          <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">
             {diff.length === 0 ? `No differences between ${versionA.name} and ${compareName}` : 'No results match your filter'}
           </div>
         ) : (
           <>
             {/* Header */}
-            <div className="sticky top-0 z-10 grid grid-cols-[1fr_160px_1fr_1fr] gap-3 px-5 py-2 bg-zinc-900 border-b border-zinc-800 text-[11px] font-medium text-zinc-500 uppercase tracking-wide">
+            <div className="sticky top-0 z-10 grid grid-cols-[1fr_160px_1fr_1fr] gap-3 px-5 py-2 bg-card border-b border-border text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
               <div>Key</div>
               <div>Locale</div>
               <div>{versionA.name}</div>
@@ -302,7 +302,7 @@ export function VersionDiffView({ projectId, versionA, versions, onRestored }: P
                 <button
                   type="button"
                   onClick={() => setShowUnchanged((v) => !v)}
-                  className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {showUnchanged ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                   {showUnchanged ? 'Hide' : 'Show'} {summary.unchanged} unchanged
@@ -335,27 +335,27 @@ export function VersionDiffView({ projectId, versionA, versions, onRestored }: P
 function DiffRow({ entry }: { entry: DiffEntry }) {
   const style = TYPE_STYLES[entry.type]
   return (
-    <div className={['grid grid-cols-[1fr_160px_1fr_1fr] gap-3 px-5 py-2.5 border-b border-zinc-800/60', style.row].join(' ')}>
-      <div className="font-mono text-xs text-zinc-200 truncate self-center">{entry.key_name}</div>
+    <div className={['grid grid-cols-[1fr_160px_1fr_1fr] gap-3 px-5 py-2.5 border-b border-border/60', style.row].join(' ')}>
+      <div className="font-mono text-xs text-foreground truncate self-center">{entry.key_name}</div>
       <div className="flex items-center gap-1.5 self-center">
         <span className="text-base">{localeFlag(entry.locale_code)}</span>
-        <span className="text-[11px] font-medium text-zinc-400 uppercase">{entry.locale_code}</span>
+        <span className="text-[11px] font-medium text-muted-foreground uppercase">{entry.locale_code}</span>
       </div>
       <div className="text-xs self-center">
         {entry.type === 'added' ? (
-          <span className="text-zinc-600 italic">—</span>
+          <span className="text-muted-foreground italic">—</span>
         ) : (
-          <span className={entry.type === 'changed' ? 'text-zinc-500 line-through' : 'text-zinc-300'}>
-            {entry.valueA ?? <span className="text-zinc-600 italic">empty</span>}
+          <span className={entry.type === 'changed' ? 'text-muted-foreground line-through' : 'text-foreground'}>
+            {entry.valueA ?? <span className="text-muted-foreground italic">empty</span>}
           </span>
         )}
       </div>
       <div className="text-xs self-center">
         {entry.type === 'removed' ? (
-          <span className="text-zinc-600 italic">—</span>
+          <span className="text-muted-foreground italic">—</span>
         ) : (
-          <span className={entry.type === 'changed' ? 'text-green-300' : 'text-zinc-300'}>
-            {entry.valueB ?? <span className="text-zinc-600 italic">empty</span>}
+          <span className={entry.type === 'changed' ? 'text-green-300' : 'text-foreground'}>
+            {entry.valueB ?? <span className="text-muted-foreground italic">empty</span>}
           </span>
         )}
       </div>
