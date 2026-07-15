@@ -1,7 +1,8 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { createSnapshot } from '@/lib/versions/snapshot'
-import type { Database } from '@/types/database'
+import type { ProjectWithStats } from '@/types'
+import type { Database, Json } from '@/types/database'
 
 export type Branch = Database['public']['Tables']['branches']['Row']
 
@@ -24,9 +25,78 @@ export async function listBranches(projectId: string): Promise<Branch[]> {
   return data ?? []
 }
 
+type BranchDashboardRow = Database['public']['Functions']['get_branches_dashboard']['Returns'][number]
+
+function mapBranchDashboardRow(row: BranchDashboardRow): BranchWithStats {
+  return {
+    id: row.id,
+    project_id: row.project_id,
+    name: row.name,
+    parent_branch_id: row.parent_branch_id,
+    is_default: row.is_default,
+    is_locked: row.is_locked,
+    base_snapshot_id: row.base_snapshot_id,
+    created_by: row.created_by,
+    created_at: row.created_at,
+    keyCount: Number(row.key_count ?? 0),
+    localeCount: Number(row.locale_count ?? 0),
+    approvedPercent: Number(row.approved_percent ?? 0),
+  }
+}
+
+type BranchesBootstrapRow = Database['public']['Functions']['get_branches_bootstrap']['Returns'][number]
+
+export type BranchesBootstrap = {
+  project: ProjectWithStats
+  branches: BranchWithStats[]
+  role: string | null
+}
+
+function isRecord(value: Json): value is Record<string, Json> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function mapBranchJson(row: Json): BranchWithStats | null {
+  if (!isRecord(row)) return null
+  return mapBranchDashboardRow({
+    id: String(row.id ?? ''),
+    project_id: String(row.project_id ?? ''),
+    name: String(row.name ?? ''),
+    parent_branch_id: typeof row.parent_branch_id === 'string' ? row.parent_branch_id : null,
+    is_default: typeof row.is_default === 'boolean' ? row.is_default : null,
+    is_locked: typeof row.is_locked === 'boolean' ? row.is_locked : null,
+    base_snapshot_id: typeof row.base_snapshot_id === 'string' ? row.base_snapshot_id : null,
+    created_by: typeof row.created_by === 'string' ? row.created_by : null,
+    created_at: typeof row.created_at === 'string' ? row.created_at : null,
+    key_count: Number(row.key_count ?? 0),
+    locale_count: Number(row.locale_count ?? 0),
+    approved_percent: Number(row.approved_percent ?? 0),
+  })
+}
+
+function mapBranchesBootstrapRow(row: BranchesBootstrapRow): BranchesBootstrap | null {
+  if (!isRecord(row.project) || !Array.isArray(row.branches)) return null
+  const branches = row.branches.map(mapBranchJson).filter((branch): branch is BranchWithStats => branch !== null)
+  return {
+    project: row.project as ProjectWithStats,
+    branches,
+    role: row.role,
+  }
+}
+
+export async function getBranchesBootstrap(projectId: string): Promise<BranchesBootstrap | null> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('get_branches_bootstrap', { p_project_id: projectId }).maybeSingle()
+  if (error || !data) return null
+  return mapBranchesBootstrapRow(data)
+}
+
 /** All branches of a project with per-branch key count + approval progress. */
 export async function listBranchesWithStats(projectId: string): Promise<BranchWithStats[]> {
   const supabase = await createClient()
+  const { data: dashboardRows, error } = await supabase.rpc('get_branches_dashboard', { p_project_id: projectId })
+  if (!error && dashboardRows) return dashboardRows.map(mapBranchDashboardRow)
+
   const [branches, { data: locales }] = await Promise.all([
     listBranches(projectId),
     supabase.from('locales').select('id, is_base').eq('project_id', projectId),

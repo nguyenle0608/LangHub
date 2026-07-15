@@ -5,13 +5,13 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 
 interface Props {
-  initialUserId: string
+  initialUserId?: string | null
 }
 
 // Detects when a different account logs in on another tab (cookie overwrite).
 // Checks on tab focus and on Supabase auth state changes.
-export function AuthWatcher({ initialUserId }: Props) {
-  const knownUserIdRef = useRef(initialUserId)
+export function AuthWatcher({ initialUserId = null }: Props) {
+  const knownUserIdRef = useRef<string | null>(initialUserId)
   const notifiedRef = useRef(false)
 
   useEffect(() => {
@@ -31,10 +31,20 @@ export function AuthWatcher({ initialUserId }: Props) {
     }
 
     async function checkUser() {
-      const { data } = await supabase.auth.getUser()
-      const currentId = data.user?.id ?? null
-      if (currentId && currentId !== knownUserIdRef.current) {
-        notify()
+      try {
+        const { data } = await supabase.auth.getUser()
+        const currentId = data.user?.id ?? null
+        if (!currentId) return
+        if (!knownUserIdRef.current) {
+          knownUserIdRef.current = currentId
+          return
+        }
+        if (currentId !== knownUserIdRef.current) {
+          notify()
+        }
+      } catch {
+        // Network/Auth hiccups on tab focus should not surface as app errors.
+        // The next visibility/auth-state event will re-check the active user.
       }
     }
 
@@ -48,11 +58,17 @@ export function AuthWatcher({ initialUserId }: Props) {
     // Also catch in-tab auth state changes (e.g. token refresh with new user)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       const currentId = session?.user?.id ?? null
-      if (currentId && currentId !== knownUserIdRef.current) {
+      if (!currentId) return
+      if (!knownUserIdRef.current) {
+        knownUserIdRef.current = currentId
+        return
+      }
+      if (currentId !== knownUserIdRef.current) {
         notify()
       }
     })
 
+    void checkUser()
     document.addEventListener('visibilitychange', onVisibilityChange)
 
     return () => {

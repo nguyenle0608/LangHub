@@ -579,6 +579,35 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_branches_bootstrap: {
+        Args: {
+          p_project_id: string
+        }
+        Returns: {
+          project: Json
+          branches: Json
+          role: string | null
+        }[]
+      }
+      get_branches_dashboard: {
+        Args: {
+          p_project_id: string
+        }
+        Returns: {
+          id: string
+          project_id: string
+          name: string
+          parent_branch_id: string | null
+          is_default: boolean | null
+          is_locked: boolean | null
+          base_snapshot_id: string | null
+          created_by: string | null
+          created_at: string | null
+          key_count: number
+          locale_count: number
+          approved_percent: number
+        }[]
+      }
       get_projects_dashboard: {
         Args: {
           p_org_id: string
