@@ -19,17 +19,14 @@ interface Props {
   initialVersions: VersionWithStats[]
 }
 
-function timeAgo(dateStr: string | null): string {
+function formatVersionDate(dateStr: string | null): string {
   if (!dateStr) return ''
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const m = Math.floor(diff / 60000)
-  if (m < 1) return 'just now'
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  const d = Math.floor(h / 24)
-  if (d < 30) return `${d}d ago`
-  return new Date(dateStr).toLocaleDateString()
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  })
 }
 
 function CreateVersionDialog({
@@ -126,11 +123,18 @@ function VersionCard({
   const pct = total > 0 ? Math.round((approved / total) * 100) : 0
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelect()
+        }
+      }}
       className={[
-        'w-full text-left rounded-lg border p-3.5 transition-colors hover:bg-zinc-800/40 space-y-2',
+        'w-full text-left rounded-lg border p-3.5 transition-colors hover:bg-zinc-800/40 space-y-2 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500/60',
         isSelected ? 'border-blue-500/60 bg-blue-500/5' : 'border-zinc-800 bg-zinc-900/40',
         !isManual && 'opacity-80',
       ].join(' ')}
@@ -168,7 +172,7 @@ function VersionCard({
         )}
       </div>
 
-      <div className="text-[10px] text-zinc-600">{timeAgo(version.created_at)}</div>
+      <div className="text-[10px] text-zinc-600">{formatVersionDate(version.created_at)}</div>
 
       {stats && (
         <>
@@ -191,15 +195,13 @@ function VersionCard({
           </div>
         </>
       )}
-    </button>
+    </div>
   )
 }
 
 export function VersionsPage({ project, initialVersions }: Props) {
   const [versions, setVersions] = useState(initialVersions)
-  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(
-    initialVersions[0]?.id ?? null
-  )
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
