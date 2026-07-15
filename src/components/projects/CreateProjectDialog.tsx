@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { X, Plus } from 'lucide-react'
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,9 +14,16 @@ import type { LocaleOption } from '@/app/api/locales-list/route'
 
 interface TargetLocale { code: string; name: string; flag: string }
 
-export function CreateProjectDialog({ children, orgId }: { children: React.ReactNode; orgId: string }) {
+interface Props {
+  children?: React.ReactNode
+  orgId: string
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+}
+
+export function CreateProjectDialog({ children, orgId, open, onOpenChange }: Props) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -26,6 +33,8 @@ export function CreateProjectDialog({ children, orgId }: { children: React.React
   const [addingCode, setAddingCode] = useState('')
   const [addingLocale, setAddingLocale] = useState<LocaleOption | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const actualOpen = open ?? internalOpen
+  const setOpen = onOpenChange ?? setInternalOpen
 
   function handleBaseLocaleChange(code: string, locale: LocaleOption) {
     setBaseLocale(code)
@@ -92,8 +101,8 @@ export function CreateProjectDialog({ children, orgId }: { children: React.React
   const usedCodes = new Set([baseLocale, ...targetLocales.map((l) => l.code)])
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm() }}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
+    <Dialog open={actualOpen} onOpenChange={(v) => { setOpen(v); if (!v) resetForm() }}>
+      {children}
       <DialogContent className="bg-zinc-900 border-zinc-800 text-zinc-100 sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-zinc-100">New Project</DialogTitle>

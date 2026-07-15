@@ -579,7 +579,37 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_projects_dashboard: {
+        Args: {
+          p_org_id: string
+        }
+        Returns: {
+          id: string
+          org_id: string | null
+          name: string
+          slug: string
+          description: string | null
+          base_locale: string | null
+          created_at: string | null
+          key_count: number
+          locale_count: number
+          overall_percent: number
+          locales: Json
+        }[]
+      }
+      get_user_organizations: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          name: string
+          slug: string
+          plan: string
+          created_at: string | null
+          role: string
+          member_count: number
+          project_count: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

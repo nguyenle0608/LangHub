@@ -29,20 +29,25 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  // Middleware runs before every dashboard page render. Avoid
+  // `auth.getUser()` here because it performs a Supabase Auth round-trip, and
+  // dashboard layouts/pages already call `getUser()` for trusted validation.
+  // `getSession()` is used only for fast redirect UX and token refresh cookie
+  // handling; do not authorize sensitive data from this middleware result.
+  const { data: { session } } = await supabase.auth.getSession()
   const path = request.nextUrl.pathname
 
   const isPublicRoute = PUBLIC_ROUTES.some((r) => path.startsWith(r))
   const isApiRoute = path.startsWith('/api/')
   const isStaticRoute = path.startsWith('/_next/')
 
-  if (!isStaticRoute && !isApiRoute && !isPublicRoute && !user) {
+  if (!isStaticRoute && !isApiRoute && !isPublicRoute && !session) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('next', path)
     return NextResponse.redirect(loginUrl)
   }
 
-  if (isPublicRoute && user && !path.startsWith('/auth/callback')) {
+  if (isPublicRoute && session && !path.startsWith('/auth/callback')) {
     return NextResponse.redirect(new URL('/projects', request.url))
   }
 

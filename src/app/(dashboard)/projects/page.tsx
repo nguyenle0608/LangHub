@@ -9,18 +9,28 @@ export default async function ProjectsPage({
 }: {
   searchParams: { org?: string }
 }) {
+  const startedAt = Date.now()
   const user = await getUser()
   if (!user) redirect('/login')
 
-  const orgs = await getOrganizations(user.id)
+  const requestedOrgId = searchParams.org
+  const orgsPromise = getOrganizations(user.id)
+  const projectsPromise = requestedOrgId ? getProjectsByOrg(requestedOrgId) : null
+  const orgs = await orgsPromise
 
   if (orgs.length === 0) {
     redirect('/setup')
   }
 
-  const currentOrgId = searchParams.org ?? orgs[0]?.id ?? ''
-  const projects = await getProjectsByOrg(currentOrgId)
+  const currentOrgId = requestedOrgId ?? orgs[0]?.id ?? ''
+  const projects = projectsPromise ? await projectsPromise : await getProjectsByOrg(currentOrgId)
   const currentOrg = orgs.find((o) => o.id === currentOrgId)
+
+  if (process.env.NODE_ENV === 'development') {
+    console.info(
+      `[perf] /projects orgs=${orgs.length} projects=${projects.length} total=${Date.now() - startedAt}ms`
+    )
+  }
 
   return (
     <ProjectsPageClient

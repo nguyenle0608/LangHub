@@ -1,12 +1,11 @@
 import { cache } from 'react'
 import { createClient } from '../server'
 import { createAdminClient } from '../admin'
-import { fetchBranchTranslations } from '@/lib/branches/fetch'
 import type { Database } from '@/types/database'
 import type { LocaleWithStats, ProjectWithStats } from '@/types'
 
 type LocaleRow = Database['public']['Tables']['locales']['Row']
-type TranslationRow = Database['public']['Tables']['translations']['Row']
+type ProjectsDashboardRow = Database['public']['Functions']['get_projects_dashboard']['Returns'][number]
 
 const LOCALE_NAMES: Record<string, string> = {
   en: 'English', vi: 'Tiếng Việt', ja: '日本語', ko: '한국어',
@@ -14,17 +13,60 @@ const LOCALE_NAMES: Record<string, string> = {
   pt: 'Português', th: 'ภาษาไทย', id: 'Bahasa Indonesia',
 }
 
-function computeLocaleStats(
+function isLocaleWithStats(value: unknown): value is LocaleWithStats {
+  if (!value || typeof value !== 'object') return false
+  const item = value as Partial<LocaleWithStats>
+  return (
+    typeof item.id === 'string' &&
+    typeof item.code === 'string' &&
+    typeof item.name === 'string' &&
+    typeof item.is_base === 'boolean' &&
+    typeof item.total === 'number' &&
+    typeof item.approved === 'number' &&
+    typeof item.percent === 'number'
+  )
+}
+
+function mapProjectsDashboardRow(row: ProjectsDashboardRow): ProjectWithStats {
+  const rawLocales = Array.isArray(row.locales) ? row.locales : []
+  const locales = rawLocales.filter(isLocaleWithStats)
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    description: row.description,
+    base_locale: row.base_locale,
+    created_at: row.created_at,
+    org_id: row.org_id,
+    key_count: Number(row.key_count ?? 0),
+    locale_count: Number(row.locale_count ?? locales.length),
+    overall_percent: Number(row.overall_percent ?? 0),
+    locales,
+  }
+}
+
+function computeLocaleStatsFromApproved(
   locales: LocaleRow[],
-  translations: Pick<TranslationRow, 'locale_id' | 'status'>[],
+  approvedByLocale: Map<string, number>,
   totalKeys: number
 ): LocaleWithStats[] {
   return locales.map((locale) => {
-    const localeTrans = translations.filter((t) => t.locale_id === locale.id)
-    const approved = localeTrans.filter((t) => t.status === 'approved').length
+    const approved = approvedByLocale.get(locale.id) ?? 0
     const percent = totalKeys > 0 ? Math.round((approved / totalKeys) * 100) : 0
     return { id: locale.id, code: locale.code, name: locale.name, is_base: locale.is_base ?? false, total: totalKeys, approved, percent }
   })
+}
+
+function computeEmptyLocaleStats(locales: LocaleRow[]): LocaleWithStats[] {
+  return locales.map((locale) => ({
+    id: locale.id,
+    code: locale.code,
+    name: locale.name,
+    is_base: locale.is_base ?? false,
+    total: 0,
+    approved: 0,
+    percent: 0,
+  }))
 }
 
 function computeOverallPercent(localesWithStats: LocaleWithStats[], totalKeys: number): number {
@@ -34,36 +76,65 @@ function computeOverallPercent(localesWithStats: LocaleWithStats[], totalKeys: n
   return overallTotal > 0 ? Math.round((overallApproved / overallTotal) * 100) : 0
 }
 
-async function getProjectTranslations(
+async function getBranchStats(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  projectId: string
-): Promise<{ totalKeys: number; translations: Pick<TranslationRow, 'locale_id' | 'status'>[] }> {
-  // Project-level stats reflect the default (main) branch only. Keys are
-  // per-branch (M2), so both the key count and translations are scoped to main.
-  const { data: mainBranch } = await supabase
-    .from('branches').select('id').eq('project_id', projectId).eq('is_default', true).maybeSingle()
-  if (!mainBranch) return { totalKeys: 0, translations: [] }
-
+  branchId: string,
+  locales: LocaleRow[]
+): Promise<{ totalKeys: number; approvedByLocale: Map<string, number> }> {
   const { count } = await supabase
     .from('translation_keys')
     .select('*', { count: 'exact', head: true })
-    .eq('branch_id', mainBranch.id)
+    .eq('branch_id', branchId)
 
   const totalKeys = count ?? 0
-  if (totalKeys === 0) return { totalKeys: 0, translations: [] }
+  if (totalKeys === 0 || locales.length === 0) {
+    return { totalKeys, approvedByLocale: new Map() }
+  }
 
-  const translations = await fetchBranchTranslations(supabase, mainBranch.id)
-  return { totalKeys, translations }
+  // Count approved cells in Postgres instead of transferring every translation
+  // row to the server just to compute progress percentages.
+  const approvedCounts = await Promise.all(
+    locales.map(async (locale) => {
+      const { count: approved } = await supabase
+        .from('translations')
+        .select('*', { count: 'exact', head: true })
+        .eq('branch_id', branchId)
+        .eq('locale_id', locale.id)
+        .eq('status', 'approved')
+      return [locale.id, approved ?? 0] as const
+    })
+  )
+
+  return { totalKeys, approvedByLocale: new Map(approvedCounts) }
 }
 
-type ProjectStats = { totalKeys: number; translations: Pick<TranslationRow, 'locale_id' | 'status'>[] }
+async function getDefaultBranchStats(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  projectId: string,
+  locales: LocaleRow[]
+): Promise<{ totalKeys: number; approvedByLocale: Map<string, number> }> {
+  // Project-level stats reflect the default (main) branch only. Keys are
+  // per-branch (M2), so both the key count and translations are scoped to main.
+  const { data: mainBranch } = await supabase
+    .from('branches')
+    .select('id')
+    .eq('project_id', projectId)
+    .eq('is_default', true)
+    .maybeSingle()
+  if (!mainBranch) return { totalKeys: 0, approvedByLocale: new Map() }
 
-// Batched stats for a list of projects. Collapses the per-project 3-query
-// pattern (branch + key count + translations) into ~3 queries total by
-// resolving all default branches at once and grouping rows in memory.
+  return getBranchStats(supabase, mainBranch.id, locales)
+}
+
+type ProjectStats = { totalKeys: number; approvedByLocale: Map<string, number> }
+
+// Stats for a list of projects. Resolves default branches in one query, then
+// uses HEAD count queries so large translation tables are counted in Postgres
+// instead of streamed into the Next.js server.
 async function getProjectsTranslationStats(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  projectIds: string[]
+  projectIds: string[],
+  localesByProject: Record<string, LocaleRow[]>
 ): Promise<Map<string, ProjectStats>> {
   const result = new Map<string, ProjectStats>()
   if (!projectIds.length) return result
@@ -80,50 +151,15 @@ async function getProjectsTranslationStats(
     if (b.project_id) branchToProject.set(b.id, b.project_id)
   }
   const branchIds = Array.from(branchToProject.keys())
-  for (const pid of projectIds) result.set(pid, { totalKeys: 0, translations: [] })
+  for (const pid of projectIds) result.set(pid, { totalKeys: 0, approvedByLocale: new Map() })
   if (!branchIds.length) return result
 
-  const PAGE = 1000
-
-  // 2. Key counts per branch (only branch_id column; paginated).
-  const keyCountByBranch = new Map<string, number>()
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
-      .from('translation_keys')
-      .select('branch_id')
-      .in('branch_id', branchIds)
-      .range(from, from + PAGE - 1)
-    if (error || !data || data.length === 0) break
-    for (const row of data) {
-      if (row.branch_id) keyCountByBranch.set(row.branch_id, (keyCountByBranch.get(row.branch_id) ?? 0) + 1)
-    }
-    if (data.length < PAGE) break
-  }
-
-  // 3. Translations for all branches (status/locale only; paginated).
-  const transByBranch = new Map<string, Pick<TranslationRow, 'locale_id' | 'status'>[]>()
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
-      .from('translations')
-      .select('branch_id, locale_id, status')
-      .in('branch_id', branchIds)
-      .range(from, from + PAGE - 1)
-    if (error || !data || data.length === 0) break
-    for (const row of data) {
-      if (!row.branch_id) continue
-      const list = transByBranch.get(row.branch_id) ?? []
-      list.push({ locale_id: row.locale_id, status: row.status })
-      transByBranch.set(row.branch_id, list)
-    }
-    if (data.length < PAGE) break
-  }
-
-  for (const [branchId, projectId] of Array.from(branchToProject)) {
-    result.set(projectId, {
-      totalKeys: keyCountByBranch.get(branchId) ?? 0,
-      translations: transByBranch.get(branchId) ?? [],
+  await Promise.all(
+    Array.from(branchToProject).map(async ([branchId, projectId]) => {
+      const locales = localesByProject[projectId] ?? []
+      result.set(projectId, await getBranchStats(supabase, branchId, locales))
     })
-  }
+  )
   return result
 }
 
@@ -152,12 +188,16 @@ export async function getProjects(userId: string): Promise<ProjectWithStats[]> {
     return acc
   }, {})
 
-  const statsByProject = await getProjectsTranslationStats(supabase, projectRows.map((p) => p.id))
+  const statsByProject = await getProjectsTranslationStats(
+    supabase,
+    projectRows.map((p) => p.id),
+    localesByProject
+  )
 
   return projectRows.map((project) => {
     const locales = localesByProject[project.id] ?? []
-    const { totalKeys, translations } = statsByProject.get(project.id) ?? { totalKeys: 0, translations: [] }
-    const localesWithStats = computeLocaleStats(locales, translations, totalKeys)
+    const { totalKeys, approvedByLocale } = statsByProject.get(project.id) ?? { totalKeys: 0, approvedByLocale: new Map() }
+    const localesWithStats = computeLocaleStatsFromApproved(locales, approvedByLocale, totalKeys)
     const overallPercent = computeOverallPercent(localesWithStats, totalKeys)
     return { ...project, key_count: totalKeys, locale_count: locales.length, overall_percent: overallPercent, locales: localesWithStats } satisfies ProjectWithStats
   })
@@ -165,6 +205,20 @@ export async function getProjects(userId: string): Promise<ProjectWithStats[]> {
 
 export async function getProjectsByOrg(orgId: string): Promise<ProjectWithStats[]> {
   const supabase = await createClient()
+
+  const { data: dashboardRows, error: dashboardError } = await supabase.rpc('get_projects_dashboard', {
+    p_org_id: orgId,
+  })
+
+  if (!dashboardError && dashboardRows) {
+    return dashboardRows.map(mapProjectsDashboardRow)
+  }
+
+  if (process.env.NODE_ENV === 'development') {
+    console.warn(
+      `[perf] get_projects_dashboard RPC failed; falling back to client queries: ${dashboardError?.message ?? 'unknown error'}`
+    )
+  }
 
   const { data: projectRows } = await supabase
     .from('projects')
@@ -185,12 +239,16 @@ export async function getProjectsByOrg(orgId: string): Promise<ProjectWithStats[
     return acc
   }, {})
 
-  const statsByProject = await getProjectsTranslationStats(supabase, projectRows.map((p) => p.id))
+  const statsByProject = await getProjectsTranslationStats(
+    supabase,
+    projectRows.map((p) => p.id),
+    localesByProject
+  )
 
   return projectRows.map((project) => {
     const locales = localesByProject[project.id] ?? []
-    const { totalKeys, translations } = statsByProject.get(project.id) ?? { totalKeys: 0, translations: [] }
-    const localesWithStats = computeLocaleStats(locales, translations, totalKeys)
+    const { totalKeys, approvedByLocale } = statsByProject.get(project.id) ?? { totalKeys: 0, approvedByLocale: new Map() }
+    const localesWithStats = computeLocaleStatsFromApproved(locales, approvedByLocale, totalKeys)
     const overallPercent = computeOverallPercent(localesWithStats, totalKeys)
     return { ...project, key_count: totalKeys, locale_count: locales.length, overall_percent: overallPercent, locales: localesWithStats } satisfies ProjectWithStats
   })
@@ -206,13 +264,33 @@ export const getProject = cache(async (projectId: string): Promise<ProjectWithSt
 
   const { data: localeRows } = await supabase.from('locales').select('*').eq('project_id', projectId)
   const locales = localeRows ?? []
-  const { totalKeys, translations } = await getProjectTranslations(supabase, projectId)
-  const localesWithStats = computeLocaleStats(locales, translations, totalKeys)
-  const overallApproved = localesWithStats.reduce((sum, l) => sum + l.approved, 0)
-  const overallTotal = totalKeys * locales.length
-  const overallPercent = overallTotal > 0 ? Math.round((overallApproved / overallTotal) * 100) : 0
+  const { totalKeys, approvedByLocale } = await getDefaultBranchStats(supabase, projectId, locales)
+  const localesWithStats = computeLocaleStatsFromApproved(locales, approvedByLocale, totalKeys)
+  const overallPercent = computeOverallPercent(localesWithStats, totalKeys)
 
   return { ...project, key_count: totalKeys, locale_count: locales.length, overall_percent: overallPercent, locales: localesWithStats } satisfies ProjectWithStats
+})
+
+// Lightweight project read for the editor shell. The editor already receives
+// the active branch's key count separately, and only needs locale metadata for
+// grid rendering/status logic. Avoid default-branch progress stats here because
+// those require extra count queries and sit on the first paint path.
+export const getProjectLite = cache(async (projectId: string): Promise<ProjectWithStats | null> => {
+  const supabase = await createClient()
+
+  const { data: project } = await supabase.from('projects').select('*').eq('id', projectId).single()
+  if (!project) return null
+
+  const { data: localeRows } = await supabase.from('locales').select('*').eq('project_id', projectId)
+  const locales = localeRows ?? []
+
+  return {
+    ...project,
+    key_count: 0,
+    locale_count: locales.length,
+    overall_percent: 0,
+    locales: computeEmptyLocaleStats(locales),
+  } satisfies ProjectWithStats
 })
 
 // ── Writes: admin client (service role) ──────────────────────────────────
