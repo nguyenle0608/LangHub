@@ -130,19 +130,31 @@ export function buildTranslationKeyTree(items: TranslationKeyTreeItem[]): Transl
   return finalizeNode(root)
 }
 
-export function resolveCheckedTranslationKeyIds(
-  root: TranslationKeyTreeNode,
-  checkedNodeIds: ReadonlySet<string>,
-): Set<string> | null {
-  if (checkedNodeIds.size === 0) return null
+export type TreeNodeCheckState = 'checked' | 'unchecked' | 'indeterminate'
 
-  const result = new Set<string>()
-  const visit = (node: TranslationKeyTreeNode) => {
-    if (checkedNodeIds.has(node.id)) {
-      for (const keyId of node.descendantKeyIds) result.add(keyId)
-    }
+export function getKeyTreeNodeCheckStates(
+  root: TranslationKeyTreeNode,
+  selectedKeyIds: ReadonlySet<string>,
+): Map<string, TreeNodeCheckState> {
+  const states = new Map<string, TreeNodeCheckState>()
+
+  const visit = (node: TranslationKeyTreeNode): TreeNodeCheckState => {
     for (const child of node.children) visit(child)
+
+    let state: TreeNodeCheckState
+    if (node.descendantKeyIds.length === 0) {
+      state = 'unchecked'
+    } else {
+      const selectedCount = node.descendantKeyIds.filter((keyId) => selectedKeyIds.has(keyId)).length
+      if (selectedCount === 0) state = 'unchecked'
+      else if (selectedCount === node.descendantKeyIds.length) state = 'checked'
+      else state = 'indeterminate'
+    }
+
+    states.set(node.id, state)
+    return state
   }
+
   visit(root)
-  return result
+  return states
 }

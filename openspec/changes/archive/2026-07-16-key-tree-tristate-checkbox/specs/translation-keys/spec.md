@@ -1,23 +1,4 @@
-## Purpose
-
-Translation key management covers creating, browsing, searching, structuring, and filtering translation keys within a project.
-
-## Requirements
-
-### Requirement: Nested key tree view
-The system SHALL provide a tree view of translation keys derived from their nested key paths.
-
-#### Scenario: Root folder is displayed
-- **WHEN** a user opens the nested key tree view for a project
-- **THEN** the system SHALL display `{}` as the root folder containing all translation keys
-
-#### Scenario: Parent segments are displayed as folders
-- **WHEN** translation keys include dot-separated paths such as `auth.login.title`
-- **THEN** the system SHALL display `auth` and `login` as folder-like parent nodes before the `title` key item
-
-#### Scenario: Flat keys remain visible
-- **WHEN** translation keys do not contain nested path separators
-- **THEN** the system SHALL display those keys as leaf items directly under the `{}` root folder
+## MODIFIED Requirements
 
 ### Requirement: Checkbox filtering from key tree
 The system SHALL allow users to filter visible translation keys by checking items in the nested key tree, and SHALL represent folder selection using a three-state checkbox (checked, unchecked, indeterminate).
@@ -61,10 +42,3 @@ The system SHALL allow users to filter visible translation keys by checking item
 #### Scenario: Toggling an unchecked folder selects its subtree
 - **WHEN** a user clicks the checkbox of a folder that is currently unchecked
 - **THEN** the system SHALL add every descendant key of that folder to the selection
-
-### Requirement: Parent key and key path ambiguity handling
-The system SHALL preserve distinct filtering behavior when a parent path is also a complete translation key.
-
-#### Scenario: Parent path also exists as key
-- **WHEN** translation keys include both `auth` and `auth.login.title`
-- **THEN** the system SHALL allow filtering the exact `auth` key separately from filtering descendants under the `auth` folder

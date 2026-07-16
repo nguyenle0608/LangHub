@@ -42,8 +42,9 @@ import { localeFlag as getFlag } from '@/lib/locale-flag'
 import {
   KEY_TREE_ROOT_ID,
   buildTranslationKeyTree,
-  resolveCheckedTranslationKeyIds,
+  getKeyTreeNodeCheckStates,
   type TranslationKeyTreeNode,
+  type TreeNodeCheckState,
 } from '@/lib/translation-key-tree'
 
 // ---------------------------------------------------------------------------
@@ -99,7 +100,7 @@ function groupIconClass(depth: number): string {
 }
 
 type KeyTreeFilterProps = {
-  checkedNodeIds: Set<string>
+  checkStates: Map<string, TreeNodeCheckState>
   expandedNodeIds: Set<string>
   onToggleChecked: (nodeId: string) => void
   onToggleExpanded: (nodeId: string) => void
@@ -110,7 +111,7 @@ type KeyTreeFilterProps = {
 function KeyTreeNodeRow({
   node,
   depth,
-  checkedNodeIds,
+  checkStates,
   expandedNodeIds,
   onToggleChecked,
   onToggleExpanded,
@@ -119,7 +120,12 @@ function KeyTreeNodeRow({
 }: KeyTreeFilterProps & { node: TranslationKeyTreeNode; depth: number }) {
   const hasChildren = node.children.length > 0
   const isExpanded = expandedNodeIds.has(node.id)
-  const isChecked = checkedNodeIds.has(node.id)
+  const checkState = checkStates.get(node.id) ?? 'unchecked'
+  const isChecked = checkState !== 'unchecked'
+  const checkboxRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (checkboxRef.current) checkboxRef.current.indeterminate = checkState === 'indeterminate'
+  }, [checkState])
   const isRoot = node.kind === 'root'
   const isFolderLike = node.kind === 'root' || node.kind === 'folder'
   const leafIsAlsoFolder = !!node.keyName && ambiguousKeyNames.has(node.keyName)
@@ -130,12 +136,13 @@ function KeyTreeNodeRow({
       <div
         className={cn(
           'group flex min-w-0 items-center gap-1 rounded px-1.5 py-1 text-xs transition-colors',
-          node.kind === 'leaf' && 'cursor-pointer',
+          (node.kind === 'leaf' || (isFolderLike && hasChildren)) && 'cursor-pointer',
           isChecked ? 'bg-blue-100/70 dark:bg-blue-950/50 text-blue-700 dark:text-blue-100' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
         )}
         style={{ paddingLeft: `${6 + depth * 12}px` }}
         onClick={() => {
           if (node.kind === 'leaf' && node.keyId) onLeafClick(node.keyId)
+          else if (isFolderLike && hasChildren) onToggleExpanded(node.id)
         }}
       >
         <button
@@ -144,7 +151,10 @@ function KeyTreeNodeRow({
             'flex h-4 w-4 items-center justify-center rounded text-muted-foreground hover:text-foreground',
             !hasChildren && 'invisible'
           )}
-          onClick={() => onToggleExpanded(node.id)}
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleExpanded(node.id)
+          }}
           aria-label={isExpanded ? `Collapse ${node.label}` : `Expand ${node.label}`}
         >
           <ChevronDown className={cn('h-3 w-3 transition-transform', !isExpanded && '-rotate-90')} />
@@ -153,12 +163,14 @@ function KeyTreeNodeRow({
           <span className="h-3 w-3 flex-shrink-0" aria-hidden="true" />
         ) : (
           <input
+            ref={checkboxRef}
             type="checkbox"
-            checked={isChecked}
+            checked={checkState === 'checked'}
             onClick={(e) => e.stopPropagation()}
             onChange={() => onToggleChecked(node.id)}
             className="h-3 w-3 flex-shrink-0 cursor-pointer accent-blue-500"
             aria-label={`Filter by ${node.label}`}
+            aria-checked={checkState === 'indeterminate' ? 'mixed' : checkState === 'checked'}
           />
         )}
         {isFolderLike ? (
@@ -189,7 +201,7 @@ function KeyTreeNodeRow({
               key={child.id}
               node={child}
               depth={depth + 1}
-              checkedNodeIds={checkedNodeIds}
+              checkStates={checkStates}
               expandedNodeIds={expandedNodeIds}
               onToggleChecked={onToggleChecked}
               onToggleExpanded={onToggleExpanded}
@@ -311,7 +323,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   const [showExport, setShowExport] = useState(false)
   const [mergeSourceId, setMergeSourceId] = useState<string | null>(null)
   const [columnFilters, setColumnFilters] = useState<Map<string, FilterStatus>>(new Map())
-  const [checkedKeyTreeNodeIds, setCheckedKeyTreeNodeIds] = useState<Set<string>>(new Set())
+  const [selectedTreeKeyIds, setSelectedTreeKeyIds] = useState<Set<string>>(new Set())
   const [expandedKeyTreeNodeIds, setExpandedKeyTreeNodeIds] = useState<Set<string>>(() => new Set([KEY_TREE_ROOT_ID]))
   const [groupBy, setGroupBy] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
@@ -545,10 +557,19 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     () => buildTranslationKeyTree(keys.map((key) => ({ id: key.id, key: key.key }))),
     [keys]
   )
-  const checkedTreeKeyIds = useMemo(
-    () => resolveCheckedTranslationKeyIds(keyTree, checkedKeyTreeNodeIds),
-    [keyTree, checkedKeyTreeNodeIds]
+  const keyTreeCheckStates = useMemo(
+    () => getKeyTreeNodeCheckStates(keyTree, selectedTreeKeyIds),
+    [keyTree, selectedTreeKeyIds]
   )
+  const keyTreeNodesById = useMemo(() => {
+    const map = new Map<string, TranslationKeyTreeNode>()
+    const visit = (node: TranslationKeyTreeNode) => {
+      map.set(node.id, node)
+      for (const child of node.children) visit(child)
+    }
+    visit(keyTree)
+    return map
+  }, [keyTree])
   const folderPathNames = useMemo(() => {
     const names = new Set<string>()
     const visit = (node: TranslationKeyTreeNode) => {
@@ -568,13 +589,19 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     return ids
   }, [keyTree])
   const toggleKeyTreeChecked = useCallback((nodeId: string) => {
-    setCheckedKeyTreeNodeIds((prev) => {
+    const node = keyTreeNodesById.get(nodeId)
+    if (!node) return
+    const isChecked = keyTreeCheckStates.get(nodeId) === 'checked'
+    setSelectedTreeKeyIds((prev) => {
       const next = new Set(prev)
-      if (next.has(nodeId)) next.delete(nodeId)
-      else next.add(nodeId)
+      if (isChecked) {
+        for (const keyId of node.descendantKeyIds) next.delete(keyId)
+      } else {
+        for (const keyId of node.descendantKeyIds) next.add(keyId)
+      }
       return next
     })
-  }, [])
+  }, [keyTreeNodesById, keyTreeCheckStates])
   const toggleKeyTreeExpanded = useCallback((nodeId: string) => {
     setExpandedKeyTreeNodeIds((prev) => {
       const next = new Set(prev)
@@ -594,8 +621,8 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   const filteredKeys = useMemo(() => {
     let result = keys
 
-    if (checkedTreeKeyIds) {
-      result = result.filter((k) => checkedTreeKeyIds.has(k.id))
+    if (selectedTreeKeyIds.size > 0) {
+      result = result.filter((k) => selectedTreeKeyIds.has(k.id))
     }
 
     if (search) {
@@ -629,7 +656,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     })
 
     return result
-  }, [keys, checkedTreeKeyIds, search, filterStatus, selectedLocaleId, columnFilters, locales])
+  }, [keys, selectedTreeKeyIds, search, filterStatus, selectedLocaleId, columnFilters, locales])
 
   // Virtual rows (flat list of group headers + key rows for the virtualizer)
   const virtualRows = useMemo((): VirtualRow[] => {
@@ -710,7 +737,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   }, [rowOrder])
 
   // Clear any range selection when the visible set changes (coords would be stale)
-  useEffect(() => { setSelRange(null) }, [search, filterStatus, selectedLocaleId, checkedKeyTreeNodeIds, groupBy])
+  useEffect(() => { setSelRange(null) }, [search, filterStatus, selectedLocaleId, selectedTreeKeyIds, groupBy])
 
   // Stats
   const stats = useMemo(() => {
@@ -1767,11 +1794,11 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     const loc = locales.find((l) => l.id === selectedLocaleId)
     activeFilters.push({ key: 'lang', label: `Needs work: ${loc?.name ?? '—'}`, onRemove: () => setSelectedLocaleId(null) })
   }
-  if (checkedKeyTreeNodeIds.size > 0) {
+  if (selectedTreeKeyIds.size > 0) {
     activeFilters.push({
       key: 'key-tree',
-      label: `Key tree: ${checkedKeyTreeNodeIds.size} selected`,
-      onRemove: () => setCheckedKeyTreeNodeIds(new Set()),
+      label: `Key tree: ${selectedTreeKeyIds.size} selected`,
+      onRemove: () => setSelectedTreeKeyIds(new Set()),
     })
   }
   columnFilters.forEach((st, localeId) => {
@@ -1787,7 +1814,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     setSearch('')
     setFilterStatus('all')
     setSelectedLocaleId(null)
-    setCheckedKeyTreeNodeIds(new Set())
+    setSelectedTreeKeyIds(new Set())
     setColumnFilters(new Map())
   }
 
@@ -2286,10 +2313,10 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                 >
                   <Folder className="h-3.5 w-3.5" />
                 </button>
-                {checkedKeyTreeNodeIds.size > 0 && (
+                {selectedTreeKeyIds.size > 0 && (
                   <button
                     type="button"
-                    onClick={() => setCheckedKeyTreeNodeIds(new Set())}
+                    onClick={() => setSelectedTreeKeyIds(new Set())}
                     className="text-[10px] text-muted-foreground hover:text-foreground"
                   >
                     Clear
@@ -2301,7 +2328,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
               <KeyTreeNodeRow
                 node={keyTree}
                 depth={0}
-                checkedNodeIds={checkedKeyTreeNodeIds}
+                checkStates={keyTreeCheckStates}
                 expandedNodeIds={expandedKeyTreeNodeIds}
                 onToggleChecked={toggleKeyTreeChecked}
                 onToggleExpanded={toggleKeyTreeExpanded}
