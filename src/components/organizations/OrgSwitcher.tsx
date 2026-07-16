@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import Link from 'next/link'
 import { ChevronDown, Check, Plus, Building2, Settings, Loader2 } from 'lucide-react'
 import type { OrgWithStats } from '@/types'
 
@@ -95,7 +96,7 @@ export function OrgSwitcher({ orgs, currentOrgId, canManageOrg, onSwitch, onCrea
 
           <div className="border-t border-border py-1">
             {canManageOrg && currentOrgId && (
-              <a
+              <Link
                 href={`/orgs/${currentOrgId}/settings`}
                 onClick={() => setOpen(false)}
                 className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-accent transition-colors"
@@ -104,7 +105,7 @@ export function OrgSwitcher({ orgs, currentOrgId, canManageOrg, onSwitch, onCrea
                   <Settings className="h-3 w-3 text-muted-foreground" />
                 </div>
                 <span className="text-sm text-muted-foreground">Workspace settings</span>
-              </a>
+              </Link>
             )}
             <button
               onClick={() => {

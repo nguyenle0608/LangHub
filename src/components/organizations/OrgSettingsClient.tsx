@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Trash2, UserMinus, Shield, Loader2 } from 'lucide-react'
+import { ArrowLeft, Trash2, UserMinus, UsersRound, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,9 +23,9 @@ const ROLE_LABELS: Record<MemberRole, string> = {
 }
 
 const ROLE_COLORS: Record<MemberRole, string> = {
-  owner: 'bg-purple-950/60 text-purple-300 border-purple-800',
-  admin: 'bg-blue-950/60 text-blue-300 border-blue-800',
-  translator: 'bg-green-950/60 text-green-300 border-green-800',
+  owner: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800',
+  admin: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800',
+  translator: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950/60 dark:text-green-300 dark:border-green-800',
   viewer: 'bg-muted text-muted-foreground border-border',
 }
 
@@ -189,7 +189,6 @@ export function OrgSettingsClient({ org, members: initialMembers, currentUserId 
               </div>
             </div>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <span>Plan: <span className="text-foreground capitalize">{org.plan}</span></span>
               <span>{org.member_count} member{org.member_count !== 1 ? 's' : ''}</span>
               <span>{org.project_count} project{org.project_count !== 1 ? 's' : ''}</span>
             </div>
@@ -199,19 +198,19 @@ export function OrgSettingsClient({ org, members: initialMembers, currentUserId 
         {/* Members */}
         <section className="bg-card border border-border rounded-xl overflow-hidden">
           <div className="px-6 py-4 border-b border-border flex items-center gap-2">
-            <Shield className="h-4 w-4 text-muted-foreground" />
+            <UsersRound className="h-4 w-4 text-muted-foreground" />
             <h2 className="text-base font-semibold text-foreground">Members</h2>
           </div>
 
           {/* Members list */}
-          <div className="divide-y divide-zinc-800">
+          <div className="divide-y divide-border">
             {members.map((member) => {
               const isCurrentUser = member.user_id === currentUserId
               const canModify = isOwner && !isCurrentUser && member.role !== 'owner'
 
               return (
                 <div key={member.id} className="flex items-center gap-3 px-6 py-3">
-                  <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center flex-shrink-0">
+                  <div className="w-8 h-8 rounded-full border border-border bg-muted flex items-center justify-center flex-shrink-0">
                     <span className="text-xs font-medium text-foreground uppercase">
                       {(member.email ?? member.user_id).charAt(0)}
                     </span>
@@ -291,8 +290,8 @@ export function OrgSettingsClient({ org, members: initialMembers, currentUserId 
 
         {/* Danger Zone — owners only */}
         {isOwner && (
-          <section className="bg-card border border-destructive/30 rounded-xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-red-900/50">
+          <section className="bg-card border border-destructive/25 rounded-xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-destructive/20 bg-destructive/5">
               <h2 className="text-base font-semibold text-destructive">Danger zone</h2>
             </div>
             <div className="px-6 py-5 space-y-4">
