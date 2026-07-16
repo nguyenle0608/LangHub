@@ -53,9 +53,9 @@ export function ProjectsPageClient({ projects, orgs, currentOrgId, userEmail, us
   // Silently update URL with default org — avoids server-side redirect flash
   useEffect(() => {
     if (!hasOrgParam && currentOrgId) {
-      router.replace(`/projects?org=${currentOrgId}`, { scroll: false })
+      window.history.replaceState(null, '', `/projects?org=${currentOrgId}`)
     }
-  }, [hasOrgParam, currentOrgId, router])
+  }, [hasOrgParam, currentOrgId])
 
   const canDelete = userRole === 'owner'
 
