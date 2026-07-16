@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { ArrowLeftRight, ChevronDown, ChevronRight, RotateCcw, Search } from 'lucide-react'
+import { ArrowLeftRight, ChevronDown, ChevronRight, RotateCcw, Search, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,11 +16,39 @@ interface Props {
   onRestored?: () => void
 }
 
-const TYPE_STYLES: Record<DiffType, { row: string; label: string; dot: string }> = {
-  changed:   { row: 'border-l-2 border-yellow-500 bg-yellow-500/5', label: 'changed', dot: 'bg-yellow-400' },
-  added:     { row: 'border-l-2 border-green-500 bg-green-500/5',   label: 'added',   dot: 'bg-green-400'  },
-  removed:   { row: 'border-l-2 border-red-500 bg-red-500/5',       label: 'removed', dot: 'bg-red-400'    },
-  unchanged: { row: '',                                               label: 'same',    dot: 'bg-zinc-600'   },
+const TYPE_STYLES: Record<DiffType, { row: string; accent: string; badge: string; value: string; label: string; dot: string }> = {
+  changed: {
+    row: 'bg-yellow-500/[0.025] hover:bg-yellow-500/[0.045]',
+    accent: 'bg-yellow-400',
+    badge: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-700 dark:text-yellow-300',
+    value: 'text-yellow-700 dark:text-yellow-300',
+    label: 'changed',
+    dot: 'bg-yellow-400',
+  },
+  added: {
+    row: 'bg-green-500/[0.025] hover:bg-green-500/[0.045]',
+    accent: 'bg-green-400',
+    badge: 'border-green-500/20 bg-green-500/10 text-green-700 dark:text-green-300',
+    value: 'text-green-700 dark:text-green-300',
+    label: 'added',
+    dot: 'bg-green-400',
+  },
+  removed: {
+    row: 'bg-red-500/[0.025] hover:bg-red-500/[0.045]',
+    accent: 'bg-red-400',
+    badge: 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300',
+    value: 'text-red-700 dark:text-red-300',
+    label: 'removed',
+    dot: 'bg-red-400',
+  },
+  unchanged: {
+    row: 'opacity-70 hover:opacity-100 hover:bg-muted/20',
+    accent: 'bg-transparent',
+    badge: 'border-border bg-muted/40 text-muted-foreground',
+    value: 'text-muted-foreground',
+    label: 'same',
+    dot: 'bg-zinc-600',
+  },
 }
 
 
@@ -79,7 +107,7 @@ function RestoreDialog({
         {/* Scope */}
         <div className="space-y-2">
           <label className="text-xs font-medium text-muted-foreground">Scope</label>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             {(['all', 'locale'] as const).map((s) => (
               <button
                 key={s}
@@ -167,7 +195,7 @@ export function VersionDiffView({ projectId, versionA, versions, onRestored }: P
 
   const filtered = useMemo(() => {
     return diff.filter((entry) => {
-      if (entry.type === 'unchanged' && !showUnchanged) return false
+      if (entry.type === 'unchanged' && !showUnchanged && filterType !== 'unchanged') return false
       if (filterType !== 'all' && entry.type !== filterType) return false
       if (filterLocale !== 'all' && entry.locale_code !== filterLocale) return false
       if (search) {
@@ -189,83 +217,115 @@ export function VersionDiffView({ projectId, versionA, versions, onRestored }: P
 
   const compareVersion = versions.find((v) => v.id === compareWithId)
   const compareName = compareWithId === 'current' ? 'Current State' : (compareVersion?.name ?? compareWithId)
+  const normalizedSearch = search.trim()
+  const hasActiveFilters = filterType !== 'all' || filterLocale !== 'all' || normalizedSearch.length > 0
+  const clearFilters = () => {
+    setFilterType('all')
+    setFilterLocale('all')
+    setSearch('')
+  }
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-background">
       {/* Controls bar */}
-      <div className="px-5 py-3 border-b border-border space-y-2 flex-shrink-0">
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2 text-sm text-foreground">
-            <span className="text-muted-foreground text-xs truncate max-w-[140px]">{versionA.name}</span>
-            <ArrowLeftRight className="h-3.5 w-3.5 text-muted-foreground" />
+      <div className="px-5 py-3 border-b border-border space-y-3 flex-shrink-0">
+        <div className="flex items-end gap-3">
+          <div className="min-w-0 flex-1 space-y-1">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Comparison</p>
+            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(220px,1.05fr)] items-center gap-2">
+              <div className="flex h-8 min-w-0 items-center gap-2 rounded-md bg-muted/40 px-2.5">
+                <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Base</span>
+                <span className="min-w-0 truncate text-sm font-medium text-foreground" title={versionA.name}>
+                  {versionA.name}
+                </span>
+              </div>
+              <div className="flex h-8 w-6 items-center justify-center text-muted-foreground">
+                <ArrowLeftRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </div>
+              <label className="flex h-8 min-w-0 items-center gap-2">
+                <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Compare</span>
+                <select
+                  value={compareWithId}
+                  onChange={(e) => setCompareWithId(e.target.value)}
+                  className="h-8 w-full min-w-0 rounded border border-border bg-background px-2 text-sm text-foreground outline-none transition-colors hover:border-muted-foreground/50 focus:border-blue-500"
+                  title={compareName}
+                >
+                  <option value="current">Current State</option>
+                  {versions.filter((v) => v.id !== versionA.id).map((v) => (
+                    <option key={v.id} value={v.id}>{v.name}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 shrink-0 border-border text-xs gap-1.5"
+            onClick={() => setShowRestoreDialog(true)}
+            title={`Restore to ${versionA.name}`}
+          >
+            <RotateCcw className="h-3 w-3 shrink-0" />
+            Restore
+          </Button>
+        </div>
+
+        {!loading && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
+            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Filter</span>
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+              {(['changed', 'added', 'removed', 'unchanged'] as const).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  aria-pressed={filterType === type}
+                  title={filterType === type ? `Filtering by ${type}. Click again to clear.` : `Filter by ${type}`}
+                  onClick={() => setFilterType(filterType === type ? 'all' : type)}
+                  className={[
+                    'flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] transition-colors',
+                    filterType === type
+                      ? 'border-blue-500 bg-blue-600 text-white shadow-sm ring-2 ring-blue-500/20'
+                      : 'border-border bg-background/60 text-muted-foreground hover:border-muted-foreground/50 hover:text-foreground',
+                  ].join(' ')}
+                >
+                  <span className={['h-1.5 w-1.5 rounded-full', filterType === type ? 'bg-white' : TYPE_STYLES[type].dot].join(' ')} />
+                  {summary[type]} {type}
+                </button>
+              ))}
+            </div>
+
+            <div className="relative min-w-[200px] flex-1 max-w-[280px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search keys…"
+                className="pl-7 h-7 text-xs bg-background border-border"
+              />
+            </div>
             <select
-              value={compareWithId}
-              onChange={(e) => setCompareWithId(e.target.value)}
-              className="text-xs bg-card border border-border rounded px-2 py-1 text-foreground"
+              value={filterLocale}
+              onChange={(e) => setFilterLocale(e.target.value)}
+              className="h-7 text-xs bg-background border border-border rounded px-2 text-foreground"
             >
-              <option value="current">Current State</option>
-              {versions.filter((v) => v.id !== versionA.id).map((v) => (
-                <option key={v.id} value={v.id}>{v.name}</option>
+              <option value="all">All locales</option>
+              {locales.map((l) => (
+                <option key={l} value={l}>{l.toUpperCase()}</option>
               ))}
             </select>
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              className="border-border h-7 text-xs gap-1.5"
-              onClick={() => setShowRestoreDialog(true)}
-            >
-              <RotateCcw className="h-3 w-3" />
-              Restore to {versionA.name}
-            </Button>
-          </div>
-        </div>
-
-        {/* Summary chips */}
-        {!loading && (
-          <div className="flex items-center gap-2 flex-wrap">
-            {(['changed', 'added', 'removed', 'unchanged'] as const).map((type) => (
+            {hasActiveFilters && (
               <button
-                key={type}
                 type="button"
-                onClick={() => setFilterType(filterType === type ? 'all' : type)}
-                className={[
-                  'flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-full border transition-colors',
-                  filterType === type
-                    ? 'bg-accent border-zinc-500 text-foreground'
-                    : 'border-border text-muted-foreground hover:border-border',
-                ].join(' ')}
+                onClick={clearFilters}
+                className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-500/10 dark:text-blue-300"
+                title="Clear all active filters"
               >
-                <span className={['w-1.5 h-1.5 rounded-full', TYPE_STYLES[type].dot].join(' ')} />
-                {summary[type]} {type}
+                <X className="h-3 w-3" aria-hidden="true" />
+                Clear
               </button>
-            ))}
+            )}
           </div>
         )}
-
-        {/* Filters row */}
-        <div className="flex gap-2">
-          <div className="relative flex-1 max-w-xs">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search keys…"
-              className="pl-7 h-7 text-xs bg-card border-border"
-            />
-          </div>
-          <select
-            value={filterLocale}
-            onChange={(e) => setFilterLocale(e.target.value)}
-            className="text-xs bg-card border border-border rounded px-2 py-1 text-foreground"
-          >
-            <option value="all">All locales</option>
-            {locales.map((l) => (
-              <option key={l} value={l}>{l.toUpperCase()}</option>
-            ))}
-          </select>
-        </div>
       </div>
 
       {/* Diff table */}
@@ -283,7 +343,7 @@ export function VersionDiffView({ projectId, versionA, versions, onRestored }: P
         ) : (
           <>
             {/* Header */}
-            <div className="sticky top-0 z-10 grid grid-cols-[1fr_160px_1fr_1fr] gap-3 px-5 py-2 bg-card border-b border-border text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+            <div className="sticky top-0 z-10 grid grid-cols-[minmax(180px,1fr)_120px_minmax(160px,1fr)_minmax(160px,1fr)] gap-3 px-5 py-2 bg-card/95 border-b border-border text-[11px] font-medium text-muted-foreground uppercase tracking-wide backdrop-blur">
               <div>Key</div>
               <div>Locale</div>
               <div>{versionA.name}</div>
@@ -298,7 +358,7 @@ export function VersionDiffView({ projectId, versionA, versions, onRestored }: P
 
             {/* Unchanged toggle */}
             {summary.unchanged > 0 && (
-              <div className="px-5 py-3">
+              <div className="px-5 py-3 border-t border-border/50">
                 <button
                   type="button"
                   onClick={() => setShowUnchanged((v) => !v)}
@@ -335,26 +395,34 @@ export function VersionDiffView({ projectId, versionA, versions, onRestored }: P
 function DiffRow({ entry }: { entry: DiffEntry }) {
   const style = TYPE_STYLES[entry.type]
   return (
-    <div className={['grid grid-cols-[1fr_160px_1fr_1fr] gap-3 px-5 py-2.5 border-b border-border/60', style.row].join(' ')}>
-      <div className="font-mono text-xs text-foreground truncate self-center">{entry.key_name}</div>
+    <div className={['relative grid grid-cols-[minmax(180px,1fr)_120px_minmax(160px,1fr)_minmax(160px,1fr)] gap-3 px-5 py-2.5 transition-colors', style.row].join(' ')}>
+      <span className={['absolute left-0 top-2 bottom-2 w-0.5 rounded-r', style.accent].join(' ')} aria-hidden="true" />
+      <div className="min-w-0 self-center">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="font-mono text-xs text-foreground truncate">{entry.key_name}</span>
+          <span className={['shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium leading-none', style.badge].join(' ')}>
+            {style.label}
+          </span>
+        </div>
+      </div>
       <div className="flex items-center gap-1.5 self-center">
         <span className="text-base">{localeFlag(entry.locale_code)}</span>
         <span className="text-[11px] font-medium text-muted-foreground uppercase">{entry.locale_code}</span>
       </div>
-      <div className="text-xs self-center">
+      <div className="min-w-0 text-xs self-center">
         {entry.type === 'added' ? (
           <span className="text-muted-foreground italic">—</span>
         ) : (
-          <span className={entry.type === 'changed' ? 'text-muted-foreground line-through' : 'text-foreground'}>
+          <span className={entry.type === 'changed' ? 'text-muted-foreground line-through decoration-muted-foreground/60' : style.value}>
             {entry.valueA ?? <span className="text-muted-foreground italic">empty</span>}
           </span>
         )}
       </div>
-      <div className="text-xs self-center">
+      <div className="min-w-0 text-xs self-center">
         {entry.type === 'removed' ? (
           <span className="text-muted-foreground italic">—</span>
         ) : (
-          <span className={entry.type === 'changed' ? 'text-green-300' : 'text-foreground'}>
+          <span className={entry.type === 'changed' || entry.type === 'added' ? style.value : 'text-foreground'}>
             {entry.valueB ?? <span className="text-muted-foreground italic">empty</span>}
           </span>
         )}
