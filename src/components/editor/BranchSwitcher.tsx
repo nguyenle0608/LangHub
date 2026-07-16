@@ -191,7 +191,7 @@ export function BranchSwitcher({
 
         <div className="border-t border-border my-1" />
         <Link
-          href={`/${projectId}/branches`}
+          href={`/dashboard/${projectId}/branches`}
           onClick={() => setOpen(false)}
           className="w-full text-left text-xs text-muted-foreground hover:text-foreground px-2 py-1.5 rounded hover:bg-muted/60 flex items-center gap-2"
         >

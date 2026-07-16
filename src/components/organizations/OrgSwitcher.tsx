@@ -97,7 +97,7 @@ export function OrgSwitcher({ orgs, currentOrgId, canManageOrg, onSwitch, onCrea
           <div className="border-t border-border py-1">
             {canManageOrg && currentOrgId && (
               <Link
-                href={`/orgs/${currentOrgId}/settings`}
+                href={`/dashboard/orgs/${currentOrgId}/settings`}
                 onClick={() => setOpen(false)}
                 className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-accent transition-colors"
               >

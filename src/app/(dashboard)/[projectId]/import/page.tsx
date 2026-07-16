@@ -1,24 +1,20 @@
-import { notFound } from 'next/navigation'
-import { getProjectLite } from '@/lib/supabase/queries/projects'
-import { ImportWizard } from '@/components/import/ImportWizard'
+import { redirect } from 'next/navigation'
 
-export default async function ImportPage({
+export default function LegacyProjectSectionRedirect({
   params,
   searchParams,
 }: {
-  params: Promise<{ projectId: string }>
-  searchParams: Promise<{ branch?: string }>
+  params: { projectId: string }
+  searchParams: Record<string, string | string[] | undefined>
 }) {
-  const startedAt = Date.now()
-  const { projectId } = await params
-  const { branch } = await searchParams
-
-  const project = await getProjectLite(projectId)
-  if (!project) notFound()
-
-  if (process.env.NODE_ENV === 'development') {
-    console.info(`[perf] /${projectId}/import locales=${project.locales.length} total=${Date.now() - startedAt}ms`)
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (Array.isArray(value)) {
+      value.forEach((item) => query.append(key, item))
+    } else if (value !== undefined) {
+      query.set(key, value)
+    }
   }
-
-  return <ImportWizard project={project} branchId={branch} />
+  const qs = query.toString()
+  redirect(`/dashboard/${params.projectId}/import${qs ? `?${qs}` : ''}`)
 }

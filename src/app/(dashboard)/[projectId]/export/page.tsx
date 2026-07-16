@@ -1,19 +1,20 @@
-import { redirect, notFound } from 'next/navigation'
-import { getUser } from '@/lib/supabase/session'
-import { getProject } from '@/lib/supabase/queries/projects'
-import { ExportPageClient } from '@/components/export/ExportPageClient'
+import { redirect } from 'next/navigation'
 
-export default async function ExportPage({
+export default function LegacyProjectSectionRedirect({
   params,
+  searchParams,
 }: {
-  params: Promise<{ projectId: string }>
+  params: { projectId: string }
+  searchParams: Record<string, string | string[] | undefined>
 }) {
-  const { projectId } = await params
-  const user = await getUser()
-  if (!user) redirect('/login')
-
-  const project = await getProject(projectId)
-  if (!project) notFound()
-
-  return <ExportPageClient project={project} />
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (Array.isArray(value)) {
+      value.forEach((item) => query.append(key, item))
+    } else if (value !== undefined) {
+      query.set(key, value)
+    }
+  }
+  const qs = query.toString()
+  redirect(`/dashboard/${params.projectId}/export${qs ? `?${qs}` : ''}`)
 }

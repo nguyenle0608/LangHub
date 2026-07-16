@@ -1,9 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { FolderOpen, KeyRound, LogOut } from 'lucide-react'
+import { KeyRound, LogOut } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 
@@ -12,7 +11,6 @@ interface UserAccountMenuProps {
   role?: string | null
   avatarColor?: string
   avatarClassName?: string
-  showBackToProjects?: boolean
 }
 
 export function UserAccountMenu({
@@ -20,7 +18,6 @@ export function UserAccountMenu({
   role,
   avatarColor,
   avatarClassName,
-  showBackToProjects = false,
 }: UserAccountMenuProps) {
   const router = useRouter()
   const [loggingOut, setLoggingOut] = useState(false)
@@ -70,15 +67,6 @@ export function UserAccountMenu({
           )}
         </div>
         <div className="p-1">
-          {showBackToProjects && (
-            <Link
-              href="/projects"
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent rounded transition-colors"
-            >
-              <FolderOpen className="h-3.5 w-3.5" />
-              Back to projects
-            </Link>
-          )}
           <button
             type="button"
             onClick={handleChangePassword}

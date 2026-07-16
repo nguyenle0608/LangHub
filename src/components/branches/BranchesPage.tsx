@@ -112,7 +112,7 @@ export function BranchesPage({ project, initialBranches, canManage }: Props) {
       {/* Header */}
       <header className="border-b border-border bg-card/50 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-6 h-14 flex items-center gap-3">
-          <Link href={`/${project.id}/editor`} className="text-muted-foreground hover:text-foreground">
+          <Link href={`/dashboard/${project.id}/editor`} className="text-muted-foreground hover:text-foreground">
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <GitBranch className="h-4 w-4 text-blue-600 dark:text-blue-400" />
@@ -214,7 +214,7 @@ export function BranchesPage({ project, initialBranches, canManage }: Props) {
 
                 {/* Actions */}
                 <div className="flex items-center gap-1 flex-shrink-0">
-                  <Link href={`/${project.id}/editor?branch=${b.id}`}>
+                  <Link href={`/dashboard/${project.id}/editor?branch=${b.id}`}>
                     <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground" title="Open in editor">
                       <ExternalLink className="h-3.5 w-3.5" /> Open
                     </Button>

@@ -65,7 +65,7 @@ function ChangePasswordContent() {
   }
 
   function handleBackToProjects() {
-    router.push('/projects')
+    router.push('/dashboard/projects')
   }
 
   return (
@@ -129,7 +129,7 @@ function ChangePasswordContent() {
       <CardFooter>
         <p className="text-sm text-muted-foreground text-center w-full">
           {success ? (
-            <Link href="/projects" className="text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 transition-colors">
+            <Link href="/dashboard/projects" className="text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 transition-colors">
               Continue to projects
             </Link>
           ) : isRecoveryMode ? (

@@ -1,3 +1,3 @@
-export default function ProjectLayout({ children }: { children: React.ReactNode }) {
+export default function LegacyProjectLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }

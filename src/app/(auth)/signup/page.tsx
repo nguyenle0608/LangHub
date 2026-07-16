@@ -47,7 +47,7 @@ export default function SignupPage() {
   async function handleGoogleSignIn() {
     setError(null)
     setGoogleLoading(true)
-    setOAuthNextCookie('/projects')
+    setOAuthNextCookie('/dashboard/projects')
 
     const supabase = createClient()
     const { error: oauthError } = await supabase.auth.signInWithOAuth({

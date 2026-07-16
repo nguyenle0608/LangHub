@@ -246,7 +246,7 @@ export function VersionsPage({ project, initialVersions }: Props) {
       <div className="w-80 flex-shrink-0 border-r border-border flex flex-col">
         {/* Nav */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
-          <Link href={`/${project.id}/editor`} className="text-muted-foreground hover:text-foreground">
+          <Link href={`/dashboard/${project.id}/editor`} className="text-muted-foreground hover:text-foreground">
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <span className="text-sm font-medium text-foreground flex-1">Versions</span>

@@ -59,7 +59,7 @@ export function ProjectCard({ project, canDelete }: { project: ProjectWithStats;
   return (
     <div className="group relative bg-card border border-border rounded-xl p-5 hover:border-foreground/20 hover:bg-accent/40 transition-all">
       {/* Main clickable area */}
-      <Link href={`/${project.id}/editor`} className="block">
+      <Link href={`/dashboard/${project.id}/editor`} className="block">
         <div className="mb-3 pr-8">
           <h3 className="font-semibold text-foreground group-hover:text-foreground transition-colors truncate">
             {project.name}
@@ -109,7 +109,7 @@ export function ProjectCard({ project, canDelete }: { project: ProjectWithStats;
             {!confirmDelete ? (
               <>
                 <Link
-                  href={`/${project.id}/editor`}
+                  href={`/dashboard/${project.id}/editor`}
                   className="flex items-center gap-2.5 px-3 py-2 text-popover-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
                   onClick={() => setMenuOpen(false)}
                 >
@@ -119,7 +119,7 @@ export function ProjectCard({ project, canDelete }: { project: ProjectWithStats;
                 {canDelete && (
                   <>
                     <Link
-                      href={`/${project.id}/settings`}
+                      href={`/dashboard/${project.id}/settings`}
                       className="flex items-center gap-2.5 px-3 py-2 text-popover-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
                       onClick={() => setMenuOpen(false)}
                     >
