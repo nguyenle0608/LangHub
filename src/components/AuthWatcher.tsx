@@ -32,8 +32,8 @@ export function AuthWatcher({ initialUserId = null }: Props) {
 
     async function checkUser() {
       try {
-        const { data } = await supabase.auth.getUser()
-        const currentId = data.user?.id ?? null
+        const { data } = await supabase.auth.getSession()
+        const currentId = data.session?.user?.id ?? null
         if (!currentId) return
         if (!knownUserIdRef.current) {
           knownUserIdRef.current = currentId
