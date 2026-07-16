@@ -117,7 +117,7 @@ export function ProjectsPageClient({ projects, orgs, currentOrgId, userEmail, us
           {/* Right: theme action + user avatar dropdown */}
           <div className="flex items-center gap-2">
             <ThemeHeaderButton />
-            <UserAccountMenu email={userEmail} role={userRole} />
+            <UserAccountMenu email={userEmail} role={userRole} plan={currentOrg?.plan} />
           </div>
         </div>
       </header>

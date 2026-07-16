@@ -58,7 +58,7 @@ interface Props {
   totalKeyCount: number
   branches: Branch[]
   activeBranchId: string
-  user: { id: string; email?: string | undefined; role: MemberRole }
+  user: { id: string; email?: string | undefined; role: MemberRole; plan?: string | null }
 }
 
 type FilterStatus = 'all' | 'empty' | 'pending' | 'reviewed' | 'approved'
@@ -1962,6 +1962,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
         <UserAccountMenu
           email={user.email}
           role={user.role}
+          plan={user.plan}
           avatarClassName="w-7 h-7 text-[11px] flex-shrink-0"
         />
       </header>

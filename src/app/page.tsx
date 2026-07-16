@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { ArrowRight, CheckCircle2, GitBranch, Globe2, History, Languages, Layers3, Sparkles, UsersRound } from 'lucide-react'
 import { getSession } from '@/lib/supabase/session'
+import { getOrganizations } from '@/lib/supabase/queries/organizations'
 import { ThemeHeaderButton } from '@/components/theme/ThemeHeaderButton'
 import { UserAccountMenu } from '@/components/auth/UserAccountMenu'
 
@@ -23,6 +24,8 @@ export default async function LandingPage() {
   const isSignedIn = !!session
   const primaryHref = isSignedIn ? '/dashboard/projects' : '/signup'
   const primaryLabel = isSignedIn ? 'Open dashboard' : 'Start free'
+  const orgs = session?.user.id ? await getOrganizations(session.user.id) : []
+  const accountPlan = orgs[0]?.plan ?? 'free'
 
   return (
     <main className="min-h-screen overflow-hidden bg-background text-foreground">
@@ -48,7 +51,7 @@ export default async function LandingPage() {
               <Link href="/dashboard/projects" className="rounded-md border border-border px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-accent">
                 Dashboard
               </Link>
-              <UserAccountMenu email={session.user.email} avatarClassName="h-7 w-7 text-[11px]" />
+              <UserAccountMenu email={session.user.email} plan={accountPlan} avatarClassName="h-7 w-7 text-[11px]" />
             </>
           ) : (
             <>
