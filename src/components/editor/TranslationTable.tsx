@@ -2601,55 +2601,53 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                         </span>
                       )
                     })()}
-                    {!locale.is_base && (
-                      <Popover>
-                        <PopoverTrigger asChild>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          className={cn(
+                            'p-0.5 rounded transition-colors',
+                            isFiltered
+                              ? 'text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:text-blue-300'
+                              : 'text-muted-foreground hover:text-foreground'
+                          )}
+                          title={`Filter ${locale.code.toUpperCase()} column by status. Combines (AND) with other active filters — may show no rows if they conflict.`}
+                        >
+                          <ListFilter className="h-3 w-3" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-36 p-1 bg-card border-border" align="start">
+                        {COL_STATUS_OPTIONS.map((opt) => (
                           <button
+                            key={opt.id}
+                            onClick={() => {
+                              setColumnFilters((prev) => {
+                                const next = new Map(prev)
+                                if (opt.id === 'all') next.delete(locale.id)
+                                else next.set(locale.id, opt.id)
+                                return next
+                              })
+                            }}
                             className={cn(
-                              'p-0.5 rounded transition-colors',
-                              isFiltered
-                                ? 'text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:text-blue-300'
-                                : 'text-muted-foreground hover:text-foreground'
+                              'w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors',
+                              colStatus === opt.id
+                                ? 'bg-muted text-foreground'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
                             )}
-                            title="Filter this column by status. Combines (AND) with other active filters — may show no rows if they conflict."
                           >
-                            <ListFilter className="h-3 w-3" />
+                            {opt.id !== 'all' && (
+                              <span className={cn(
+                                'w-1.5 h-1.5 rounded-full flex-shrink-0',
+                                opt.id === 'approved' && 'bg-emerald-500',
+                                opt.id === 'reviewed' && 'bg-blue-500',
+                                opt.id === 'pending' && 'bg-amber-500',
+                                opt.id === 'empty' && 'bg-zinc-600',
+                              )} />
+                            )}
+                            {opt.label}
                           </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-36 p-1 bg-card border-border" align="start">
-                          {COL_STATUS_OPTIONS.map((opt) => (
-                            <button
-                              key={opt.id}
-                              onClick={() => {
-                                setColumnFilters((prev) => {
-                                  const next = new Map(prev)
-                                  if (opt.id === 'all') next.delete(locale.id)
-                                  else next.set(locale.id, opt.id)
-                                  return next
-                                })
-                              }}
-                              className={cn(
-                                'w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors',
-                                colStatus === opt.id
-                                  ? 'bg-muted text-foreground'
-                                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
-                              )}
-                            >
-                              {opt.id !== 'all' && (
-                                <span className={cn(
-                                  'w-1.5 h-1.5 rounded-full flex-shrink-0',
-                                  opt.id === 'approved' && 'bg-emerald-500',
-                                  opt.id === 'reviewed' && 'bg-blue-500',
-                                  opt.id === 'pending' && 'bg-amber-500',
-                                  opt.id === 'empty' && 'bg-zinc-600',
-                                )} />
-                              )}
-                              {opt.label}
-                            </button>
-                          ))}
-                        </PopoverContent>
-                      </Popover>
-                    )}
+                        ))}
+                      </PopoverContent>
+                    </Popover>
                     <div
                       role="separator"
                       aria-orientation="vertical"
