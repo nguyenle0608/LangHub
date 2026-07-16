@@ -1,48 +1,20 @@
-import { notFound } from 'next/navigation'
-import { getUser } from '@/lib/supabase/session'
-import { getProjectLite } from '@/lib/supabase/queries/projects'
-import { getUserOrgRole } from '@/lib/supabase/queries/organizations'
-import { getBranchesBootstrap, listBranchesWithStats } from '@/lib/branches/queries'
-import { BranchesPage } from '@/components/branches/BranchesPage'
+import { redirect } from 'next/navigation'
 
-export default async function BranchesPageRoute({
+export default function LegacyProjectSectionRedirect({
   params,
+  searchParams,
 }: {
-  params: Promise<{ projectId: string }>
+  params: { projectId: string }
+  searchParams: Record<string, string | string[] | undefined>
 }) {
-  const startedAt = Date.now()
-  const { projectId } = await params
-  const bootstrap = await getBranchesBootstrap(projectId)
-  let project = bootstrap?.project ?? null
-  let branches = bootstrap?.branches ?? []
-  let role = bootstrap?.role ?? null
-
-  if (!bootstrap) {
-    project = await getProjectLite(projectId)
-    if (!project) notFound()
-    const fallbackProject = project
-
-    const [fallbackBranches, fallbackRole] = await Promise.all([
-      listBranchesWithStats(projectId),
-      fallbackProject.org_id
-        ? getUser().then((user) => user ? getUserOrgRole(fallbackProject.org_id!, user.id) : null)
-        : Promise.resolve(null),
-    ])
-    branches = fallbackBranches
-    role = fallbackRole
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (Array.isArray(value)) {
+      value.forEach((item) => query.append(key, item))
+    } else if (value !== undefined) {
+      query.set(key, value)
+    }
   }
-
-  if (!project) notFound()
-
-  if (process.env.NODE_ENV === 'development') {
-    console.info(`[perf] /${projectId}/branches branches=${branches.length} total=${Date.now() - startedAt}ms`)
-  }
-
-  return (
-    <BranchesPage
-      project={project}
-      initialBranches={branches}
-      canManage={role === 'owner' || role === 'admin'}
-    />
-  )
+  const qs = query.toString()
+  redirect(`/dashboard/${params.projectId}/branches${qs ? `?${qs}` : ''}`)
 }

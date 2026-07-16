@@ -425,7 +425,7 @@ export function ImportWizard({ project, branchId }: Props) {
     <div className="flex flex-col h-screen bg-background text-foreground">
       {/* Nav */}
       <div className="flex items-center gap-3 px-6 py-3 border-b border-border flex-shrink-0">
-        <Link href={`/${project.id}/editor`} className="text-muted-foreground hover:text-foreground">
+        <Link href={`/dashboard/${project.id}/editor`} className="text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <span className="text-sm font-medium text-foreground">{project.name} / Import</span>
@@ -938,7 +938,7 @@ export function ImportWizard({ project, branchId }: Props) {
                 >
                   Import More
                 </Button>
-                <Link href={`/${project.id}/editor`}>
+                <Link href={`/dashboard/${project.id}/editor`}>
                   <Button size="sm">View in Editor</Button>
                 </Link>
               </div>

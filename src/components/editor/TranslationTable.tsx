@@ -7,10 +7,9 @@ import {
   Search, Plus, Download, Upload,
   Sparkles, ListFilter, Layers2, ChevronDown,
   Columns3, Eye, EyeOff, Pin, PinOff, Lock, Unlock, GripVertical, Undo2, Redo2,
-  MoreHorizontal, Copy, History, GitBranch as GitBranchIcon, Loader2, ArrowUp,
+  MoreHorizontal, Copy, History, GitBranch as GitBranchIcon, Loader2, ArrowUp, ArrowLeft,
   Info, X, Folder, FolderOpen, FileKey2, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react'
-import { Logo } from '@/components/Logo'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -540,7 +539,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     setSelectedKeyId(null)
     setEditingCell(null)
     // Update URL without a full navigation (no loading flash, no remount)
-    window.history.replaceState(null, '', `/${project.id}/editor?branch=${branchId}`)
+    window.history.replaceState(null, '', `/dashboard/${project.id}/editor?branch=${branchId}`)
     await loadBranchWindowed(branchId)
   }, [activeBranchId, switchingBranch, project.id, loadBranchWindowed])
 
@@ -1841,12 +1840,10 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
       {/* ── TopNav ── */}
       <header className="h-12 border-b border-border flex items-center px-4 gap-3 flex-shrink-0 bg-background/95 backdrop-blur">
-        {/* Logo + breadcrumb */}
-        <Link href="/projects" className="flex items-center gap-2 shrink-0 group">
-          <Logo size={24} />
-          <span className="font-semibold text-sm text-foreground group-hover:text-foreground transition-colors hidden lg:block">
-            LangHub
-          </span>
+        {/* Back + breadcrumb */}
+        <Link href="/dashboard/projects" className="flex items-center gap-1.5 shrink-0 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="h-4 w-4" />
+          <span className="hidden sm:inline">Projects</span>
         </Link>
         <span className="text-border text-sm select-none px-0.5">/</span>
         <span className="text-sm text-muted-foreground truncate max-w-[160px]" title={project.name}>
@@ -1912,7 +1909,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
           </PopoverTrigger>
           <PopoverContent className="w-48 p-1 bg-card border-border" align="end">
             {canManage && (
-              <Link href={`/${project.id}/import?branch=${activeBranchId}`}>
+              <Link href={`/dashboard/${project.id}/import?branch=${activeBranchId}`}>
                 <button className="w-full text-left text-xs text-foreground hover:text-foreground px-2 py-1.5 rounded hover:bg-muted/60 flex items-center gap-2">
                   <Upload className="h-3.5 w-3.5 text-muted-foreground" />
                   Import
@@ -1927,19 +1924,19 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
               Export
             </button>
             <div className="border-t border-border my-1" />
-            <Link href={`/${project.id}/keys`}>
+            <Link href={`/dashboard/${project.id}/keys`}>
               <button className="w-full text-left text-xs text-foreground hover:text-foreground px-2 py-1.5 rounded hover:bg-muted/60 flex items-center gap-2">
                 <Copy className="h-3.5 w-3.5 text-muted-foreground" />
                 Duplicate Keys
               </button>
             </Link>
-            <Link href={`/${project.id}/branches`}>
+            <Link href={`/dashboard/${project.id}/branches`}>
               <button className="w-full text-left text-xs text-foreground hover:text-foreground px-2 py-1.5 rounded hover:bg-muted/60 flex items-center gap-2">
                 <GitBranchIcon className="h-3.5 w-3.5 text-muted-foreground" />
                 Branches
               </button>
             </Link>
-            <Link href={`/${project.id}/versions`}>
+            <Link href={`/dashboard/${project.id}/versions`}>
               <button className="w-full text-left text-xs text-foreground hover:text-foreground px-2 py-1.5 rounded hover:bg-muted/60 flex items-center gap-2">
                 <History className="h-3.5 w-3.5 text-muted-foreground" />
                 Versions
@@ -1966,7 +1963,6 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
           email={user.email}
           role={user.role}
           avatarClassName="w-7 h-7 text-[11px] flex-shrink-0"
-          showBackToProjects
         />
       </header>
 
@@ -2734,7 +2730,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                     <p className="text-sm font-medium text-muted-foreground mb-1">No keys yet</p>
                     <p className="text-xs text-muted-foreground mb-4">Import a file or add your first key manually</p>
                     <div className="flex gap-2">
-                      <Link href={`/${project.id}/import?branch=${activeBranchId}`}>
+                      <Link href={`/dashboard/${project.id}/import?branch=${activeBranchId}`}>
                         <Button size="sm" variant="outline" className="border-border gap-1.5">
                           <Upload className="h-3.5 w-3.5" />
                           Import File

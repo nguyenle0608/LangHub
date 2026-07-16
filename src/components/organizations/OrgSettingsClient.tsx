@@ -130,7 +130,7 @@ export function OrgSettingsClient({ org, members: initialMembers, currentUserId 
       const res = await fetch(`/api/organizations/${org.id}`, { method: 'DELETE' })
       if (res.ok) {
         toast.success(`Workspace "${org.name}" deleted`)
-        router.push('/projects')
+        router.push('/dashboard/projects')
       } else {
         const json = await res.json() as { error?: string }
         toast.error(typeof json.error === 'string' ? json.error : 'Failed to delete workspace')
@@ -146,7 +146,7 @@ export function OrgSettingsClient({ org, members: initialMembers, currentUserId 
       <header className="border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-6 h-14 flex items-center gap-3">
           <a
-            href={`/projects?org=${org.id}`}
+            href={`/dashboard/projects?org=${org.id}`}
             className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />

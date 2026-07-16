@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password', '/auth/callback', '/auth/reset-password']
+const AUTH_PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password', '/auth/callback', '/auth/reset-password']
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -37,7 +37,9 @@ export async function middleware(request: NextRequest) {
   const { data: { session } } = await supabase.auth.getSession()
   const path = request.nextUrl.pathname
 
-  const isPublicRoute = PUBLIC_ROUTES.some((r) => path.startsWith(r))
+  const isRootRoute = path === '/'
+  const isAuthPublicRoute = AUTH_PUBLIC_ROUTES.some((r) => path.startsWith(r))
+  const isPublicRoute = isRootRoute || isAuthPublicRoute
   const isApiRoute = path.startsWith('/api/')
   const isStaticRoute = path.startsWith('/_next/')
 
@@ -47,8 +49,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  if (isPublicRoute && session && !path.startsWith('/auth/callback') && !path.startsWith('/auth/reset-password')) {
-    return NextResponse.redirect(new URL('/projects', request.url))
+  if (isAuthPublicRoute && session && !path.startsWith('/auth/callback') && !path.startsWith('/auth/reset-password')) {
+    return NextResponse.redirect(new URL('/dashboard/projects', request.url))
   }
 
   return supabaseResponse

@@ -98,7 +98,7 @@ export function ProjectSettingsClient({ project }: { project: ProjectWithStats }
     setDeleting(true)
     try {
       await fetch(`/api/projects/${project.id}`, { method: 'DELETE' })
-      router.push('/projects')
+      router.push('/dashboard/projects')
     } catch {
       setDeleting(false)
     }
@@ -109,11 +109,11 @@ export function ProjectSettingsClient({ project }: { project: ProjectWithStats }
       {/* Header */}
       <header className="border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-6 h-14 flex items-center gap-3">
-          <Link href="/projects" className="text-muted-foreground hover:text-foreground transition-colors text-sm">
+          <Link href="/dashboard/projects" className="text-muted-foreground hover:text-foreground transition-colors text-sm">
             Projects
           </Link>
           <span className="text-border">/</span>
-          <Link href={`/${project.id}/editor`} className="text-muted-foreground hover:text-foreground transition-colors text-sm">
+          <Link href={`/dashboard/${project.id}/editor`} className="text-muted-foreground hover:text-foreground transition-colors text-sm">
             {project.name}
           </Link>
           <span className="text-border">/</span>

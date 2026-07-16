@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useTransition } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { LayoutGrid, List, ArrowUpDown, Plus } from 'lucide-react'
@@ -53,7 +54,7 @@ export function ProjectsPageClient({ projects, orgs, currentOrgId, userEmail, us
   // Silently update URL with default org — avoids server-side redirect flash
   useEffect(() => {
     if (!hasOrgParam && currentOrgId) {
-      window.history.replaceState(null, '', `/projects?org=${currentOrgId}`)
+      window.history.replaceState(null, '', `/dashboard/projects?org=${currentOrgId}`)
     }
   }, [hasOrgParam, currentOrgId])
 
@@ -65,12 +66,12 @@ export function ProjectsPageClient({ projects, orgs, currentOrgId, userEmail, us
   function handleOrgSwitch(orgId: string) {
     setSwitchingToOrgId(orgId)
     startOrgSwitch(() => {
-      router.push(`/projects?org=${orgId}`)
+      router.push(`/dashboard/projects?org=${orgId}`)
     })
   }
 
   function handleOrgCreated(orgId: string) {
-    router.push(`/projects?org=${orgId}`)
+    router.push(`/dashboard/projects?org=${orgId}`)
     router.refresh()
   }
 
@@ -98,8 +99,10 @@ export function ProjectsPageClient({ projects, orgs, currentOrgId, userEmail, us
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
           {/* Left: logo + org switcher */}
           <div className="flex items-center gap-2">
-            <Logo size={30} />
-            <span className="font-semibold text-foreground tracking-tight hidden sm:inline">LangHub</span>
+            <Link href="/" className="flex items-center gap-2 group">
+              <Logo size={30} />
+              <span className="font-semibold text-foreground tracking-tight hidden sm:inline group-hover:text-foreground">LangHub</span>
+            </Link>
             <span className="text-border hidden sm:inline">/</span>
             <OrgSwitcher
               orgs={orgs}
@@ -243,7 +246,7 @@ function ProjectListRow({ project, canDelete }: { project: ProjectWithStats; can
 
   return (
     <a
-      href={`/${project.id}/editor`}
+      href={`/dashboard/${project.id}/editor`}
       className="grid grid-cols-[1fr_80px_60px_60px_40px] px-4 py-3 gap-4 border-b border-border/60 last:border-0 hover:bg-muted/60 transition-colors items-center group"
     >
       <div className="min-w-0">

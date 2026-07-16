@@ -1,25 +1,20 @@
-import { notFound } from 'next/navigation'
-import { getProjectLite } from '@/lib/supabase/queries/projects'
-import { getVersions } from '@/lib/versions/snapshot'
-import { VersionsPage } from '@/components/versions/VersionsPage'
+import { redirect } from 'next/navigation'
 
-export default async function VersionsPageRoute({
+export default function LegacyProjectSectionRedirect({
   params,
+  searchParams,
 }: {
-  params: Promise<{ projectId: string }>
+  params: { projectId: string }
+  searchParams: Record<string, string | string[] | undefined>
 }) {
-  const startedAt = Date.now()
-  const { projectId } = await params
-
-  const [project, versions] = await Promise.all([
-    getProjectLite(projectId),
-    getVersions(projectId),
-  ])
-  if (!project) notFound()
-
-  if (process.env.NODE_ENV === 'development') {
-    console.info(`[perf] /${projectId}/versions versions=${versions.length} total=${Date.now() - startedAt}ms`)
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (Array.isArray(value)) {
+      value.forEach((item) => query.append(key, item))
+    } else if (value !== undefined) {
+      query.set(key, value)
+    }
   }
-
-  return <VersionsPage project={project} initialVersions={versions} />
+  const qs = query.toString()
+  redirect(`/dashboard/${params.projectId}/versions${qs ? `?${qs}` : ''}`)
 }

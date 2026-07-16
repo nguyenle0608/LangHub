@@ -38,7 +38,7 @@ export function SetupClient() {
         return
       }
 
-      router.push(`/projects?org=${orgId}`)
+      router.push(`/dashboard/projects?org=${orgId}`)
       router.refresh()
     })
   }

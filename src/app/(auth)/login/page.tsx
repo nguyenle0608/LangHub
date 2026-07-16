@@ -215,7 +215,7 @@ function LoginPageContent() {
 
 function getSafeNextPath(next: string | null) {
   if (!next || !next.startsWith('/') || next.startsWith('//')) {
-    return '/projects'
+    return '/dashboard/projects'
   }
 
   return next

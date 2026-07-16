@@ -120,7 +120,7 @@ export function DuplicateFinder({ project, initialGroups }: Props) {
       {/* Nav */}
       <div className="flex items-center gap-3 px-6 py-3 border-b border-border flex-shrink-0">
         <Link
-          href={`/${project.id}/editor`}
+          href={`/dashboard/${project.id}/editor`}
           className="text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
