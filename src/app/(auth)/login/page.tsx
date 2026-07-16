@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+
+const REMEMBERED_EMAIL_KEY = 'langhub:remembered-email'
 
 export default function LoginPage() {
   return (
@@ -28,7 +30,16 @@ function LoginPageContent() {
   const [error, setError] = useState<string | null>(initialError)
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
+  const [rememberMe, setRememberMe] = useState(false)
   const nextPath = getSafeNextPath(searchParams.get('next'))
+
+  useEffect(() => {
+    const rememberedEmail = window.localStorage.getItem(REMEMBERED_EMAIL_KEY)
+    if (rememberedEmail) {
+      setEmail(rememberedEmail)
+      setRememberMe(true)
+    }
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -42,6 +53,12 @@ function LoginPageContent() {
       setError(signInError.message)
       setLoading(false)
       return
+    }
+
+    if (rememberMe) {
+      window.localStorage.setItem(REMEMBERED_EMAIL_KEY, email)
+    } else {
+      window.localStorage.removeItem(REMEMBERED_EMAIL_KEY)
     }
 
     router.push(nextPath)
@@ -102,6 +119,22 @@ function LoginPageContent() {
               autoComplete="current-password"
               className="bg-background border-input text-foreground placeholder:text-muted-foreground focus-visible:ring-ring"
             />
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <label htmlFor="remember-me" className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input
+                id="remember-me"
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="h-4 w-4 rounded border-input bg-background text-blue-600 focus:ring-ring"
+              />
+              Remember me
+            </label>
+            <Link href="/forgot-password" className="text-sm text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 transition-colors">
+              Forgot password?
+            </Link>
           </div>
 
           {error && (

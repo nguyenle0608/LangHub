@@ -1,15 +1,16 @@
 'use client'
 
-import { useState, useEffect, useRef, useTransition } from 'react'
+import { useState, useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import { LayoutGrid, List, LogOut, ArrowUpDown, Plus } from 'lucide-react'
+import { LayoutGrid, List, ArrowUpDown, Plus } from 'lucide-react'
 import { ThemeHeaderButton } from '@/components/theme/ThemeHeaderButton'
 import { Logo } from '@/components/Logo'
 import { toast } from 'sonner'
 import { ProjectCard } from './ProjectCard'
 import { OrgSwitcher } from '@/components/organizations/OrgSwitcher'
 import { Button } from '@/components/ui/button'
+import { UserAccountMenu } from '@/components/auth/UserAccountMenu'
 import type { OrgWithStats, ProjectWithStats } from '@/types'
 
 const CreateProjectDialog = dynamic(() => import('./CreateProjectDialog').then((m) => m.CreateProjectDialog))
@@ -40,7 +41,6 @@ export function ProjectsPageClient({ projects, orgs, currentOrgId, userEmail, us
   const router = useRouter()
   const [view, setView] = useState<ViewMode>('grid')
   const [sort, setSort] = useState<SortKey>('name')
-  const [loggingOut, setLoggingOut] = useState(false)
   const [createOrgOpen, setCreateOrgOpen] = useState(false)
   const [createProjectOpen, setCreateProjectOpen] = useState(false)
   const [isSwitchingOrg, startOrgSwitch] = useTransition()
@@ -61,12 +61,6 @@ export function ProjectsPageClient({ projects, orgs, currentOrgId, userEmail, us
 
   const sorted = sortProjects(projects, sort)
 
-  async function handleLogout() {
-    setLoggingOut(true)
-    await fetch('/api/auth/signout', { method: 'POST' })
-    router.push('/login')
-    router.refresh()
-  }
 
   function handleOrgSwitch(orgId: string) {
     setSwitchingToOrgId(orgId)
@@ -120,7 +114,7 @@ export function ProjectsPageClient({ projects, orgs, currentOrgId, userEmail, us
           {/* Right: theme action + user avatar dropdown */}
           <div className="flex items-center gap-2">
             <ThemeHeaderButton />
-            <UserMenu email={userEmail} onLogout={handleLogout} loggingOut={loggingOut} />
+            <UserAccountMenu email={userEmail} role={userRole} />
           </div>
         </div>
       </header>
@@ -298,60 +292,5 @@ function ProjectListRow({ project, canDelete }: { project: ProjectWithStats; can
         ))}
       </div>
     </a>
-  )
-}
-
-function UserMenu({
-  email,
-  onLogout,
-  loggingOut,
-}: {
-  email: string | undefined
-  onLogout: () => void
-  loggingOut: boolean
-}) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [open])
-
-  const initial = (email?.[0] ?? '?').toUpperCase()
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold text-white hover:bg-blue-500 transition-colors"
-        title={email}
-      >
-        {initial}
-      </button>
-
-      {open && (
-        <div className="absolute right-0 top-10 w-56 bg-popover border border-border rounded-lg shadow-xl z-50 overflow-hidden">
-          <div className="px-4 py-3 border-b border-border">
-            <p className="text-xs text-muted-foreground">Signed in as</p>
-            <p className="text-sm text-foreground font-medium truncate mt-0.5">{email ?? '—'}</p>
-          </div>
-          <div className="p-1">
-            <button
-              onClick={() => { setOpen(false); onLogout() }}
-              disabled={loggingOut}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent rounded transition-colors disabled:opacity-50"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              {loggingOut ? 'Signing out…' : 'Sign out'}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
   )
 }

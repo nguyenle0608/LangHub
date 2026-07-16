@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   Search, Plus, Download, Upload,
-  Sparkles, LogOut, ListFilter, Layers2, ChevronDown,
+  Sparkles, ListFilter, Layers2, ChevronDown,
   Columns3, Eye, EyeOff, Pin, PinOff, Lock, Unlock, GripVertical, Undo2, Redo2,
   MoreHorizontal, Copy, History, GitBranch as GitBranchIcon, Loader2, ArrowUp,
   Info, X, Folder, FolderOpen, FileKey2,
@@ -22,6 +22,7 @@ import { StatusBadge } from './StatusBadge'
 import { Tooltip } from '@/components/ui/tooltip'
 import { ThemeHeaderButton } from '@/components/theme/ThemeHeaderButton'
 import { BranchSwitcher } from './BranchSwitcher'
+import { UserAccountMenu } from '@/components/auth/UserAccountMenu'
 
 // Interaction-only modals/sheets — lazy-loaded so they stay out of the
 // editor's initial bundle and only fetch when the user opens them.
@@ -38,7 +39,6 @@ import type { ProjectWithStats, MemberRole } from '@/types'
 import type { KeyWithTranslations } from '@/lib/supabase/queries/translations'
 import type { Branch } from '@/lib/branches/queries'
 import { localeFlag as getFlag } from '@/lib/locale-flag'
-import { signOut } from '@/lib/supabase/auth'
 import {
   KEY_TREE_ROOT_ID,
   buildTranslationKeyTree,
@@ -263,14 +263,6 @@ function parseClipboardTable(text: string): string[][] {
   const last = rows[rows.length - 1]
   if (last && last.length === 1 && last[0] === '') rows.pop()
   return rows
-}
-
-// Generate a deterministic HSL color from a string (for user avatars).
-function stringToColor(str: string): string {
-  let hash = 0
-  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash)
-  const h = Math.abs(hash) % 360
-  return `hsl(${h}, 55%, 40%)`
 }
 
 // Serialize a 2D grid to TSV, quoting cells that contain tab/newline/quote.
@@ -1919,52 +1911,12 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
         <div className="w-px h-4 bg-muted" />
 
         {/* User avatar */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <button
-              className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0 hover:ring-2 hover:ring-blue-500/50 transition-all"
-              style={{ backgroundColor: stringToColor(user.email ?? user.id) }}
-              title={user.email}
-            >
-              {(user.email?.[0] ?? '?').toUpperCase()}
-            </button>
-          </PopoverTrigger>
-          <PopoverContent className="w-56 p-3 bg-card border-border" align="end">
-            {/* Email */}
-            <div className="flex items-center gap-2.5 mb-3">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
-                style={{ backgroundColor: stringToColor(user.email ?? user.id) }}
-              >
-                {(user.email?.[0] ?? '?').toUpperCase()}
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs text-foreground truncate font-medium">{user.email ?? 'Unknown'}</p>
-                <span className={cn(
-                  'inline-block text-[10px] px-1.5 py-0.5 rounded-full font-medium mt-0.5',
-                  user.role === 'owner'      ? 'bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300' :
-                  user.role === 'admin'      ? 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300' :
-                  user.role === 'translator' ? 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300' :
-                                               'bg-muted text-muted-foreground'
-                )}>
-                  {user.role}
-                </span>
-              </div>
-            </div>
-            <div className="border-t border-border -mx-3 mb-2" />
-            <Link href="/projects" className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground px-1 py-1 rounded hover:bg-muted/60 transition-colors">
-              <LogOut className="h-3.5 w-3.5" />
-              Back to projects
-            </Link>
-            <button
-              onClick={() => void signOut()}
-              className="w-full text-left flex items-center gap-2 text-xs text-destructive hover:text-red-700 dark:text-red-300 px-1 py-1 rounded hover:bg-muted/60 transition-colors mt-0.5"
-            >
-              <LogOut className="h-3.5 w-3.5 rotate-180" />
-              Sign out
-            </button>
-          </PopoverContent>
-        </Popover>
+        <UserAccountMenu
+          email={user.email}
+          role={user.role}
+          avatarClassName="w-7 h-7 text-[11px] flex-shrink-0"
+          showBackToProjects
+        />
       </header>
 
       {/* ── Toolbar ── */}

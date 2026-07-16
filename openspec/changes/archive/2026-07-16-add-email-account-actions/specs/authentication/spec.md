@@ -1,10 +1,4 @@
-# Authentication Specification
-
-## Purpose
-
-Defines user authentication behavior for LangHub, including email/password login, remembered login email, password reset requests, reset callback handling, authenticated account password changes, and account-menu access to authentication actions.
-
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Login can remember email address
 The system SHALL let users opt into remembering their email address on the current browser without storing their password.
