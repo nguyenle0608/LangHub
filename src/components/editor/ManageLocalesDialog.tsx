@@ -111,7 +111,7 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange} modal={false}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground">
           <Languages className="h-3.5 w-3.5" />
