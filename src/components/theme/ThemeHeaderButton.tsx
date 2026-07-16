@@ -1,6 +1,6 @@
 'use client'
 
-import { Monitor, Moon, Palette, Sun } from 'lucide-react'
+import { Monitor, Moon, Sun } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useTheme } from '@/components/theme/ThemeProvider'
@@ -13,22 +13,20 @@ const OPTIONS: Array<{ value: ThemeMode; label: string; icon: React.ComponentTyp
 ]
 
 export function ThemeHeaderButton() {
-  const { mode, setMode, effectiveTheme } = useTheme()
+  const { mode, setMode } = useTheme()
+  const CurrentIcon = OPTIONS.find((option) => option.value === mode)?.icon ?? Monitor
 
   return (
     <Popover>
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
-          size="sm"
-          className="h-7 gap-1 border border-border px-2 text-xs text-muted-foreground hover:text-foreground"
-          title="Change theme"
-          aria-label="Change theme"
+          size="icon"
+          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+          title={`Change theme (current: ${mode})`}
+          aria-label={`Change theme (current: ${mode})`}
         >
-          <Palette className="h-3.5 w-3.5 text-blue-500" />
-          <span className="text-[10px] capitalize text-muted-foreground">
-            {mode === 'system' ? effectiveTheme : mode}
-          </span>
+          <CurrentIcon className="h-4 w-4" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-56 border-border bg-popover p-1 text-popover-foreground" align="end">

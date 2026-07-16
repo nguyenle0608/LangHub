@@ -1889,24 +1889,6 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
 
         <div className="w-px h-4 bg-muted" />
 
-        {/* Data operations */}
-        <div className="flex items-center">
-          {canManage && (
-            <Link href={`/${project.id}/import?branch=${activeBranchId}`}>
-              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground">
-                <Upload className="h-3.5 w-3.5" />
-                <span className="hidden md:inline">Import</span>
-              </Button>
-            </Link>
-          )}
-          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground" onClick={() => setShowExport(true)}>
-            <Download className="h-3.5 w-3.5" />
-            <span className="hidden md:inline">Export</span>
-          </Button>
-        </div>
-
-        <div className="w-px h-4 bg-muted" />
-
         {/* Languages config */}
         {canManage && <ManageLocalesDialog project={project} onLocalesChanged={() => {}} />}
 
@@ -1918,11 +1900,26 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-48 p-1 bg-card border-border" align="end">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 py-1.5">Navigate</p>
+            {canManage && (
+              <Link href={`/${project.id}/import?branch=${activeBranchId}`}>
+                <button className="w-full text-left text-xs text-foreground hover:text-foreground px-2 py-1.5 rounded hover:bg-muted/60 flex items-center gap-2">
+                  <Upload className="h-3.5 w-3.5 text-muted-foreground" />
+                  Import
+                </button>
+              </Link>
+            )}
+            <button
+              className="w-full text-left text-xs text-foreground hover:text-foreground px-2 py-1.5 rounded hover:bg-muted/60 flex items-center gap-2"
+              onClick={() => setShowExport(true)}
+            >
+              <Download className="h-3.5 w-3.5 text-muted-foreground" />
+              Export
+            </button>
+            <div className="border-t border-border my-1" />
             <Link href={`/${project.id}/keys`}>
               <button className="w-full text-left text-xs text-foreground hover:text-foreground px-2 py-1.5 rounded hover:bg-muted/60 flex items-center gap-2">
                 <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                Duplicates
+                Duplicate Keys
               </button>
             </Link>
             <Link href={`/${project.id}/branches`}>
