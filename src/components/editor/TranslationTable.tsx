@@ -767,6 +767,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     // Per-locale: count of keys where that locale needs work + approved percent
     const localeNeedsWork = new Map<string, number>()
     const localePercent = new Map<string, number>()
+    const localeApproved = new Map<string, number>()
     // Approved records for the overall progress bar. Normally scored over the
     // target (non-base) locales; if the project has only the base locale, the
     // base counts so progress reflects the user's work instead of staying 0%.
@@ -784,6 +785,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
       // counter and column-header percent.
       if (needsWork > 0) localeNeedsWork.set(locale.id, needsWork)
       localePercent.set(locale.id, totalKeys > 0 ? Math.round((approved / totalKeys) * 100) : 0)
+      localeApproved.set(locale.id, approved)
       const isScored = hasTargets ? !locale.is_base : true
       if (isScored) approvedRecords += approved
     }
@@ -793,6 +795,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
       ...keyCounts,
       localeNeedsWork,
       localePercent,
+      localeApproved,
     }
   }, [keys, locales])
 
@@ -1890,7 +1893,15 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
         <div className="w-px h-4 bg-muted" />
 
         {/* Languages config */}
-        {canManage && <ManageLocalesDialog project={project} onLocalesChanged={() => {}} />}
+        {canManage && (
+          <ManageLocalesDialog
+            project={project}
+            onLocalesChanged={() => {}}
+            totalKeys={stats.total}
+            localeApproved={stats.localeApproved}
+            localePercent={stats.localePercent}
+          />
+        )}
 
         {/* Overflow menu: Duplicates, Versions, AI Translate */}
         <Popover>

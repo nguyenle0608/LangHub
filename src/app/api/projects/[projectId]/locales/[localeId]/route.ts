@@ -1,6 +1,19 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { removeLocale } from '@/lib/supabase/queries/projects'
+import { removeLocale, setBaseLocale } from '@/lib/supabase/queries/projects'
+
+export async function PATCH(
+  _request: Request,
+  { params }: { params: { projectId: string; localeId: string } }
+) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const result = await setBaseLocale(params.projectId, params.localeId)
+  if (result.error) return NextResponse.json({ error: result.error }, { status: 500 })
+  return NextResponse.json({ success: true })
+}
 
 export async function DELETE(
   _request: Request,

@@ -429,3 +429,31 @@ export async function removeLocale(localeId: string): Promise<{ error?: string }
   const { error } = await admin.from('locales').delete().eq('id', localeId)
   return error ? { error: error.message } : {}
 }
+
+export async function setBaseLocale(projectId: string, localeId: string): Promise<{ error?: string }> {
+  const admin = createAdminClient()
+
+  const { data: target, error: targetError } = await admin
+    .from('locales')
+    .select('code')
+    .eq('id', localeId)
+    .eq('project_id', projectId)
+    .single()
+  if (targetError || !target) return { error: targetError?.message ?? 'Locale not found' }
+
+  const { error: unsetError } = await admin
+    .from('locales')
+    .update({ is_base: false })
+    .eq('project_id', projectId)
+    .neq('id', localeId)
+  if (unsetError) return { error: unsetError.message }
+
+  const { error: setError } = await admin
+    .from('locales')
+    .update({ is_base: true })
+    .eq('id', localeId)
+  if (setError) return { error: setError.message }
+
+  await admin.from('projects').update({ base_locale: target.code }).eq('id', projectId)
+  return {}
+}

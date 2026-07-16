@@ -101,7 +101,7 @@ export function CreateProjectDialog({ children, orgId, open, onOpenChange }: Pro
   const usedCodes = new Set([baseLocale, ...targetLocales.map((l) => l.code)])
 
   return (
-    <Dialog open={actualOpen} onOpenChange={(v) => { setOpen(v); if (!v) resetForm() }}>
+    <Dialog open={actualOpen} onOpenChange={(v) => { setOpen(v); if (!v) resetForm() }} modal={false}>
       {children}
       <DialogContent className="bg-card border-border text-card-foreground sm:max-w-md">
         <DialogHeader>
