@@ -83,6 +83,18 @@ export async function getOrganizations(userId: string): Promise<OrgWithStats[]> 
   })) satisfies OrgWithStats[]
 }
 
+
+export async function getOrganizationPlan(orgId: string): Promise<string | null> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('organizations')
+    .select('plan')
+    .eq('id', orgId)
+    .single()
+
+  return data?.plan ?? null
+}
+
 // ── Writes: admin client (service role) ───────────────────────────────────
 
 export async function createOrganization(

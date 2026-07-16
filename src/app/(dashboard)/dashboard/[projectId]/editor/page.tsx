@@ -2,7 +2,7 @@ import { redirect, notFound } from 'next/navigation'
 import { getUser } from '@/lib/supabase/session'
 import { getEditorBootstrap, getProjectLite } from '@/lib/supabase/queries/projects'
 import { getTranslationKeysPage } from '@/lib/supabase/queries/translations'
-import { getUserOrgRole } from '@/lib/supabase/queries/organizations'
+import { getOrganizationPlan, getUserOrgRole } from '@/lib/supabase/queries/organizations'
 import { listBranches } from '@/lib/branches/queries'
 import { TranslationTable } from '@/components/editor/TranslationTable'
 
@@ -47,9 +47,10 @@ export default async function EditorPage({ params, searchParams }: Props) {
 
   if (!project || !activeBranchId) notFound()
 
-  const [{ keys, total }, fallbackRole] = await Promise.all([
+  const [{ keys, total }, fallbackRole, plan] = await Promise.all([
     getTranslationKeysPage(projectId, activeBranchId, { limit: INITIAL_KEYS, includeCount: true }),
     role === null && project.org_id ? getUserOrgRole(project.org_id, user.id) : Promise.resolve(null),
+    project.org_id ? getOrganizationPlan(project.org_id) : Promise.resolve(null),
   ])
   role ??= fallbackRole
   const totalKeys = total ?? keys.length
@@ -67,7 +68,7 @@ export default async function EditorPage({ params, searchParams }: Props) {
       totalKeyCount={totalKeys}
       branches={branches}
       activeBranchId={activeBranchId}
-      user={{ id: user.id, email: user.email ?? undefined, role: role ?? 'viewer' }}
+      user={{ id: user.id, email: user.email ?? undefined, role: role ?? 'viewer', plan }}
     />
   )
 }
