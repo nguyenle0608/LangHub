@@ -72,17 +72,22 @@ export function ProjectCard({ project, canDelete }: { project: ProjectWithStats;
         <ProgressBar percent={project.overall_percent} />
 
         <div className="flex items-center gap-3 mt-3">
-          <div className="flex items-center gap-1.5">
-            {project.locales.slice(0, 6).map((locale) => (
-              <span key={locale.id} className="text-base leading-none" title={`${locale.name} — ${locale.percent}%`}>
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+            {project.locales.slice(0, 4).map((locale) => (
+              <span key={locale.id} className="shrink-0 text-base leading-none" title={`${locale.name} — ${locale.percent}%`}>
                 {localeFlag(locale.code)}
               </span>
             ))}
-            {project.locales.length > 6 && (
-              <span className="text-xs text-muted-foreground self-center">+{project.locales.length - 6}</span>
+            {project.locales.length > 4 && (
+              <span
+                className="shrink-0 text-xs text-muted-foreground self-center"
+                title={project.locales.slice(4).map((l) => l.name).join(', ')}
+              >
+                +{project.locales.length - 4}
+              </span>
             )}
           </div>
-          <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
+          <div className="ml-auto flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
             <span>{project.key_count} keys</span>
             <span>{project.locale_count} locales</span>
             <span className={`font-semibold tabular-nums ${percentColor}`}>{project.overall_percent}%</span>

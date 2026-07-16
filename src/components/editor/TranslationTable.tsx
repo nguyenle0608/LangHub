@@ -8,7 +8,7 @@ import {
   Sparkles, ListFilter, Layers2, ChevronDown,
   Columns3, Eye, EyeOff, Pin, PinOff, Lock, Unlock, GripVertical, Undo2, Redo2,
   MoreHorizontal, Copy, History, GitBranch as GitBranchIcon, Loader2, ArrowUp,
-  Info, X, Folder, FolderOpen, FileKey2,
+  Info, X, Folder, FolderOpen, FileKey2, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { toast } from 'sonner'
@@ -292,6 +292,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   const scrollRef = useRef<HTMLDivElement>(null)
   const SIDEBAR_MIN_WIDTH = 180
   const SIDEBAR_MAX_WIDTH = 420
+  const SIDEBAR_COLLAPSE_THRESHOLD = 32
   const DEFAULT_COLS = { check: 40, key: 224, locale: 200, status: 88 }
   const KEY_COL_MIN_WIDTH = 160
   const KEY_COL_MAX_WIDTH = 420
@@ -344,6 +345,17 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   const [sidebarWidth, setSidebarWidth] = useState(208)
   const [resizingSidebar, setResizingSidebar] = useState(false)
   const sidebarResizeRef = useRef<{ startX: number; startWidth: number } | null>(null)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  type SidebarSection = 'status' | 'language' | 'keyTree'
+  const [collapsedSidebarSections, setCollapsedSidebarSections] = useState<Set<SidebarSection>>(new Set())
+  const toggleSidebarSection = useCallback((section: SidebarSection) => {
+    setCollapsedSidebarSections((prev) => {
+      const next = new Set(prev)
+      if (next.has(section)) next.delete(section)
+      else next.add(section)
+      return next
+    })
+  }, [])
   const [keyColWidth, setKeyColWidth] = useState(DEFAULT_COLS.key)
   const [localeColWidths, setLocaleColWidths] = useState<Map<string, number>>(new Map())
   const [resizingColumnId, setResizingColumnId] = useState<string | null>(null)
@@ -423,10 +435,14 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     const onMouseMove = (event: MouseEvent) => {
       const start = sidebarResizeRef.current
       if (!start) return
-      const nextWidth = Math.min(
-        SIDEBAR_MAX_WIDTH,
-        Math.max(SIDEBAR_MIN_WIDTH, start.startWidth + event.clientX - start.startX)
-      )
+      const rawWidth = start.startWidth + event.clientX - start.startX
+      if (rawWidth < SIDEBAR_MIN_WIDTH - SIDEBAR_COLLAPSE_THRESHOLD) {
+        sidebarResizeRef.current = null
+        setResizingSidebar(false)
+        setSidebarCollapsed(true)
+        return
+      }
+      const nextWidth = Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, rawWidth))
       setSidebarWidth(nextWidth)
     }
 
@@ -447,7 +463,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
     }
-  }, [resizingSidebar, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH])
+  }, [resizingSidebar, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_COLLAPSE_THRESHOLD])
 
   useEffect(() => {
     if (!resizingColumnId) return
@@ -2178,184 +2194,246 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
       {/* ── Main content ── */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left sidebar */}
-        <aside
-          className="flex flex-col flex-shrink-0 overflow-hidden bg-background"
-          style={{ width: sidebarWidth }}
-        >
-          {/* Status filters */}
-          <div className="flex-shrink-0 p-3">
-            <div className="flex items-center justify-between mb-2 px-1">
-              <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-                Status
-                <Tooltip
-                  side="right"
-                  content="Filters by each key's overall status across all target languages. Selecting one clears the language filter below."
-                >
-                  <Info className="h-3 w-3 text-muted-foreground hover:text-muted-foreground" />
-                </Tooltip>
-              </span>
-              {filteredKeys.length !== stats.total && (
-                <span className="text-[10px] text-muted-foreground">
-                  {filteredKeys.length}<span className="text-border"> / {stats.total}</span>
+        {!sidebarCollapsed && (
+          <aside
+            className="flex flex-col flex-shrink-0 overflow-hidden bg-background"
+            style={{ width: sidebarWidth }}
+          >
+            {/* Status filters */}
+            <div className="flex-shrink-0 p-3">
+              <button
+                type="button"
+                onClick={() => toggleSidebarSection('status')}
+                aria-expanded={!collapsedSidebarSections.has('status')}
+                className="mb-2 flex w-full items-center justify-between gap-2 px-1"
+              >
+                <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Status
+                  <Tooltip
+                    side="right"
+                    content="Filters by each key's overall status across all target languages. Selecting one clears the language filter below."
+                  >
+                    <Info className="h-3 w-3 text-muted-foreground hover:text-muted-foreground" />
+                  </Tooltip>
                 </span>
-              )}
-            </div>
-            {([
-              { id: 'all', label: 'All Keys', count: stats.total },
-              { id: 'empty', label: 'Untranslated', count: stats.empty },
-              { id: 'pending', label: 'Pending', count: stats.pending },
-              { id: 'reviewed', label: 'Reviewed', count: stats.reviewed },
-              { id: 'approved', label: 'Approved', count: stats.approved },
-            ] as { id: FilterStatus; label: string; count: number }[]).map((item) => {
-              const isActive = filterStatus === item.id && !selectedLocaleId
-              const dotColor =
-                item.id === 'approved' ? 'bg-emerald-500' :
-                item.id === 'reviewed' ? 'bg-blue-500' :
-                item.id === 'pending' ? 'bg-amber-500' :
-                item.id === 'empty' ? 'bg-zinc-600' : null
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => { setFilterStatus(item.id); setSelectedLocaleId(null) }}
-                  className={cn(
-                    'w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors',
-                    isActive ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
-                  )}
-                >
-                  {dotColor
-                    ? <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', dotColor)} />
-                    : <span className="w-1.5 h-1.5 flex-shrink-0" />
-                  }
-                  <span className="flex-1 text-left">{item.label}</span>
-                  {item.count > 0 && (
-                    <span className={cn(
-                      'text-[10px] tabular-nums',
-                      item.id === 'empty' ? 'text-amber-700 dark:text-amber-400' :
-                      item.id === 'approved' ? 'text-emerald-500/70' : 'text-muted-foreground'
-                    )}>
-                      {item.count}
+                <span className="flex items-center gap-1.5">
+                  {filteredKeys.length !== stats.total && (
+                    <span className="text-[10px] text-muted-foreground">
+                      {filteredKeys.length}<span className="text-border"> / {stats.total}</span>
                     </span>
                   )}
-                </button>
-              )
-            })}
-          </div>
-
-          {/* Language focus */}
-          <div className="flex-shrink-0 border-t border-border p-3">
-            <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground mb-2 px-1">
-              By language
-              <Tooltip
-                side="right"
-                content="Click a language to show only keys that still need work (empty or pending) in it. The number is how many remain. This resets the Status filter to All."
-              >
-                <Info className="h-3 w-3 text-muted-foreground hover:text-muted-foreground" />
-              </Tooltip>
-            </div>
-            {locales.map((locale) => {
-              const isActive = selectedLocaleId === locale.id
-              const needsWork = stats.localeNeedsWork.get(locale.id) ?? 0
-              return (
-                <button
-                  key={locale.id}
-                  onClick={() => {
-                    setSelectedLocaleId(isActive ? null : locale.id)
-                    setFilterStatus('all')
-                  }}
-                  className={cn(
-                    'w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors',
-                    isActive ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
-                  )}
-                >
-                  <span className="text-sm leading-none">{getFlag(locale.code)}</span>
-                  <span className="flex-1 text-left truncate">{locale.name}</span>
-                  {locale.is_base && (
-                    <span className="text-[9px] text-muted-foreground border border-border rounded px-1">base</span>
-                  )}
-                  {needsWork > 0 ? (
-                    <span className="text-[10px] text-amber-700 dark:text-amber-400 tabular-nums">{needsWork}</span>
-                  ) : (
-                    <span className="text-[10px] text-emerald-500/70">✓</span>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-
-          {/* Nested key tree */}
-          <div className="flex min-h-0 flex-1 flex-col border-t border-border p-3">
-            <div className="mb-2 flex flex-shrink-0 items-center justify-between gap-2 px-1">
-              <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-                Key tree
-                <Tooltip
-                  side="right"
-                  content="Filter by nested key folders. Checking a folder includes all descendant keys; checking a leaf includes that exact key."
-                >
-                  <Info className="h-3 w-3 text-muted-foreground hover:text-muted-foreground" />
-                </Tooltip>
-              </span>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={expandAllKeyTreeNodes}
-                  className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                  title="Expand all folders"
-                  aria-label="Expand all key tree folders"
-                >
-                  <FolderOpen className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={collapseAllKeyTreeNodes}
-                  className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                  title="Collapse all folders"
-                  aria-label="Collapse all key tree folders"
-                >
-                  <Folder className="h-3.5 w-3.5" />
-                </button>
-                {selectedTreeKeyIds.size > 0 && (
+                  <ChevronDown className={cn(
+                    'h-3 w-3 flex-shrink-0 text-muted-foreground transition-transform',
+                    collapsedSidebarSections.has('status') && '-rotate-90'
+                  )} />
+                </span>
+              </button>
+              {!collapsedSidebarSections.has('status') && ([
+                { id: 'all', label: 'All Keys', count: stats.total },
+                { id: 'empty', label: 'Untranslated', count: stats.empty },
+                { id: 'pending', label: 'Pending', count: stats.pending },
+                { id: 'reviewed', label: 'Reviewed', count: stats.reviewed },
+                { id: 'approved', label: 'Approved', count: stats.approved },
+              ] as { id: FilterStatus; label: string; count: number }[]).map((item) => {
+                const isActive = filterStatus === item.id && !selectedLocaleId
+                const dotColor =
+                  item.id === 'approved' ? 'bg-emerald-500' :
+                  item.id === 'reviewed' ? 'bg-blue-500' :
+                  item.id === 'pending' ? 'bg-amber-500' :
+                  item.id === 'empty' ? 'bg-zinc-600' : null
+                return (
                   <button
-                    type="button"
-                    onClick={() => setSelectedTreeKeyIds(new Set())}
-                    className="text-[10px] text-muted-foreground hover:text-foreground"
+                    key={item.id}
+                    onClick={() => { setFilterStatus(item.id); setSelectedLocaleId(null) }}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors',
+                      isActive ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
+                    )}
                   >
-                    Clear
+                    {dotColor
+                      ? <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', dotColor)} />
+                      : <span className="w-1.5 h-1.5 flex-shrink-0" />
+                    }
+                    <span className="flex-1 text-left">{item.label}</span>
+                    {item.count > 0 && (
+                      <span className={cn(
+                        'text-[10px] tabular-nums',
+                        item.id === 'empty' ? 'text-amber-700 dark:text-amber-400' :
+                        item.id === 'approved' ? 'text-emerald-500/70' : 'text-muted-foreground'
+                      )}>
+                        {item.count}
+                      </span>
+                    )}
                   </button>
+                )
+              })}
+            </div>
+
+            {/* Language focus */}
+            <div className="flex-shrink-0 border-t border-border p-3">
+              <button
+                type="button"
+                onClick={() => toggleSidebarSection('language')}
+                aria-expanded={!collapsedSidebarSections.has('language')}
+                className="mb-2 flex w-full items-center justify-between gap-1 px-1"
+              >
+                <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                  By language
+                  <Tooltip
+                    side="right"
+                    content="Click a language to show only keys that still need work (empty or pending) in it. The number is how many remain. This resets the Status filter to All."
+                  >
+                    <Info className="h-3 w-3 text-muted-foreground hover:text-muted-foreground" />
+                  </Tooltip>
+                </span>
+                <ChevronDown className={cn(
+                  'h-3 w-3 flex-shrink-0 text-muted-foreground transition-transform',
+                  collapsedSidebarSections.has('language') && '-rotate-90'
+                )} />
+              </button>
+              {!collapsedSidebarSections.has('language') && locales.map((locale) => {
+                const isActive = selectedLocaleId === locale.id
+                const needsWork = stats.localeNeedsWork.get(locale.id) ?? 0
+                return (
+                  <button
+                    key={locale.id}
+                    onClick={() => {
+                      setSelectedLocaleId(isActive ? null : locale.id)
+                      setFilterStatus('all')
+                    }}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors',
+                      isActive ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
+                    )}
+                  >
+                    <span className="text-sm leading-none">{getFlag(locale.code)}</span>
+                    <span className="flex-1 text-left truncate">{locale.name}</span>
+                    {locale.is_base && (
+                      <span className="text-[9px] text-muted-foreground border border-border rounded px-1">base</span>
+                    )}
+                    {needsWork > 0 ? (
+                      <span className="text-[10px] text-amber-700 dark:text-amber-400 tabular-nums">{needsWork}</span>
+                    ) : (
+                      <span className="text-[10px] text-emerald-500/70">✓</span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Nested key tree */}
+            <div className={cn(
+              'flex flex-col border-t border-border p-3',
+              collapsedSidebarSections.has('keyTree') ? 'flex-shrink-0' : 'min-h-0 flex-1'
+            )}>
+              <div className="mb-2 flex flex-shrink-0 w-full items-center justify-between gap-2 px-1">
+                <button
+                  type="button"
+                  onClick={() => toggleSidebarSection('keyTree')}
+                  aria-expanded={!collapsedSidebarSections.has('keyTree')}
+                  className="flex min-w-0 items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground"
+                >
+                  <ChevronDown className={cn(
+                    'h-3 w-3 flex-shrink-0 transition-transform',
+                    collapsedSidebarSections.has('keyTree') && '-rotate-90'
+                  )} />
+                  Key tree
+                  <Tooltip
+                    side="right"
+                    content="Filter by nested key folders. Checking a folder includes all descendant keys; checking a leaf includes that exact key."
+                  >
+                    <Info className="h-3 w-3 text-muted-foreground hover:text-muted-foreground" />
+                  </Tooltip>
+                </button>
+                {!collapsedSidebarSections.has('keyTree') && (
+                  <div className="flex flex-shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={expandAllKeyTreeNodes}
+                      className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      title="Expand all folders"
+                      aria-label="Expand all key tree folders"
+                    >
+                      <FolderOpen className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={collapseAllKeyTreeNodes}
+                      className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      title="Collapse all folders"
+                      aria-label="Collapse all key tree folders"
+                    >
+                      <Folder className="h-3.5 w-3.5" />
+                    </button>
+                    {selectedTreeKeyIds.size > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedTreeKeyIds(new Set())}
+                        className="text-[10px] text-muted-foreground hover:text-foreground"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
+              {!collapsedSidebarSections.has('keyTree') && (
+                <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                  <KeyTreeNodeRow
+                    node={keyTree}
+                    depth={0}
+                    checkStates={keyTreeCheckStates}
+                    expandedNodeIds={expandedKeyTreeNodeIds}
+                    onToggleChecked={toggleKeyTreeChecked}
+                    onToggleExpanded={toggleKeyTreeExpanded}
+                    onLeafClick={scrollToKey}
+                    ambiguousKeyNames={folderPathNames}
+                  />
+                </div>
+              )}
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-              <KeyTreeNodeRow
-                node={keyTree}
-                depth={0}
-                checkStates={keyTreeCheckStates}
-                expandedNodeIds={expandedKeyTreeNodeIds}
-                onToggleChecked={toggleKeyTreeChecked}
-                onToggleExpanded={toggleKeyTreeExpanded}
-                onLeafClick={scrollToKey}
-                ambiguousKeyNames={folderPathNames}
-              />
-            </div>
-          </div>
-        </aside>
+          </aside>
+        )}
 
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize sidebar"
-          title="Drag to resize sidebar"
-          className={cn(
-            'group relative z-20 w-1 flex-shrink-0 cursor-col-resize bg-muted transition-colors hover:bg-blue-500/60',
-            resizingSidebar && 'bg-blue-500/80'
-          )}
-          onMouseDown={(event) => {
-            event.preventDefault()
-            sidebarResizeRef.current = { startX: event.clientX, startWidth: sidebarWidth }
-            setResizingSidebar(true)
-          }}
-        >
-          <div className="absolute inset-y-0 -left-1 -right-1" />
-        </div>
+        {!sidebarCollapsed ? (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize sidebar"
+            title="Drag to resize sidebar"
+            className={cn(
+              'group relative z-20 w-1 flex-shrink-0 cursor-col-resize bg-muted transition-colors hover:bg-blue-500/60',
+              resizingSidebar && 'bg-blue-500/80'
+            )}
+            onMouseDown={(event) => {
+              event.preventDefault()
+              sidebarResizeRef.current = { startX: event.clientX, startWidth: sidebarWidth }
+              setResizingSidebar(true)
+            }}
+          >
+            <div className="absolute inset-y-0 -left-1 -right-1" />
+            <button
+              type="button"
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={() => setSidebarCollapsed(true)}
+              title="Hide sidebar"
+              aria-label="Hide sidebar"
+              className="absolute left-1/2 top-1/2 z-30 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded border border-border bg-background text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100"
+            >
+              <PanelLeftClose className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setSidebarCollapsed(false)}
+            title="Show sidebar"
+            aria-label="Show sidebar"
+            className="group relative z-20 flex w-3 flex-shrink-0 items-center justify-center border-r border-border bg-background transition-colors hover:bg-muted"
+          >
+            <PanelLeftOpen className="h-3 w-3 text-muted-foreground group-hover:text-foreground" />
+          </button>
+        )}
 
         {/* Table */}
         <div className="flex flex-col flex-1 overflow-hidden relative">
