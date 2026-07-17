@@ -109,7 +109,7 @@ export default async function LandingPage() {
     <main className="min-h-screen bg-background text-foreground">
       {/* Ambient background glow */}
       <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[560px] bg-[radial-gradient(circle_at_top,rgba(37,99,235,0.20),transparent_58%)]" />
-      <div className="pointer-events-none absolute right-0 top-40 -z-10 h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle,rgba(16,185,129,0.12),transparent_65%)] blur-2xl" />
+      <div className="animate-drift pointer-events-none absolute right-0 top-40 -z-10 h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle,rgba(16,185,129,0.12),transparent_65%)] blur-2xl" />
 
       <header className="fixed inset-x-0 top-0 z-50 border-b border-border/70 bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/75">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
@@ -157,7 +157,7 @@ export default async function LandingPage() {
           </div>
           <h1 className="text-balance text-4xl font-bold tracking-tight sm:text-6xl">
             Ship multilingual products without{' '}
-            <span className="bg-gradient-to-r from-blue-500 to-emerald-400 bg-clip-text text-transparent">
+            <span className="animate-gradient-pan bg-gradient-to-r from-blue-500 via-emerald-400 to-blue-500 bg-clip-text text-transparent">
               losing track
             </span>{' '}
             of translations.
@@ -180,7 +180,7 @@ export default async function LandingPage() {
           </p>
         </Reveal>
 
-        <Reveal delay={120} className="rounded-2xl border border-border bg-card/80 p-4 shadow-2xl shadow-blue-950/10 backdrop-blur">
+        <Reveal delay={120} className="animate-float rounded-2xl border border-border bg-card/80 p-4 shadow-2xl shadow-blue-950/10 backdrop-blur">
           <div className="rounded-xl border border-border bg-background">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <div>
@@ -188,6 +188,13 @@ export default async function LandingPage() {
                 <p className="text-xs text-muted-foreground">4 languages · 248 keys</p>
               </div>
               <div className="flex items-center gap-3">
+                {/* Live indicator */}
+                <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                  <span className="animate-pulse-ring relative inline-flex h-2 w-2 text-emerald-500">
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                  </span>
+                  Live
+                </span>
                 {/* Live presence avatars */}
                 <div className="flex -space-x-2">
                   {presence.map((person) => (
