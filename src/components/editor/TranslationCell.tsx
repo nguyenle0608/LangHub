@@ -112,7 +112,12 @@ export function TranslationCell({
         <span className="whitespace-pre-wrap break-words leading-relaxed line-clamp-3">{isEmpty ? '—' : value}</span>
       )}
       {dotColor && !isReadonly && (
-        <span className={cn('absolute bottom-1.5 right-1.5 w-1.5 h-1.5 rounded-full', dotColor)} />
+        <span
+          role="img"
+          aria-label={`Status: ${status}`}
+          title={`Status: ${status}`}
+          className={cn('absolute bottom-1.5 right-1.5 w-1.5 h-1.5 rounded-full', dotColor)}
+        />
       )}
       {isReadonly && (
         <span className="absolute top-1.5 right-1.5 text-border">

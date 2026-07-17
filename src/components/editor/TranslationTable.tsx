@@ -2504,6 +2504,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                     type="checkbox"
                     checked={selectedRows.size === filteredKeys.length && filteredKeys.length > 0}
                     onChange={toggleAllRows}
+                    aria-label="Select all keys"
                     className="accent-blue-500 cursor-pointer"
                   />
                 )}
@@ -2889,7 +2890,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                             style={{ left: stickyLeft.get('check') }}
                             onClick={(e) => canSelect && toggleRow(keyItem.id, e)}
                           >
-                            {canSelect && <input type="checkbox" checked={isSelected} onChange={() => undefined} className="accent-blue-500 cursor-pointer" />}
+                            {canSelect && <input type="checkbox" checked={isSelected} onChange={() => undefined} aria-label={`Select ${keyItem.key}`} className="accent-blue-500 cursor-pointer" />}
                           </div>
 
                           {/* Key name */}
