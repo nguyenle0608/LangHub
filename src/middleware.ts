@@ -2,6 +2,8 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 const AUTH_PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password', '/auth/callback', '/auth/reset-password']
+// Public marketing/content pages that never require authentication.
+const MARKETING_PUBLIC_ROUTES = ['/docs', '/changelog', '/terms', '/privacy']
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -39,7 +41,8 @@ export async function middleware(request: NextRequest) {
 
   const isRootRoute = path === '/'
   const isAuthPublicRoute = AUTH_PUBLIC_ROUTES.some((r) => path.startsWith(r))
-  const isPublicRoute = isRootRoute || isAuthPublicRoute
+  const isMarketingPublicRoute = MARKETING_PUBLIC_ROUTES.some((r) => path.startsWith(r))
+  const isPublicRoute = isRootRoute || isAuthPublicRoute || isMarketingPublicRoute
   const isApiRoute = path.startsWith('/api/')
   const isStaticRoute = path.startsWith('/_next/')
 
