@@ -10,7 +10,7 @@ import { localeFlag } from '@/lib/locale-flag'
 
 function ProgressBar({ percent }: { percent: number }) {
   const color =
-    percent >= 80 ? 'bg-green-500' : percent >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+    percent >= 80 ? 'bg-emerald-500' : percent >= 50 ? 'bg-amber-500' : 'bg-red-500'
   return (
     <div className="w-full bg-muted rounded-full h-1.5">
       <div className={`h-1.5 rounded-full transition-all ${color}`} style={{ width: `${percent}%` }} />
@@ -26,8 +26,8 @@ export function ProjectCard({ project, canDelete }: { project: ProjectWithStats;
   const menuRef = useRef<HTMLDivElement>(null)
 
   const percentColor =
-    project.overall_percent >= 80 ? 'text-green-400' :
-    project.overall_percent >= 50 ? 'text-yellow-400' : 'text-red-400'
+    project.overall_percent >= 80 ? 'text-emerald-600 dark:text-emerald-400' :
+    project.overall_percent >= 50 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'
 
   // Close menu on outside click
   useEffect(() => {
@@ -38,8 +38,18 @@ export function ProjectCard({ project, canDelete }: { project: ProjectWithStats;
         setConfirmDelete(false)
       }
     }
+    const keyHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setMenuOpen(false)
+        setConfirmDelete(false)
+      }
+    }
     document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    document.addEventListener('keydown', keyHandler)
+    return () => {
+      document.removeEventListener('mousedown', handler)
+      document.removeEventListener('keydown', keyHandler)
+    }
   }, [menuOpen])
 
   async function handleDelete() {
@@ -98,8 +108,12 @@ export function ProjectCard({ project, canDelete }: { project: ProjectWithStats;
       {/* Kebab menu */}
       <div ref={menuRef} className="absolute top-3 right-3">
         <button
+          type="button"
           onClick={(e) => { e.preventDefault(); setMenuOpen((v) => !v); setConfirmDelete(false) }}
-          className="w-7 h-7 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors opacity-0 group-hover:opacity-100"
+          aria-label={`Project actions for ${project.name}`}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          className="w-9 h-9 flex items-center justify-center rounded text-muted-foreground opacity-70 transition-all hover:text-foreground hover:bg-accent focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
         >
           <MoreHorizontal className="h-4 w-4" />
         </button>
@@ -128,8 +142,9 @@ export function ProjectCard({ project, canDelete }: { project: ProjectWithStats;
                     </Link>
                     <div className="border-t border-border my-1" />
                     <button
+                      type="button"
                       onClick={() => setConfirmDelete(true)}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors"
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-red-600 hover:bg-red-500/10 transition-colors dark:text-red-400 dark:hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                       Delete project
@@ -142,15 +157,17 @@ export function ProjectCard({ project, canDelete }: { project: ProjectWithStats;
                 <p className="text-xs text-muted-foreground">Delete <span className="text-foreground font-medium">{project.name}</span>? This cannot be undone.</p>
                 <div className="flex gap-1.5">
                   <button
+                    type="button"
                     onClick={handleDelete}
                     disabled={deleting}
-                    className="flex-1 text-xs bg-red-600 hover:bg-red-500 text-white rounded px-2 py-1 transition-colors disabled:opacity-50"
+                    className="flex-1 text-xs bg-destructive text-destructive-foreground hover:opacity-90 rounded px-2 py-1 transition-opacity disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {deleting ? 'Deleting…' : 'Delete'}
                   </button>
                   <button
+                    type="button"
                     onClick={() => setConfirmDelete(false)}
-                    className="flex-1 text-xs border border-border text-muted-foreground hover:text-foreground rounded px-2 py-1 transition-colors"
+                    className="flex-1 text-xs border border-border text-muted-foreground hover:text-foreground rounded px-2 py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     Cancel
                   </button>

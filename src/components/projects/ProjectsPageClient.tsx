@@ -4,7 +4,7 @@ import { useState, useEffect, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import { LayoutGrid, List, ArrowUpDown, Plus } from 'lucide-react'
+import { LayoutGrid, List, ArrowUpDown, Plus, Trash2, X } from 'lucide-react'
 import { ThemeHeaderButton } from '@/components/theme/ThemeHeaderButton'
 import { Logo } from '@/components/Logo'
 import { toast } from 'sonner'
@@ -141,7 +141,8 @@ export function ProjectsPageClient({ projects, orgs, currentOrgId, userEmail, us
               <select
                 value={sort}
                 onChange={(e) => setSort(e.target.value as SortKey)}
-                className="text-xs bg-transparent text-muted-foreground outline-none cursor-pointer"
+                aria-label="Sort projects"
+                className="text-xs bg-transparent text-muted-foreground outline-none cursor-pointer focus-visible:ring-2 focus-visible:ring-ring rounded"
               >
                 <option value="name">Name</option>
                 <option value="percent">Progress</option>
@@ -150,23 +151,29 @@ export function ProjectsPageClient({ projects, orgs, currentOrgId, userEmail, us
             </div>
 
             {/* View toggle */}
-            <div className="flex border border-border rounded-lg overflow-hidden">
+            <div className="flex border border-border rounded-lg overflow-hidden" role="group" aria-label="View mode">
               <button
+                type="button"
                 onClick={() => setView('grid')}
-                className={`p-1.5 transition-colors ${view === 'grid' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                aria-label="Grid view"
+                aria-pressed={view === 'grid'}
+                className={`p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${view === 'grid' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               >
-                <LayoutGrid className="h-3.5 w-3.5" />
+                <LayoutGrid className="h-4 w-4" />
               </button>
               <button
+                type="button"
                 onClick={() => setView('list')}
-                className={`p-1.5 transition-colors ${view === 'list' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                aria-label="List view"
+                aria-pressed={view === 'list'}
+                className={`p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${view === 'list' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               >
-                <List className="h-3.5 w-3.5" />
+                <List className="h-4 w-4" />
               </button>
             </div>
 
             <Button
-              className="bg-blue-600 hover:bg-blue-500 text-white gap-1.5 h-8 text-sm"
+              className="bg-blue-600 hover:bg-blue-500 text-white gap-1.5 h-9 text-sm"
               onClick={() => setCreateProjectOpen(true)}
             >
               <Plus className="h-3.5 w-3.5" />
@@ -227,11 +234,10 @@ function ProjectListRow({ project, canDelete }: { project: ProjectWithStats; can
   const [deleting, setDeleting] = useState(false)
 
   const percentColor =
-    project.overall_percent >= 80 ? 'text-green-400' :
-    project.overall_percent >= 50 ? 'text-yellow-400' : 'text-red-400'
+    project.overall_percent >= 80 ? 'text-emerald-600 dark:text-emerald-400' :
+    project.overall_percent >= 50 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'
 
-  async function handleDelete(e: React.MouseEvent) {
-    e.preventDefault()
+  async function handleDelete() {
     setDeleting(true)
     const res = await fetch(`/api/projects/${project.id}`, { method: 'DELETE' })
     setDeleting(false)
@@ -245,55 +251,61 @@ function ProjectListRow({ project, canDelete }: { project: ProjectWithStats; can
   }
 
   return (
-    <a
-      href={`/dashboard/${project.id}/editor`}
-      className="grid grid-cols-[1fr_80px_60px_60px_40px] px-4 py-3 gap-4 border-b border-border/60 last:border-0 hover:bg-muted/60 transition-colors items-center group"
-    >
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-foreground truncate group-hover:text-foreground">{project.name}</p>
+    <div className="relative grid grid-cols-[1fr_80px_60px_60px_44px] px-4 py-3 gap-4 border-b border-border/60 last:border-0 hover:bg-muted/60 transition-colors items-center group">
+      {/* Stretched link overlay: whole row navigates without nesting controls inside an anchor */}
+      <Link
+        href={`/dashboard/${project.id}/editor`}
+        aria-label={`Open ${project.name} editor`}
+        className="absolute inset-0 z-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      />
+      <div className="pointer-events-none relative z-10 min-w-0">
+        <p className="text-sm font-medium text-foreground truncate">{project.name}</p>
         {project.description && (
           <p className="text-xs text-muted-foreground truncate mt-0.5">{project.description}</p>
         )}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="pointer-events-none relative z-10 flex items-center gap-2">
         <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
           <div
-            className={`h-full rounded-full ${project.overall_percent >= 80 ? 'bg-green-500' : project.overall_percent >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
+            className={`h-full rounded-full ${project.overall_percent >= 80 ? 'bg-emerald-500' : project.overall_percent >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
             style={{ width: `${project.overall_percent}%` }}
           />
         </div>
         <span className={`text-xs tabular-nums font-medium w-7 text-right ${percentColor}`}>{project.overall_percent}%</span>
       </div>
-      <span className="text-sm text-muted-foreground tabular-nums">{project.key_count}</span>
-      <span className="text-sm text-muted-foreground tabular-nums">{project.locale_count}</span>
-      <div className="flex items-center justify-end" onClick={(e) => e.preventDefault()}>
+      <span className="pointer-events-none relative z-10 text-sm text-muted-foreground tabular-nums">{project.key_count}</span>
+      <span className="pointer-events-none relative z-10 text-sm text-muted-foreground tabular-nums">{project.locale_count}</span>
+      <div className="relative z-10 flex items-center justify-end">
         {canDelete && (confirmDelete ? (
           <div className="flex gap-1">
             <button
+              type="button"
               onClick={handleDelete}
               disabled={deleting}
-              className="text-[10px] bg-red-600 hover:bg-red-500 text-white rounded px-1.5 py-0.5 transition-colors"
+              className="text-xs bg-destructive text-destructive-foreground hover:opacity-90 rounded px-2 py-1 transition-opacity disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {deleting ? '…' : 'Del'}
+              {deleting ? 'Deleting…' : 'Delete'}
             </button>
             <button
+              type="button"
               onClick={() => setConfirmDelete(false)}
-              className="text-[10px] border border-border text-muted-foreground hover:text-foreground rounded px-1.5 py-0.5"
+              aria-label="Cancel delete"
+              className="border border-border text-muted-foreground hover:text-foreground rounded p-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              ✕
+              <X className="h-3.5 w-3.5" />
             </button>
           </div>
         ) : (
           <button
+            type="button"
             onClick={() => setConfirmDelete(true)}
-            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-400 transition-all"
+            aria-label={`Delete ${project.name}`}
+            className="flex h-9 w-9 items-center justify-center rounded text-muted-foreground opacity-70 transition-all hover:bg-accent hover:text-red-600 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100 dark:hover:text-red-400"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
+            <Trash2 className="h-4 w-4" />
           </button>
         ))}
       </div>
-    </a>
+    </div>
   )
 }
