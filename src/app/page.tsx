@@ -124,6 +124,8 @@ export default async function LandingPage() {
             <a href="#features" className="transition-colors hover:text-foreground">Features</a>
             <a href="#workflow" className="transition-colors hover:text-foreground">Workflow</a>
             <a href="#pricing" className="transition-colors hover:text-foreground">Pricing</a>
+            <Link href="/docs" className="transition-colors hover:text-foreground">Docs</Link>
+            <Link href="/changelog" className="transition-colors hover:text-foreground">Changelog</Link>
           </nav>
           <div className="flex items-center gap-2">
             <ThemeHeaderButton />
@@ -385,6 +387,10 @@ export default async function LandingPage() {
             <a href="#features" className="transition-colors hover:text-foreground">Features</a>
             <a href="#workflow" className="transition-colors hover:text-foreground">Workflow</a>
             <a href="#pricing" className="transition-colors hover:text-foreground">Pricing</a>
+            <Link href="/docs" className="transition-colors hover:text-foreground">Docs</Link>
+            <Link href="/changelog" className="transition-colors hover:text-foreground">Changelog</Link>
+            <Link href="/terms" className="transition-colors hover:text-foreground">Terms</Link>
+            <Link href="/privacy" className="transition-colors hover:text-foreground">Privacy</Link>
             <Link href="/login" className="transition-colors hover:text-foreground">Sign in</Link>
           </nav>
         </div>
