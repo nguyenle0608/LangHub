@@ -5,6 +5,8 @@ import { exportJSON } from '@/lib/exporters/json'
 import { exportARB } from '@/lib/exporters/arb'
 import { exportCSV } from '@/lib/exporters/csv'
 import { exportYAML } from '@/lib/exporters/yaml'
+import { exportAndroidXML } from '@/lib/exporters/android'
+import { exportIOSStrings } from '@/lib/exporters/ios'
 import { exportZIP } from '@/lib/exporters/zip'
 import { buildExportLookup, ExportDataQueryError, fetchExportData } from '@/lib/exporters/data'
 import { resolveBranchId } from '@/lib/branches/queries'
@@ -20,7 +22,7 @@ export async function POST(req: NextRequest) {
     projectId: string
     branchId?: string
     localeIds: string[]
-    format: 'json' | 'arb' | 'csv' | 'yaml'
+    format: 'json' | 'arb' | 'csv' | 'yaml' | 'android' | 'ios'
     filter: 'all' | 'approved' | 'reviewed_approved'
     nested?: boolean
     jsonStructure?: JsonExportStructure
@@ -121,23 +123,31 @@ export async function POST(req: NextRequest) {
 
     let content: string
     let contentType = 'application/json'
-    let ext = format
+    let filename = `${locale.code}.${format}`
 
     if (format === 'json') {
       content = exportJSON(localeKeys, nested)
     } else if (format === 'arb') {
       content = exportARB(localeKeys, locale.code, descriptions)
-      ext = 'arb'
-    } else {
+    } else if (format === 'yaml') {
       content = exportYAML(localeKeys)
       contentType = 'text/yaml'
-      ext = 'yaml'
+    } else if (format === 'android') {
+      content = exportAndroidXML(localeKeys)
+      contentType = 'application/xml'
+      filename = 'strings.xml'
+    } else if (format === 'ios') {
+      content = exportIOSStrings(localeKeys)
+      contentType = 'text/plain'
+      filename = 'Localizable.strings'
+    } else {
+      content = exportJSON(localeKeys, nested)
     }
 
     return new NextResponse(content, {
       headers: {
         'Content-Type': contentType,
-        'Content-Disposition': `attachment; filename="${locale.code}.${ext}"`,
+        'Content-Disposition': `attachment; filename="${filename}"`,
       },
     })
   }
@@ -161,6 +171,12 @@ export async function POST(req: NextRequest) {
     } else if (format === 'arb') {
       content = exportARB(localeKeys, locale.code, descriptions)
       ext = 'arb'
+    } else if (format === 'android') {
+      files.push({ name: `values-${locale.code}/strings.xml`, content: exportAndroidXML(localeKeys) })
+      continue
+    } else if (format === 'ios') {
+      files.push({ name: `${locale.code}.lproj/Localizable.strings`, content: exportIOSStrings(localeKeys) })
+      continue
     } else {
       content = exportYAML(localeKeys)
       ext = 'yaml'

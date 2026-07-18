@@ -7,6 +7,8 @@ import { parseJSON } from '@/lib/parsers/json'
 import { parseARB } from '@/lib/parsers/arb'
 import { parseCSV } from '@/lib/parsers/csv'
 import { parseYAML } from '@/lib/parsers/yaml'
+import { parseAndroidXML } from '@/lib/parsers/android'
+import { parseIOSStrings } from '@/lib/parsers/ios'
 import {
   deriveNamespaceFromFilename,
   prefixKeysWithNamespace,
@@ -14,7 +16,7 @@ import {
   type JsonImportStructure,
 } from '@/lib/localization-namespaces'
 
-const SUPPORTED_FORMATS = ['json', 'arb', 'csv', 'yaml', 'yml'] as const
+const SUPPORTED_FORMATS = ['json', 'arb', 'csv', 'yaml', 'yml', 'android', 'ios'] as const
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
@@ -69,6 +71,14 @@ export async function POST(req: NextRequest) {
     parsedKeys = matching.keys
   } else if (format === 'yaml' || format === 'yml') {
     const r = parseYAML(content)
+    if (r.errors.length > 0) return NextResponse.json({ error: r.errors[0] }, { status: 400 })
+    parsedKeys = r.keys
+  } else if (format === 'android') {
+    const r = parseAndroidXML(content)
+    if (r.errors.length > 0) return NextResponse.json({ error: r.errors[0] }, { status: 400 })
+    parsedKeys = r.keys
+  } else if (format === 'ios') {
+    const r = parseIOSStrings(content)
     if (r.errors.length > 0) return NextResponse.json({ error: r.errors[0] }, { status: 400 })
     parsedKeys = r.keys
   }

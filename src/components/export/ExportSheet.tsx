@@ -9,8 +9,22 @@ import type { ProjectWithStats } from '@/types'
 import { localeFlag } from '@/lib/locale-flag'
 import type { JsonExportStructure } from '@/lib/localization-namespaces'
 
-type Format = 'json' | 'arb' | 'csv' | 'yaml'
+type Format = 'json' | 'arb' | 'csv' | 'yaml' | 'android' | 'ios'
 type Filter = 'all' | 'approved' | 'reviewed_approved'
+
+const FORMATS: { value: Format; label: string }[] = [
+  { value: 'json', label: 'JSON' },
+  { value: 'arb', label: 'ARB' },
+  { value: 'csv', label: 'CSV' },
+  { value: 'yaml', label: 'YAML' },
+  { value: 'android', label: 'Android' },
+  { value: 'ios', label: 'iOS' },
+]
+
+const SINGLE_FILE_NAME: Partial<Record<Format, string>> = {
+  android: 'strings.xml',
+  ios: 'Localizable.strings',
+}
 
 interface Props {
   open: boolean
@@ -49,7 +63,7 @@ export function ExportSheet({ open, project, branchId, onClose }: Props) {
     : format === 'json' && jsonStructure === 'namespaced'
     ? (fileCount === 1 ? `${selectedLocaleCode}-namespaces.zip` : 'translations.zip')
     : fileCount === 1
-    ? `${selectedLocaleCode}.${format === 'arb' ? 'arb' : format}`
+    ? (SINGLE_FILE_NAME[format] ?? `${selectedLocaleCode}.${format}`)
     : 'translations.zip'
 
   const handleExport = async () => {
@@ -133,21 +147,28 @@ export function ExportSheet({ open, project, branchId, onClose }: Props) {
           {/* Section 2: Format */}
           <div className="space-y-2">
             <div className="text-xs font-medium text-muted-foreground">Format</div>
-            <div className="grid grid-cols-4 gap-2">
-              {(['json', 'arb', 'csv', 'yaml'] as const).map((f) => (
+            <div className="grid grid-cols-3 gap-2">
+              {FORMATS.map((f) => (
                 <button
-                  key={f}
+                  key={f.value}
                   type="button"
-                  onClick={() => setFormat(f)}
+                  onClick={() => setFormat(f.value)}
                   className={[
-                    'py-2 text-xs rounded border transition-colors uppercase',
-                    format === f ? 'bg-blue-600/20 border-blue-500 text-blue-700 dark:text-blue-300' : 'border-border text-muted-foreground hover:border-border',
+                    'py-2 text-xs rounded border transition-colors',
+                    format === f.value ? 'bg-blue-600/20 border-blue-500 text-blue-700 dark:text-blue-300' : 'border-border text-muted-foreground hover:border-border',
                   ].join(' ')}
                 >
-                  {f}
+                  {f.label}
                 </button>
               ))}
             </div>
+            {(format === 'android' || format === 'ios') && (
+              <p className="text-[11px] text-muted-foreground">
+                {format === 'android'
+                  ? 'Android strings.xml. Multiple locales export as values-<code>/strings.xml in a ZIP.'
+                  : 'iOS Localizable.strings. Multiple locales export as <code>.lproj/Localizable.strings in a ZIP.'}
+              </p>
+            )}
             {format === 'json' && (
               <div className="space-y-2 mt-2">
                 <div className="grid grid-cols-2 gap-2">
