@@ -8,7 +8,19 @@ Keep `TRANSLATION_ASSISTANCE_ENABLED=false` while migration 017 is deploying and
 
 Call `backfill_translation_memory(after_translation_id, batch_size)` with the service role only. Start with a null cursor and pass the returned `nextCursor` into the next call until `processed` is zero. Use batches of 500 by default and do not expose this RPC through a browser client.
 
+From a trusted checkout with `.env.local`, run:
+
+```bash
+node --env-file=.env.local scripts/backfill-translation-memory.mjs
+```
+
 After backfill, compare sampled TM rows with approved target translations and confirm that locale pairs and organization IDs match their source projects.
+
+Run the self-cleaning production smoke test from a trusted checkout:
+
+```bash
+node --env-file=.env.local scripts/verify-translation-assistance.mjs
+```
 
 ## Verification
 

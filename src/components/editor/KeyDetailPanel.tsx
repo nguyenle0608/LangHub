@@ -66,7 +66,7 @@ function Section({ title, icon: Icon, collapsible, defaultOpen = true, children 
 
 // ── Left: Translations ────────────────────────────────────────────────────────
 
-function TranslationsPane({
+export function TranslationsPane({
   keyItem,
   locales,
   branchId,
