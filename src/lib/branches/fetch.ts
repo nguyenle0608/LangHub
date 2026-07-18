@@ -18,7 +18,8 @@ export type BranchTranslation = {
  */
 export async function fetchBranchTranslations(
   client: SupabaseClient<Database>,
-  branchId: string
+  branchId: string,
+  options: { throwOnError?: boolean } = {}
 ): Promise<BranchTranslation[]> {
   const out: BranchTranslation[] = []
   const PAGE = 1000
@@ -29,7 +30,11 @@ export async function fetchBranchTranslations(
       .select('key_id, locale_id, value, status')
       .eq('branch_id', branchId)
       .range(from, from + PAGE - 1)
-    if (error || !data || data.length === 0) break
+    if (error) {
+      if (options.throwOnError) throw new Error(`Failed to load branch translations: ${error.message}`)
+      break
+    }
+    if (!data || data.length === 0) break
     out.push(...data)
     if (data.length < PAGE) break
     from += PAGE

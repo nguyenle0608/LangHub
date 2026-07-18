@@ -90,6 +90,17 @@ describe('POST /api/export', () => {
     expect(JSON.parse(await response.text())).toEqual({ app: { title: 'LangHub' } })
   })
 
+  it('sanitizes locale codes before using them in attachment filenames', async () => {
+    mockLocales([{ ...en, code: '../en"\r\n' }])
+    vi.mocked(fetchExportData).mockResolvedValue({
+      keys: [{ id: 'key-title', key: 'app.title', description: null }],
+      translations: [{ key_id: 'key-title', locale_id: en.id, value: 'LangHub', status: 'pending' }],
+    })
+    const response = await POST(request({}))
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Content-Disposition')).toBe('attachment; filename="en.json"')
+  })
+
   it('keeps a successfully queried empty locale as a valid empty JSON file', async () => {
     vi.mocked(fetchExportData).mockResolvedValue({
       keys: [{ id: 'key-title', key: 'app.title', description: null }],

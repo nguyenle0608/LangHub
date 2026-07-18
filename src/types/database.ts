@@ -39,6 +39,71 @@ export type Database = {
   }
   public: {
     Tables: {
+      api_audit_events: {
+        Row: {
+          action: string
+          branch_id: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          org_id: string
+          outcome: string
+          project_id: string | null
+          request_id: string
+          token_id: string | null
+        }
+        Insert: {
+          action: string
+          branch_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          org_id: string
+          outcome: string
+          project_id?: string | null
+          request_id: string
+          token_id?: string | null
+        }
+        Update: {
+          action?: string
+          branch_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          org_id?: string
+          outcome?: string
+          project_id?: string | null
+          request_id?: string
+          token_id?: string | null
+        }
+        Relationships: [
+          { foreignKeyName: "api_audit_events_branch_id_fkey"; columns: ["branch_id"]; isOneToOne: false; referencedRelation: "branches"; referencedColumns: ["id"] },
+          { foreignKeyName: "api_audit_events_org_id_fkey"; columns: ["org_id"]; isOneToOne: false; referencedRelation: "organizations"; referencedColumns: ["id"] },
+          { foreignKeyName: "api_audit_events_project_id_fkey"; columns: ["project_id"]; isOneToOne: false; referencedRelation: "projects"; referencedColumns: ["id"] },
+          { foreignKeyName: "api_audit_events_token_id_fkey"; columns: ["token_id"]; isOneToOne: false; referencedRelation: "api_tokens"; referencedColumns: ["id"] },
+        ]
+      }
+      api_idempotency_keys: {
+        Row: { created_at: string; expires_at: string; idempotency_key: string; request_hash: string; response_body: Json | null; response_status: number | null; snapshot_id: string | null; state: string; token_id: string; updated_at: string }
+        Insert: { created_at?: string; expires_at?: string; idempotency_key: string; request_hash: string; response_body?: Json | null; response_status?: number | null; snapshot_id?: string | null; state?: string; token_id: string; updated_at?: string }
+        Update: { created_at?: string; expires_at?: string; idempotency_key?: string; request_hash?: string; response_body?: Json | null; response_status?: number | null; snapshot_id?: string | null; state?: string; token_id?: string; updated_at?: string }
+        Relationships: [
+          { foreignKeyName: "api_idempotency_keys_snapshot_id_fkey"; columns: ["snapshot_id"]; isOneToOne: false; referencedRelation: "versions"; referencedColumns: ["id"] },
+          { foreignKeyName: "api_idempotency_keys_token_id_fkey"; columns: ["token_id"]; isOneToOne: false; referencedRelation: "api_tokens"; referencedColumns: ["id"] },
+        ]
+      }
+      api_rate_limit_buckets: {
+        Row: { bucket_start: string; request_count: number; request_kind: string; token_id: string }
+        Insert: { bucket_start: string; request_count?: number; request_kind: string; token_id: string }
+        Update: { bucket_start?: string; request_count?: number; request_kind?: string; token_id?: string }
+        Relationships: [{ foreignKeyName: "api_rate_limit_buckets_token_id_fkey"; columns: ["token_id"]; isOneToOne: false; referencedRelation: "api_tokens"; referencedColumns: ["id"] }]
+      }
+      api_tokens: {
+        Row: { created_at: string; created_by: string | null; expires_at: string | null; id: string; last_used_at: string | null; name: string; org_id: string; revoked_at: string | null; scope: string; token_hash: string; token_prefix: string }
+        Insert: { created_at?: string; created_by?: string | null; expires_at?: string | null; id?: string; last_used_at?: string | null; name: string; org_id: string; revoked_at?: string | null; scope?: string; token_hash: string; token_prefix: string }
+        Update: { created_at?: string; created_by?: string | null; expires_at?: string | null; id?: string; last_used_at?: string | null; name?: string; org_id?: string; revoked_at?: string | null; scope?: string; token_hash?: string; token_prefix?: string }
+        Relationships: [{ foreignKeyName: "api_tokens_org_id_fkey"; columns: ["org_id"]; isOneToOne: false; referencedRelation: "organizations"; referencedColumns: ["id"] }]
+      }
       branches: {
         Row: {
           base_snapshot_id: string | null
@@ -579,6 +644,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_idempotent_translation_import: {
+        Args: { p_actor_user_id?: string | null; p_api_token_id: string; p_branch_id: string; p_entries: Json; p_filename: string; p_idempotency_key: string; p_locale_id: string; p_project_id: string; p_request_hash: string; p_request_id: string; p_skipped?: number; p_snapshot_id: string; p_total?: number }
+        Returns: Json
+      }
+      apply_translation_import: {
+        Args: { p_actor_user_id?: string | null; p_api_token_id?: string | null; p_branch_id: string; p_entries: Json; p_locale_id: string; p_project_id: string; p_request_id?: string }
+        Returns: Json
+      }
+      consume_api_rate_limit: {
+        Args: { p_limit: number; p_request_kind: string; p_token_id: string; p_window_seconds?: number }
+        Returns: { allowed: boolean; remaining: number; reset_at: string }[]
+      }
+      create_api_token: {
+        Args: { p_active_limit?: number; p_expires_at?: string | null; p_name: string; p_org_id: string; p_scope: string; p_token_hash: string; p_token_prefix: string; p_user_id: string }
+        Returns: { created_at: string; created_by: string | null; expires_at: string | null; id: string; last_used_at: string | null; name: string; revoked_at: string | null; scope: string; token_prefix: string }[]
+      }
       get_branches_bootstrap: {
         Args: {
           p_project_id: string

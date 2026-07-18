@@ -69,6 +69,7 @@ Open [http://localhost:3000](http://localhost:3000).
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `SUPABASE_SERVICE_ROLE_KEY`
    - `NEXT_PUBLIC_APP_URL` (your Vercel URL)
+   - `PUBLIC_API_ENABLED` (`false` until public API security smoke tests pass)
 3. Deploy — Vercel auto-detects Next.js
 
 ## Database Migrations
@@ -93,3 +94,8 @@ See [`docs/project-struct.md`](docs/project-struct.md) for a detailed breakdown.
 - **Read-only client** (`createClient` with anon key) is used for auth checks only
 - All DB queries are in `lib/supabase/queries/` — components never call Supabase directly
 - Auto-snapshot fires before every destructive operation (import, bulk delete, restore) — rollback is always one click away
+- Public API tokens are stored only as SHA-256 hashes; v1 routes remain unavailable unless `PUBLIC_API_ENABLED=true`
+
+## Public API operations
+
+Rate-limit buckets and idempotency records are intentionally retained for short-lived replay and diagnostics. Schedule the cleanup SQL in [`docs/public-api-operations.md`](docs/public-api-operations.md) daily after enabling v1.

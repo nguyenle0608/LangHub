@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { OrgMember, OrgWithStats, MemberRole } from '@/types'
+import { ApiTokensPanel } from './ApiTokensPanel'
 
 interface Props {
   org: OrgWithStats
@@ -287,6 +288,8 @@ export function OrgSettingsClient({ org, members: initialMembers, currentUserId 
             </form>
           </div>
         </section>
+
+        <ApiTokensPanel orgId={org.id} />
 
         {/* Danger Zone — owners only */}
         {isOwner && (

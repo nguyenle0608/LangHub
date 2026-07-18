@@ -16,7 +16,7 @@ export type RestoreOptions = {
 
 export async function createSnapshot(
   projectId: string,
-  userId: string,
+  userId: string | null,
   meta: { name: string; description?: string; tag?: string; branchId?: string }
 ): Promise<VersionWithStats | { error: string }> {
   const admin = createAdminClient()
@@ -36,16 +36,21 @@ export async function createSnapshot(
     .single()
 
   if (verErr || !version) return { error: verErr?.message ?? 'Failed to create version' }
+  const fail = async (message: string): Promise<{ error: string }> => {
+    await admin.from('versions').delete().eq('id', version.id)
+    return { error: message }
+  }
 
   // 2. Fetch all keys for this project
-  const { data: keys } = await admin
+  const { data: keys, error: keysError } = await admin
     .from('translation_keys')
     .select('id, key')
     .eq('project_id', projectId)
 
+  if (keysError) return fail(`Failed to snapshot keys: ${keysError.message}`)
   if (!keys?.length) {
     // No keys — still create empty version with zero stats
-    await admin.from('version_stats').insert({
+    const { error: statsError } = await admin.from('version_stats').insert({
       version_id: version.id,
       total_keys: 0,
       total_locales: 0,
@@ -53,27 +58,34 @@ export async function createSnapshot(
       pending_count: 0,
       empty_count: 0,
     })
+    if (statsError) return fail(`Failed to snapshot stats: ${statsError.message}`)
     return { ...version, stats: { version_id: version.id, total_keys: 0, total_locales: 0, approved_count: 0, pending_count: 0, empty_count: 0 } }
   }
 
   const keyNameById = Object.fromEntries(keys.map((k) => [k.id, k.key]))
 
   // 3. Fetch all locales
-  const { data: locales } = await admin
+  const { data: locales, error: localesError } = await admin
     .from('locales')
     .select('id, code')
     .eq('project_id', projectId)
 
   const localeCodeById = Object.fromEntries((locales ?? []).map((l) => [l.id, l.code]))
+  if (localesError) return fail(`Failed to snapshot locales: ${localesError.message}`)
 
   // 4. Fetch all translations for the branch (paginated; scoped by branch_id
   //    to avoid over-long .in(keyIds) URLs and the 1000-row cap)
-  const translations = meta.branchId
-    ? await fetchBranchTranslations(admin, meta.branchId)
-    : []
+  let translations
+  try {
+    translations = meta.branchId
+      ? await fetchBranchTranslations(admin, meta.branchId, { throwOnError: true })
+      : []
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : 'Failed to snapshot translations')
+  }
 
   if (!translations?.length) {
-    await admin.from('version_stats').insert({
+    const { error: statsError } = await admin.from('version_stats').insert({
       version_id: version.id,
       total_keys: keys.length,
       total_locales: locales?.length ?? 0,
@@ -81,6 +93,7 @@ export async function createSnapshot(
       pending_count: 0,
       empty_count: 0,
     })
+    if (statsError) return fail(`Failed to snapshot stats: ${statsError.message}`)
     return { ...version, stats: { version_id: version.id, total_keys: keys.length, total_locales: locales?.length ?? 0, approved_count: 0, pending_count: 0, empty_count: 0 } }
   }
 
@@ -98,7 +111,8 @@ export async function createSnapshot(
   // Insert in chunks of 500 to avoid limits
   for (let i = 0; i < snapshots.length; i += 500) {
     const chunk = snapshots.slice(i, i + 500)
-    await admin.from('version_snapshots').insert(chunk)
+    const { error } = await admin.from('version_snapshots').insert(chunk)
+    if (error) return fail(`Failed to store snapshot data: ${error.message}`)
   }
 
   // 6. Compute stats
@@ -115,7 +129,8 @@ export async function createSnapshot(
     empty_count: empty,
   }
 
-  await admin.from('version_stats').insert(stats)
+  const { error: statsError } = await admin.from('version_stats').insert(stats)
+  if (statsError) return fail(`Failed to snapshot stats: ${statsError.message}`)
 
   return { ...version, stats }
 }

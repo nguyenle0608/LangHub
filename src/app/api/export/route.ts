@@ -1,207 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
-import { exportJSON } from '@/lib/exporters/json'
-import { exportARB } from '@/lib/exporters/arb'
-import { exportCSV } from '@/lib/exporters/csv'
-import { exportYAML } from '@/lib/exporters/yaml'
-import { exportAndroidXML } from '@/lib/exporters/android'
-import { exportIOSStrings } from '@/lib/exporters/ios'
-import { exportZIP } from '@/lib/exporters/zip'
-import { buildExportLookup, ExportDataQueryError, fetchExportData } from '@/lib/exporters/data'
-import { resolveBranchId } from '@/lib/branches/queries'
-import { splitKeysByNamespace, type JsonExportStructure } from '@/lib/localization-namespaces'
+import { z } from 'zod'
 import { assertBranchAccess, assertLocalesAccess, assertProjectAccess } from '@/lib/auth/access'
+import { resolveBranchId } from '@/lib/branches/queries'
+import { ExportDataQueryError } from '@/lib/exporters/data'
+import { executeExport, ExportServiceError } from '@/lib/exporters/service'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 
-// POST body: { projectId, branchId?, localeIds[], format, filter, nested? }
+const ExportSchema = z.object({
+  projectId: z.string().min(1),
+  branchId: z.string().min(1).optional(),
+  localeIds: z.array(z.string().min(1)).min(1).max(100),
+  format: z.enum(['json', 'arb', 'csv', 'yaml', 'android', 'ios']),
+  filter: z.enum(['all', 'approved', 'reviewed_approved']),
+  nested: z.boolean().optional(),
+  jsonStructure: z.enum(['monolithic', 'namespaced']).optional(),
+  includeEmpty: z.boolean().optional(),
+})
+
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const parsed = ExportSchema.safeParse(await req.json().catch(() => null))
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
-  const body = await req.json() as {
-    projectId: string
-    branchId?: string
-    localeIds: string[]
-    format: 'json' | 'arb' | 'csv' | 'yaml' | 'android' | 'ios'
-    filter: 'all' | 'approved' | 'reviewed_approved'
-    nested?: boolean
-    jsonStructure?: JsonExportStructure
-    includeEmpty?: boolean
-  }
-
-  const { projectId, localeIds, format, filter, nested = true, jsonStructure = 'monolithic', includeEmpty = false } = body
-  if (!projectId || !localeIds?.length || !format) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
-  }
-  if (jsonStructure !== 'monolithic' && jsonStructure !== 'namespaced') {
-    return NextResponse.json({ error: `Unsupported JSON export structure: ${jsonStructure}` }, { status: 400 })
-  }
-
+  const { projectId, localeIds } = parsed.data
   const projectAccess = await assertProjectAccess(user.id, projectId, 'viewer')
   if (!projectAccess.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-
-  const branchId = await resolveBranchId(projectId, body.branchId)
+  const branchId = await resolveBranchId(projectId, parsed.data.branchId)
   if (!branchId) return NextResponse.json({ error: 'No branch found for project' }, { status: 400 })
   const [branchAccess, localeAccess] = await Promise.all([
     assertBranchAccess(user.id, branchId, 'viewer', projectId),
     assertLocalesAccess(user.id, localeIds, 'viewer', projectId),
   ])
-  if (!branchAccess.ok || !localeAccess.ok) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  if (!branchAccess.ok || !localeAccess.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const admin = createAdminClient()
-
-  let keys
-  let translations
   try {
-    const exportData = await fetchExportData(admin, branchId, localeIds)
-    keys = exportData.keys
-    translations = exportData.translations
+    const artifact = await executeExport(createAdminClient(), { ...parsed.data, branchId })
+    return new NextResponse(artifact.body as BodyInit, {
+      headers: {
+        'Content-Type': artifact.contentType,
+        'Content-Disposition': `attachment; filename="${artifact.filename}"`,
+      },
+    })
   } catch (error) {
-    const message = error instanceof ExportDataQueryError ? error.message : 'Failed to load export data'
-    return NextResponse.json({ error: message }, { status: 500 })
-  }
-
-  if (!keys?.length) {
-    return NextResponse.json({ error: 'No keys found' }, { status: 400 })
-  }
-
-  // Fetch locales
-  const { data: locales, error: localesError } = await admin
-    .from('locales')
-    .select('id, code, name')
-    .eq('project_id', projectId)
-    .in('id', localeIds)
-
-  if (localesError) {
-    return NextResponse.json(
-      { error: `Failed to load locales for export: ${localesError.message}` },
-      { status: 500 }
-    )
-  }
-
-  if (!locales?.length) {
-    return NextResponse.json({ error: 'No locales found' }, { status: 400 })
-  }
-
-  // Build lookup: localeId → keyName → value
-  const byLocale = buildExportLookup(keys, translations, filter, { includeEmpty, localeIds })
-
-  const descriptions = Object.fromEntries(
-    keys.filter((k) => k.description).map((k) => [k.key, k.description as string])
-  )
-
-  // CSV is multi-locale in one file
-  if (format === 'csv') {
-    const keyNames = keys.map((k) => k.key)
-    const localeCodes = locales.map((l) => l.code)
-    const translationsMap: Record<string, Record<string, string>> = {}
-    for (const k of keyNames) {
-      translationsMap[k] = {}
-      for (const locale of locales) {
-        translationsMap[k]![locale.code] = byLocale.get(locale.id)?.[k] ?? ''
-      }
+    if (error instanceof ExportDataQueryError || (error instanceof ExportServiceError && error.code === 'query_failed')) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
-    const csv = exportCSV(keyNames, localeCodes, translationsMap)
-    const slug = locales.map((l) => l.code).join('-')
-    return new NextResponse(csv, {
-      headers: {
-        'Content-Type': 'text/csv',
-        'Content-Disposition': `attachment; filename="translations-${slug}.csv"`,
-      },
-    })
+    if (error instanceof ExportServiceError) return NextResponse.json({ error: error.message }, { status: 400 })
+    return NextResponse.json({ error: 'Failed to export translations' }, { status: 500 })
   }
-
-  // Single locale — return file directly
-  if (localeIds.length === 1) {
-    const locale = locales[0]!
-    const localeKeys = byLocale.get(locale.id) ?? {}
-
-    if (format === 'json' && jsonStructure === 'namespaced') {
-      const files = splitKeysByNamespace(localeKeys).map((group) => ({
-        name: group.filename,
-        content: exportJSON(group.keys, true),
-      }))
-      const zipBuffer = await exportZIP(files)
-      return new NextResponse(zipBuffer as unknown as BodyInit, {
-        headers: {
-          'Content-Type': 'application/zip',
-          'Content-Disposition': `attachment; filename="${locale.code}-namespaces.zip"`,
-        },
-      })
-    }
-
-    let content: string
-    let contentType = 'application/json'
-    let filename = `${locale.code}.${format}`
-
-    if (format === 'json') {
-      content = exportJSON(localeKeys, nested)
-    } else if (format === 'arb') {
-      content = exportARB(localeKeys, locale.code, descriptions)
-    } else if (format === 'yaml') {
-      content = exportYAML(localeKeys)
-      contentType = 'text/yaml'
-    } else if (format === 'android') {
-      content = exportAndroidXML(localeKeys)
-      contentType = 'application/xml'
-      filename = 'strings.xml'
-    } else if (format === 'ios') {
-      content = exportIOSStrings(localeKeys)
-      contentType = 'text/plain'
-      filename = 'Localizable.strings'
-    } else {
-      content = exportJSON(localeKeys, nested)
-    }
-
-    return new NextResponse(content, {
-      headers: {
-        'Content-Type': contentType,
-        'Content-Disposition': `attachment; filename="${filename}"`,
-      },
-    })
-  }
-
-  // Multiple locales — ZIP
-  const files: { name: string; content: string }[] = []
-  for (const locale of locales) {
-    const localeKeys = byLocale.get(locale.id) ?? {}
-    let content: string
-    let ext: string
-
-    if (format === 'json') {
-      if (jsonStructure === 'namespaced') {
-        for (const group of splitKeysByNamespace(localeKeys)) {
-          files.push({ name: `${locale.code}/${group.filename}`, content: exportJSON(group.keys, true) })
-        }
-        continue
-      }
-      content = exportJSON(localeKeys, nested)
-      ext = 'json'
-    } else if (format === 'arb') {
-      content = exportARB(localeKeys, locale.code, descriptions)
-      ext = 'arb'
-    } else if (format === 'android') {
-      files.push({ name: `values-${locale.code}/strings.xml`, content: exportAndroidXML(localeKeys) })
-      continue
-    } else if (format === 'ios') {
-      files.push({ name: `${locale.code}.lproj/Localizable.strings`, content: exportIOSStrings(localeKeys) })
-      continue
-    } else {
-      content = exportYAML(localeKeys)
-      ext = 'yaml'
-    }
-    files.push({ name: `${locale.code}.${ext}`, content })
-  }
-
-  const zipBuffer = await exportZIP(files)
-
-  return new NextResponse(zipBuffer as unknown as BodyInit, {
-    headers: {
-      'Content-Type': 'application/zip',
-      'Content-Disposition': `attachment; filename="translations.zip"`,
-    },
-  })
 }

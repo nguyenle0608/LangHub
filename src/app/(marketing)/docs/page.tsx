@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { ArrowRight, BookOpen, Download, GitBranch, History, KeyRound, Languages } from 'lucide-react'
+import { ArrowRight, BookOpen, Download, GitBranch, History, KeyRound, Languages, Terminal } from 'lucide-react'
 
 export const metadata: Metadata = {
   title: 'Docs · LangHub',
@@ -22,6 +22,16 @@ const guides = [
   { icon: Download, title: 'Import & export', text: 'Round-trip common localization formats without leaving the browser.' },
   { icon: BookOpen, title: 'Concepts', text: 'Understand how projects, organizations, and roles fit together.' },
 ]
+
+const githubActionsExample = `- name: Pull LangHub translations
+  env:
+    LANGHUB_TOKEN: __DOLLAR__{{ secrets.LANGHUB_TOKEN }}
+    PROJECT_ID: __DOLLAR__{{ vars.LANGHUB_PROJECT_ID }}
+  run: |
+    curl --fail-with-body \\
+      -H "Authorization: Bearer __DOLLAR__LANGHUB_TOKEN" \\
+      -o app/locales/en.json \\
+      "https://your-langhub.example/api/v1/projects/__DOLLAR__PROJECT_ID/export?locale=en&format=json"`.replaceAll('__DOLLAR__', String.fromCharCode(36))
 
 export default function DocsPage() {
   return (
@@ -64,6 +74,86 @@ export default function DocsPage() {
               <p className="mt-2 text-sm leading-6 text-muted-foreground">{guide.text}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section id="api" className="mt-14 scroll-mt-20">
+        <div className="flex items-center gap-3">
+          <div className="inline-flex rounded-lg bg-blue-500/10 p-2.5 ring-1 ring-inset ring-blue-500/20">
+            <Terminal className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight">Public REST API</h2>
+            <p className="text-sm text-muted-foreground">Automate translation pull and push from CI/CD or scripts.</p>
+          </div>
+        </div>
+
+        <div className="mt-6 space-y-8 rounded-xl border border-border bg-card p-6">
+          <div>
+            <h3 className="font-semibold">Create and protect a token</h3>
+            <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm leading-6 text-muted-foreground">
+              <li>Open Workspace Settings → API tokens. Only owners and admins can manage credentials.</li>
+              <li>Prefer a read token and finite expiration. Use write only for import automation.</li>
+              <li>Copy the <code className="rounded bg-muted px-1">lh_…</code> secret once into a secret manager. LangHub stores only its SHA-256 hash.</li>
+              <li>Send it only as <code className="rounded bg-muted px-1">Authorization: Bearer …</code>. Revoke it immediately if exposed.</li>
+            </ol>
+            <p className="mt-2 text-sm text-muted-foreground">Write scope includes read access. Read scope cannot import.</p>
+          </div>
+
+          <div>
+            <h3 className="font-semibold">v1 endpoints</h3>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[680px] text-left text-sm">
+                <thead className="text-muted-foreground"><tr className="border-b"><th className="py-2 pr-4">Method</th><th className="py-2 pr-4">Path</th><th className="py-2 pr-4">Scope</th><th className="py-2">Purpose</th></tr></thead>
+                <tbody className="divide-y divide-border">
+                  <tr><td className="py-2 pr-4 font-mono">GET</td><td className="py-2 pr-4 font-mono">/api/v1/projects</td><td className="py-2 pr-4">read</td><td className="py-2">Cursor-paginated projects for the token workspace.</td></tr>
+                  <tr><td className="py-2 pr-4 font-mono">GET</td><td className="py-2 pr-4 font-mono">/api/v1/projects/:id/translations</td><td className="py-2 pr-4">read</td><td className="py-2">Deterministic key/value JSON for one locale.</td></tr>
+                  <tr><td className="py-2 pr-4 font-mono">GET</td><td className="py-2 pr-4 font-mono">/api/v1/projects/:id/export</td><td className="py-2 pr-4">read</td><td className="py-2">JSON, ARB, CSV, YAML, Android XML, or iOS strings.</td></tr>
+                  <tr><td className="py-2 pr-4 font-mono">POST</td><td className="py-2 pr-4 font-mono">/api/v1/projects/:id/import</td><td className="py-2 pr-4">write</td><td className="py-2">Snapshot-first, transactional multipart import.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="font-semibold">Pull translations</h3>
+            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`curl --fail-with-body \\
+  -H "Authorization: Bearer $LANGHUB_TOKEN" \\
+  "https://your-langhub.example/api/v1/projects/$PROJECT_ID/translations?locale=en&branch=main"`}</code></pre>
+            <p className="mt-2 text-sm text-muted-foreground">List projects accepts <code className="rounded bg-muted px-1">limit=1..100</code> and the opaque <code className="rounded bg-muted px-1">cursor</code> returned in <code className="rounded bg-muted px-1">pagination.nextCursor</code>.</p>
+          </div>
+
+          <div>
+            <h3 className="font-semibold">Export a localization file</h3>
+            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`curl --fail-with-body \\
+  -H "Authorization: Bearer $LANGHUB_TOKEN" \\
+  -o en.json \\
+  "https://your-langhub.example/api/v1/projects/$PROJECT_ID/export?locale=en&format=json&filter=approved"`}</code></pre>
+            <p className="mt-2 text-sm text-muted-foreground">Repeat <code className="rounded bg-muted px-1">locale</code> for multi-locale export. Formats: <code className="rounded bg-muted px-1">json</code>, <code className="rounded bg-muted px-1">arb</code>, <code className="rounded bg-muted px-1">csv</code>, <code className="rounded bg-muted px-1">yaml</code>, <code className="rounded bg-muted px-1">android</code>, and <code className="rounded bg-muted px-1">ios</code>.</p>
+          </div>
+
+          <div>
+            <h3 className="font-semibold">Import with retry safety</h3>
+            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`curl --fail-with-body -X POST \\
+  -H "Authorization: Bearer $LANGHUB_WRITE_TOKEN" \\
+  -H "Idempotency-Key: deploy-$GITHUB_RUN_ID" \\
+  -F "file=@locales/en.json" \\
+  -F "locale=en" \\
+  -F "branch=main" \\
+  -F "format=json" \\
+  "https://your-langhub.example/api/v1/projects/$PROJECT_ID/import"`}</code></pre>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">The key is bound to the token and normalized request. An identical completed retry replays the stored response; changed content returns 409. Requests are limited to 5 MiB, 5,000 keys, 200 characters per key, and 100,000 characters per value.</p>
+          </div>
+
+          <div>
+            <h3 className="font-semibold">GitHub Actions</h3>
+            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{githubActionsExample}</code></pre>
+          </div>
+
+          <div>
+            <h3 className="font-semibold">Errors and limits</h3>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">JSON errors contain <code className="rounded bg-muted px-1">error.code</code>, <code className="rounded bg-muted px-1">error.message</code>, and <code className="rounded bg-muted px-1">error.requestId</code>. Expect 401 for any invalid credential, 403 for scope denial, 404 for out-of-workspace resources, 409 for idempotency conflict, and 429 with <code className="rounded bg-muted px-1">Retry-After</code>. Initial quotas are 120 reads and 10 writes per token per minute.</p>
+          </div>
         </div>
       </section>
 
