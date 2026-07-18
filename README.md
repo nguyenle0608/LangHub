@@ -61,16 +61,18 @@ Open [http://localhost:3000](http://localhost:3000).
 | `pnpm db:push` | Apply Supabase migrations |
 | `pnpm db:types` | Regenerate TypeScript types from DB schema |
 
-## Deployment (Vercel)
+## Deployment (Netlify)
 
-1. Push to GitHub and import the repo in Vercel
-2. Set environment variables in Vercel dashboard:
+1. Push to GitHub and connect the repo in Netlify
+2. Set environment variables in Netlify for the Production deploy context:
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `SUPABASE_SERVICE_ROLE_KEY`
-   - `NEXT_PUBLIC_APP_URL` (your Vercel URL)
-   - `PUBLIC_API_ENABLED` (`false` until public API security smoke tests pass)
-3. Deploy — Vercel auto-detects Next.js
+   - `NEXT_PUBLIC_APP_URL=https://lang-hub.netlify.app`
+   - `PUBLIC_API_ENABLED=true` (enables `/api/v1/*`; use `false` for rollback)
+   - `TRANSLATION_ASSISTANCE_ENABLED=false` until the TM/Glossary application deploy is verified, then change it to `true`
+   - `RESTCOUNTRIES_API_KEY` when the REST Countries account requires authenticated requests
+3. Trigger a new production deploy after adding or changing environment variables
 
 ## Database Migrations
 
