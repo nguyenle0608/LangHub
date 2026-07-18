@@ -18,6 +18,12 @@ describe('extractPlaceholders', () => {
   it('ignores literal %%', () => {
     expect(extractPlaceholders('100%% done')).toEqual([])
   })
+
+  it('counts empty positional braces {} (easy_localization / Flutter)', () => {
+    expect(extractPlaceholders('You have {} items')).toEqual(['{}'])
+    expect(extractPlaceholders('{} + {} = {}')).toEqual(['{}', '{}', '{}'])
+    expect(extractPlaceholders('{ }')).toEqual(['{}'])
+  })
 })
 
 describe('extractTags', () => {
@@ -38,6 +44,15 @@ describe('checkTranslation', () => {
 
   it('flags a missing placeholder', () => {
     expect(rules('Hello {name}', 'Hola')).toContain('placeholder-missing')
+  })
+
+  it('flags a missing empty positional brace {}', () => {
+    expect(rules('You have {} items', 'Tienes elementos')).toContain('placeholder-missing')
+    expect(checkTranslation('You have {} items', 'Tienes {} elementos')).toEqual([])
+  })
+
+  it('flags count mismatch of {} placeholders', () => {
+    expect(rules('{} of {}', '{}')).toContain('placeholder-missing')
   })
 
   it('flags an unexpected placeholder', () => {

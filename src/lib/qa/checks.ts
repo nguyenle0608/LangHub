@@ -12,7 +12,9 @@ export interface QAIssue {
 // printf / Android / iOS conversions: %s %d %@ %1$s %02d %.2f %ld … (not %%)
 const PRINTF_RE = /%(?:\d+\$)?[-+ 0#]*\d*(?:\.\d+)?(?:hh?|ll?|[Lzjt])?([@diouxXeEfFgGaAcspn%])/g
 const DOUBLE_BRACE_RE = /\{\{\s*([^{}]+?)\s*\}\}/g
-const SINGLE_BRACE_RE = /\{\s*([^{}]+?)\s*\}/g
+// `*?` (not `+?`) so empty positional braces `{}` / `{ }` — used by
+// easy_localization (Flutter), i18next and others — are counted too.
+const SINGLE_BRACE_RE = /\{\s*([^{}]*?)\s*\}/g
 const TAG_RE = /<\/?([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>/g
 
 // Normalizes placeholders so reordering/width tweaks don't false-positive:
