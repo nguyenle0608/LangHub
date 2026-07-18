@@ -32,6 +32,10 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(h / 24)}d ago`
 }
 
+function truncateForLabel(text: string, max = 40): string {
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text
+}
+
 // ── Section wrapper ───────────────────────────────────────────────────────────
 
 function Section({ title, icon: Icon, collapsible, defaultOpen = true, children }: {
@@ -96,6 +100,12 @@ export function TranslationsPane({
   const [assistanceLoading, setAssistanceLoading] = useState<Set<string>>(new Set())
   const [assistanceFailed, setAssistanceFailed] = useState<Set<string>>(new Set())
   const assistanceRequests = useRef<Map<string, AbortController>>(new Map())
+  // Text the user has selected in the source (base) textarea — powers
+  // "Add <selection> to glossary" without leaving the editor.
+  const [sourceSelection, setSourceSelection] = useState('')
+  // Last non-base locale the user focused; used to default the target
+  // locale when adding a glossary term from a source selection.
+  const [activeTargetLocaleId, setActiveTargetLocaleId] = useState<string | null>(null)
 
   useEffect(() => {
     const requests = assistanceRequests.current
@@ -111,6 +121,8 @@ export function TranslationsPane({
     })
     setAssistance(new Map())
     setAssistanceFailed(new Set())
+    setSourceSelection('')
+    setGlossaryForm(null)
     return () => {
       requests.forEach((controller) => controller.abort())
       requests.clear()
@@ -146,16 +158,29 @@ export function TranslationsPane({
   >(null)
   const [glossarySubmitting, setGlossarySubmitting] = useState(false)
 
-  const openGlossaryAdd = (localeId: string) => {
+  const openGlossaryAdd = (localeId: string, overrides?: { sourceTerm?: string; targetTerm?: string }) => {
     const base = locales.find((l) => l.is_base)
     const source = base ? (drafts.get(base.id) ?? '') : ''
     setGlossaryForm({
       localeId,
-      sourceTerm: source.trim(),
-      targetTerm: (drafts.get(localeId) ?? '').trim(),
+      sourceTerm: (overrides?.sourceTerm ?? source).trim(),
+      targetTerm: (overrides?.targetTerm ?? drafts.get(localeId) ?? '').trim(),
       caseSensitive: false,
       wholeWord: true,
     })
+  }
+
+  // Selecting text in the source box lets the user add just that term
+  // instead of the full source sentence.
+  const handleSourceSelect = (event: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    const el = event.currentTarget
+    setSourceSelection(el.value.slice(el.selectionStart, el.selectionEnd).trim())
+  }
+
+  const addSelectionToGlossary = () => {
+    const targetLocaleId = activeTargetLocaleId ?? locales.find((l) => !l.is_base)?.id
+    if (!targetLocaleId) { toast.error('Add a target locale to this project first'); return }
+    openGlossaryAdd(targetLocaleId, { sourceTerm: sourceSelection, targetTerm: '' })
   }
 
   const submitGlossaryTerm = async () => {
@@ -188,6 +213,7 @@ export function TranslationsPane({
       toast.success('Glossary term added')
       const localeId = glossaryForm.localeId
       setGlossaryForm(null)
+      setSourceSelection('')
       // Refresh assistance so the new term shows up as a glossary match immediately.
       setAssistance((previous) => { const next = new Map(previous); next.delete(localeId); return next })
       void loadAssistance(localeId, true)
@@ -320,8 +346,9 @@ export function TranslationsPane({
             <textarea
               value={draft}
               onChange={(e) => canEdit && setDrafts((p) => new Map(p).set(locale.id, e.target.value))}
-              onFocus={() => { if (!locale.is_base) void loadAssistance(locale.id) }}
+              onFocus={() => { if (!locale.is_base) { void loadAssistance(locale.id); setActiveTargetLocaleId(locale.id) } }}
               onBlur={() => canEdit && void saveTranslation(locale.id)}
+              onSelect={locale.is_base ? handleSourceSelect : undefined}
               rows={3}
               placeholder={locale.is_base ? 'Source text…' : 'Translation…'}
               readOnly={!canEdit}
@@ -330,6 +357,18 @@ export function TranslationsPane({
                 !canEdit && 'cursor-default select-text'
               )}
             />
+
+            {/* Add selection to glossary (translator+, in-context) */}
+            {locale.is_base && canEdit && orgId && sourceSelection && (
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={addSelectionToGlossary}
+                className="flex w-full items-center gap-1.5 border-t border-border/60 px-3 py-1.5 text-left text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <BookPlus className="h-3 w-3 flex-shrink-0" /> Add “{truncateForLabel(sourceSelection)}” to glossary
+              </button>
+            )}
 
             {!locale.is_base && assistanceLoading.has(locale.id) && (
               <div className="border-t border-border/60 px-3 py-2 text-[11px] text-muted-foreground">Loading translation memory…</div>

@@ -88,3 +88,54 @@ describe('editor translation assistance', () => {
     expect((screen.getByPlaceholderText('Translation…') as HTMLTextAreaElement).value).toBe('Vui lòng tiếp tục')
   })
 })
+
+describe('glossary quick add from a source selection', () => {
+  function selectSourceText(range: [number, number]) {
+    const source = screen.getByPlaceholderText('Source text…') as HTMLTextAreaElement
+    source.setSelectionRange(...range)
+    fireEvent.select(source)
+    return source
+  }
+
+  it('shows an add-from-selection trigger prefilled with the selected text only', () => {
+    render(<TranslationsPane keyItem={keyItem} locales={[baseLocale, targetLocale]} branchId="branch-a" orgId="org-a" onUpdated={vi.fn()} canEdit />)
+    selectSourceText([0, 4]) // "Sign" out of "Sign in"
+    expect(screen.getByText('Add “Sign” to glossary')).toBeTruthy()
+  })
+
+  it('does not show the trigger without an orgId (no workspace to attach the term to)', () => {
+    render(<TranslationsPane keyItem={keyItem} locales={[baseLocale, targetLocale]} branchId="branch-a" onUpdated={vi.fn()} canEdit />)
+    selectSourceText([0, 4])
+    expect(screen.queryByText('Add “Sign” to glossary')).toBeNull()
+  })
+
+  it('clicking the trigger opens the quick-add form under the target locale, source prefilled and target empty', () => {
+    render(<TranslationsPane keyItem={keyItem} locales={[baseLocale, targetLocale]} branchId="branch-a" orgId="org-a" onUpdated={vi.fn()} canEdit />)
+    selectSourceText([0, 4])
+    fireEvent.click(screen.getByText('Add “Sign” to glossary'))
+    expect((screen.getByLabelText('Glossary source term') as HTMLInputElement).value).toBe('Sign')
+    expect((screen.getByLabelText('Glossary target term') as HTMLInputElement).value).toBe('')
+  })
+
+  it('submits the selected term to the glossary API and clears the trigger on success', async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (typeof url === 'string' && url.includes('/glossary')) {
+        return Promise.resolve(new Response(JSON.stringify({ data: { id: 'term-x' } }), { status: 201 }))
+      }
+      return Promise.resolve(new Response(JSON.stringify({ data: {
+        sourceText: 'Sign in', sourceLocale: 'en', targetLocale: 'vi', suggestions: [], glossary: [],
+      } }), { status: 200 }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<TranslationsPane keyItem={keyItem} locales={[baseLocale, targetLocale]} branchId="branch-a" orgId="org-a" onUpdated={vi.fn()} canEdit />)
+    selectSourceText([0, 4])
+    fireEvent.click(screen.getByText('Add “Sign” to glossary'))
+    fireEvent.change(screen.getByLabelText('Glossary target term'), { target: { value: 'Đăng' } })
+    fireEvent.click(screen.getByText('Add term'))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/organizations/org-a/glossary', expect.objectContaining({ method: 'POST' })))
+    const call = fetchMock.mock.calls.find(([url]) => typeof url === 'string' && url.includes('/glossary')) as unknown as [string, RequestInit]
+    expect(JSON.parse(call[1].body as string)).toMatchObject({ sourceLocale: 'en', targetLocale: 'vi', sourceTerm: 'Sign', targetTerm: 'Đăng' })
+    await waitFor(() => expect(screen.queryByText('Add “Sign” to glossary')).toBeNull())
+  })
+})
