@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { restoreSnapshot } from '@/lib/versions/snapshot'
 import { resolveBranchId } from '@/lib/branches/queries'
+import { assertBranchAccess, assertProjectAccess, assertVersionAccess } from '@/lib/auth/access'
 
 const RestoreSchema = z.object({
   projectId: z.string().uuid(),
@@ -26,8 +27,18 @@ export async function POST(
   const parsed = RestoreSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
+  const [projectAccess, versionAccess] = await Promise.all([
+    assertProjectAccess(user.id, parsed.data.projectId, 'admin'),
+    assertVersionAccess(user.id, versionId, 'admin', parsed.data.projectId),
+  ])
+  if (!projectAccess.ok || !versionAccess.ok) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const branchId = await resolveBranchId(parsed.data.projectId, parsed.data.branchId)
   if (!branchId) return NextResponse.json({ error: 'No branch found for project' }, { status: 400 })
+  const branchAccess = await assertBranchAccess(user.id, branchId, 'admin', parsed.data.projectId)
+  if (!branchAccess.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const result = await restoreSnapshot(versionId, parsed.data.projectId, user.id, branchId, {
     scope: parsed.data.scope,

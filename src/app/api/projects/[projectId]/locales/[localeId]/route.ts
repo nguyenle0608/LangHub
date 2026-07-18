@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { removeLocale, setBaseLocale } from '@/lib/supabase/queries/projects'
+import { assertLocalesAccess, assertProjectAccess } from '@/lib/auth/access'
 
 export async function PATCH(
   _request: Request,
@@ -9,6 +10,14 @@ export async function PATCH(
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const [projectAccess, localeAccess] = await Promise.all([
+    assertProjectAccess(user.id, params.projectId, 'admin'),
+    assertLocalesAccess(user.id, [params.localeId], 'admin', params.projectId),
+  ])
+  if (!projectAccess.ok || !localeAccess.ok) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const result = await setBaseLocale(params.projectId, params.localeId)
   if (result.error) return NextResponse.json({ error: result.error }, { status: 500 })
@@ -22,6 +31,14 @@ export async function DELETE(
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const [projectAccess, localeAccess] = await Promise.all([
+    assertProjectAccess(user.id, params.projectId, 'admin'),
+    assertLocalesAccess(user.id, [params.localeId], 'admin', params.projectId),
+  ])
+  if (!projectAccess.ok || !localeAccess.ok) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const { data: locale } = await supabase
     .from('locales')

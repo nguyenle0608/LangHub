@@ -1,15 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
-import { getUserOrgRole } from '@/lib/supabase/queries/organizations'
 import { listBranches, createBranch, deleteBranch, renameBranch, setDefaultBranch, resolveBranchId } from '@/lib/branches/queries'
-
-async function roleForProject(projectId: string, userId: string): Promise<string | null> {
-  const supabase = await createClient()
-  const { data: project } = await supabase.from('projects').select('org_id').eq('id', projectId).single()
-  if (!project?.org_id) return null
-  return getUserOrgRole(project.org_id, userId)
-}
+import { assertBranchAccess, assertProjectAccess } from '@/lib/auth/access'
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
@@ -19,6 +12,9 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const projectId = searchParams.get('projectId')
   if (!projectId) return NextResponse.json({ error: 'projectId required' }, { status: 400 })
+
+  const access = await assertProjectAccess(user.id, projectId, 'viewer')
+  if (!access.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const data = await listBranches(projectId)
   return NextResponse.json({ data })
@@ -40,8 +36,8 @@ export async function POST(req: NextRequest) {
   const parsed = PostSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
-  const role = await roleForProject(parsed.data.projectId, user.id)
-  if (!role || role === 'viewer') {
+  const access = await assertProjectAccess(user.id, parsed.data.projectId, 'translator')
+  if (!access.ok) {
     return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
   }
 
@@ -74,8 +70,8 @@ export async function PATCH(req: NextRequest) {
   const parsed = PatchSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
-  const role = await roleForProject(parsed.data.projectId, user.id)
-  if (role !== 'owner' && role !== 'admin') {
+  const access = await assertBranchAccess(user.id, parsed.data.branchId, 'admin', parsed.data.projectId)
+  if (!access.ok) {
     return NextResponse.json({ error: 'Only owners and admins can manage branches' }, { status: 403 })
   }
 
@@ -104,8 +100,8 @@ export async function DELETE(req: NextRequest) {
   const parsed = DeleteSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
-  const role = await roleForProject(parsed.data.projectId, user.id)
-  if (role !== 'owner' && role !== 'admin') {
+  const access = await assertBranchAccess(user.id, parsed.data.branchId, 'admin', parsed.data.projectId)
+  if (!access.ok) {
     return NextResponse.json({ error: 'Only owners and admins can delete branches' }, { status: 403 })
   }
 

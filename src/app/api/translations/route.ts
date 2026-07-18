@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { updateTranslation } from '@/lib/supabase/queries/translations'
+import { assertTranslationItemsAccess } from '@/lib/auth/access'
 
 const PatchSchema = z.object({
   branchId: z.string().uuid(),
@@ -25,6 +26,9 @@ export async function PATCH(req: NextRequest) {
   }
 
   const { branchId, keyId, localeId, value, status } = parsed.data
+  const access = await assertTranslationItemsAccess(user.id, branchId, [keyId], [localeId])
+  if (!access.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const result = await updateTranslation(branchId, keyId, localeId, value, status, user.id)
   if ('error' in result) return NextResponse.json({ error: result.error }, { status: 500 })
   return NextResponse.json(result)
@@ -54,6 +58,14 @@ export async function POST(req: NextRequest) {
   const body = await req.json() as unknown
   const parsed = BulkUpsertSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+
+  const access = await assertTranslationItemsAccess(
+    user.id,
+    parsed.data.branchId,
+    parsed.data.items.map((item) => item.keyId),
+    parsed.data.items.map((item) => item.localeId)
+  )
+  if (!access.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const admin = createAdminClient()
   const now = new Date().toISOString()

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { assertTranslationItemsAccess } from '@/lib/auth/access'
 
 const Schema = z.object({
   branchId: z.string().uuid(),
@@ -21,6 +22,14 @@ export async function POST(req: NextRequest) {
   const body = await req.json() as unknown
   const parsed = Schema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+
+  const access = await assertTranslationItemsAccess(
+    user.id,
+    parsed.data.branchId,
+    parsed.data.items.map((item) => item.keyId),
+    parsed.data.items.map((item) => item.localeId)
+  )
+  if (!access.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const admin = createAdminClient()
   const now = new Date().toISOString()

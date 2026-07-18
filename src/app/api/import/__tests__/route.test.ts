@@ -3,12 +3,18 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resolveBranchId } from '@/lib/branches/queries'
 import { createSnapshot } from '@/lib/versions/snapshot'
+import { assertBranchAccess, assertLocalesAccess, assertProjectAccess } from '@/lib/auth/access'
 import { POST } from '../route'
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }))
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn() }))
 vi.mock('@/lib/branches/queries', () => ({ resolveBranchId: vi.fn() }))
 vi.mock('@/lib/versions/snapshot', () => ({ createSnapshot: vi.fn() }))
+vi.mock('@/lib/auth/access', () => ({
+  assertProjectAccess: vi.fn(),
+  assertBranchAccess: vi.fn(),
+  assertLocalesAccess: vi.fn(),
+}))
 
 const projectId = 'project-1'
 const branchId = 'branch-main'
@@ -97,7 +103,22 @@ describe('POST /api/import', () => {
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) },
     } as unknown as Awaited<ReturnType<typeof createClient>>)
     vi.mocked(resolveBranchId).mockResolvedValue(branchId)
+    vi.mocked(assertProjectAccess).mockResolvedValue({ ok: true, role: 'translator', projectId, orgId: 'org-1' })
+    vi.mocked(assertBranchAccess).mockResolvedValue({ ok: true, role: 'translator', branchId, projectId, orgId: 'org-1' })
+    vi.mocked(assertLocalesAccess).mockResolvedValue({ ok: true, role: 'translator', projectId })
     vi.mocked(createSnapshot).mockResolvedValue({ id: 'snapshot-1' } as Awaited<ReturnType<typeof createSnapshot>>)
+  })
+
+  it('rejects a user who cannot write to the requested project', async () => {
+    vi.mocked(assertProjectAccess).mockResolvedValue({ ok: false })
+
+    const response = await POST(formRequest({
+      filename: 'messages.json',
+      content: JSON.stringify({ title: 'blocked' }),
+    }))
+
+    expect(response.status).toBe(403)
+    expect(createSnapshot).not.toHaveBeenCalled()
   })
 
   it('re-imports one namespaced JSON file into an existing prefixed key', async () => {

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
-import { getUserOrgRole } from '@/lib/supabase/queries/organizations'
 import { computeMerge, applyMerge } from '@/lib/branches/merge'
 import { deleteBranch } from '@/lib/branches/queries'
+import { assertBranchAccess, assertProjectAccess } from '@/lib/auth/access'
 
 const CellSchema = z.object({
   keyName: z.string(),
@@ -21,13 +21,6 @@ const Schema = z.object({
   resolutions: z.array(CellSchema).optional(),
 })
 
-async function roleForProject(projectId: string, userId: string): Promise<string | null> {
-  const supabase = await createClient()
-  const { data: project } = await supabase.from('projects').select('org_id').eq('id', projectId).single()
-  if (!project?.org_id) return null
-  return getUserOrgRole(project.org_id, userId)
-}
-
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -42,8 +35,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Source and target branches must differ' }, { status: 400 })
   }
 
-  const role = await roleForProject(projectId, user.id)
-  if (role !== 'owner' && role !== 'admin') {
+  const [projectAccess, sourceAccess, targetAccess] = await Promise.all([
+    assertProjectAccess(user.id, projectId, 'admin'),
+    assertBranchAccess(user.id, sourceBranchId, 'admin', projectId),
+    assertBranchAccess(user.id, targetBranchId, 'admin', projectId),
+  ])
+  if (!projectAccess.ok || !sourceAccess.ok || !targetAccess.ok) {
     return NextResponse.json({ error: 'Only owners and admins can merge branches' }, { status: 403 })
   }
 

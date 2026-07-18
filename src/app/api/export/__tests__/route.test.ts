@@ -5,11 +5,17 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { resolveBranchId } from '@/lib/branches/queries'
 import { ExportDataQueryError, fetchExportData } from '@/lib/exporters/data'
 import { exportZIP } from '@/lib/exporters/zip'
+import { assertBranchAccess, assertLocalesAccess, assertProjectAccess } from '@/lib/auth/access'
 import { POST } from '../route'
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }))
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn() }))
 vi.mock('@/lib/branches/queries', () => ({ resolveBranchId: vi.fn() }))
+vi.mock('@/lib/auth/access', () => ({
+  assertProjectAccess: vi.fn(),
+  assertBranchAccess: vi.fn(),
+  assertLocalesAccess: vi.fn(),
+}))
 vi.mock('@/lib/exporters/data', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/exporters/data')>()
   return { ...actual, fetchExportData: vi.fn() }
@@ -39,6 +45,7 @@ function request(body: Record<string, unknown>) {
 function mockLocales(locales = [en]) {
   const query = {
     select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
     in: vi.fn().mockResolvedValue({ data: locales, error: null }),
   }
   vi.mocked(createAdminClient).mockReturnValue({
@@ -53,7 +60,19 @@ describe('POST /api/export', () => {
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) },
     } as unknown as Awaited<ReturnType<typeof createClient>>)
     vi.mocked(resolveBranchId).mockResolvedValue('branch-main')
+    vi.mocked(assertProjectAccess).mockResolvedValue({ ok: true, role: 'viewer', projectId, orgId: 'org-1' })
+    vi.mocked(assertBranchAccess).mockResolvedValue({ ok: true, role: 'viewer', branchId: 'branch-main', projectId, orgId: 'org-1' })
+    vi.mocked(assertLocalesAccess).mockResolvedValue({ ok: true, role: 'viewer', projectId })
     mockLocales()
+  })
+
+  it('rejects a user who is not a member of the requested project', async () => {
+    vi.mocked(assertProjectAccess).mockResolvedValue({ ok: false })
+
+    const response = await POST(request({}))
+
+    expect(response.status).toBe(403)
+    expect(fetchExportData).not.toHaveBeenCalled()
   })
 
   it('returns a complete nested JSON file for a populated locale', async () => {
@@ -211,6 +230,7 @@ describe('POST /api/export', () => {
   it('surfaces locale query errors', async () => {
     const query = {
       select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
       in: vi.fn().mockResolvedValue({ data: null, error: { message: 'locale lookup failed' } }),
     }
     vi.mocked(createAdminClient).mockReturnValue({

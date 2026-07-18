@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createTranslationKey, getTranslationKeys, getTranslationKeysPage } from '@/lib/supabase/queries/translations'
 import { resolveBranchId } from '@/lib/branches/queries'
+import { assertBranchAccess, assertKeysAccess, assertLocalesAccess, assertProjectAccess } from '@/lib/auth/access'
 
 const PostSchema = z.object({
   projectId: z.string().uuid(),
@@ -64,8 +65,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   }
 
+  const projectAccess = await assertProjectAccess(user.id, parsed.data.projectId, 'translator')
+  if (!projectAccess.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const branchId = await resolveBranchId(parsed.data.projectId, parsed.data.branchId)
   if (!branchId) return NextResponse.json({ error: 'No branch found for project' }, { status: 400 })
+  const [branchAccess, localeAccess] = await Promise.all([
+    assertBranchAccess(user.id, branchId, 'translator', parsed.data.projectId),
+    parsed.data.localeIds.length > 0
+      ? assertLocalesAccess(user.id, parsed.data.localeIds, 'translator', parsed.data.projectId)
+      : Promise.resolve({ ok: true } as const),
+  ])
+  if (!branchAccess.ok || !localeAccess.ok) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const result = await createTranslationKey({
     ...parsed.data,
@@ -92,6 +105,9 @@ export async function DELETE(req: NextRequest) {
   const body = await req.json() as unknown
   const parsed = DeleteSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'ids[] required' }, { status: 400 })
+
+  const access = await assertKeysAccess(user.id, parsed.data.ids, 'admin')
+  if (!access.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const admin = createAdminClient()
   // Chunk the delete: a single .in('id', [...]) with many UUIDs overflows the

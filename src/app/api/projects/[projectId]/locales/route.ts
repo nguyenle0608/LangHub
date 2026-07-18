@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { addLocale } from '@/lib/supabase/queries/projects'
+import { assertProjectAccess } from '@/lib/auth/access'
 
 const AddLocaleSchema = z.object({
   code: z.string().min(2).max(10),
@@ -24,6 +25,9 @@ export async function POST(
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const access = await assertProjectAccess(user.id, params.projectId, 'admin')
+  if (!access.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body: unknown = await request.json()
 

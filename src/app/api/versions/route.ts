@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createSnapshot, getVersions } from '@/lib/versions/snapshot'
 import { resolveBranchId } from '@/lib/branches/queries'
+import { assertBranchAccess, assertProjectAccess } from '@/lib/auth/access'
 
 const PostSchema = z.object({
   projectId: z.string().uuid(),
@@ -20,6 +21,9 @@ export async function GET(req: NextRequest) {
   const projectId = searchParams.get('projectId')
   if (!projectId) return NextResponse.json({ error: 'projectId required' }, { status: 400 })
 
+  const access = await assertProjectAccess(user.id, projectId, 'viewer')
+  if (!access.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const versions = await getVersions(projectId)
   return NextResponse.json({ data: versions })
 }
@@ -33,8 +37,13 @@ export async function POST(req: NextRequest) {
   const parsed = PostSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
+  const projectAccess = await assertProjectAccess(user.id, parsed.data.projectId, 'translator')
+  if (!projectAccess.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const branchId = await resolveBranchId(parsed.data.projectId, parsed.data.branchId)
   if (!branchId) return NextResponse.json({ error: 'No branch found for project' }, { status: 400 })
+  const branchAccess = await assertBranchAccess(user.id, branchId, 'translator', parsed.data.projectId)
+  if (!branchAccess.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const result = await createSnapshot(parsed.data.projectId, user.id, {
     name: parsed.data.name,

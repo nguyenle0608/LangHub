@@ -11,6 +11,7 @@ import { exportZIP } from '@/lib/exporters/zip'
 import { buildExportLookup, ExportDataQueryError, fetchExportData } from '@/lib/exporters/data'
 import { resolveBranchId } from '@/lib/branches/queries'
 import { splitKeysByNamespace, type JsonExportStructure } from '@/lib/localization-namespaces'
+import { assertBranchAccess, assertLocalesAccess, assertProjectAccess } from '@/lib/auth/access'
 
 // POST body: { projectId, branchId?, localeIds[], format, filter, nested? }
 export async function POST(req: NextRequest) {
@@ -37,8 +38,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Unsupported JSON export structure: ${jsonStructure}` }, { status: 400 })
   }
 
+  const projectAccess = await assertProjectAccess(user.id, projectId, 'viewer')
+  if (!projectAccess.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const branchId = await resolveBranchId(projectId, body.branchId)
   if (!branchId) return NextResponse.json({ error: 'No branch found for project' }, { status: 400 })
+  const [branchAccess, localeAccess] = await Promise.all([
+    assertBranchAccess(user.id, branchId, 'viewer', projectId),
+    assertLocalesAccess(user.id, localeIds, 'viewer', projectId),
+  ])
+  if (!branchAccess.ok || !localeAccess.ok) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const admin = createAdminClient()
 
@@ -61,6 +72,7 @@ export async function POST(req: NextRequest) {
   const { data: locales, error: localesError } = await admin
     .from('locales')
     .select('id, code, name')
+    .eq('project_id', projectId)
     .in('id', localeIds)
 
   if (localesError) {

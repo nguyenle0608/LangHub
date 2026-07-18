@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { findDuplicateGroups, mergeKeys, linkKeys } from '@/lib/supabase/queries/keys'
 import { resolveBranchId } from '@/lib/branches/queries'
+import { assertKeysAccess, assertProjectAccess } from '@/lib/auth/access'
 
 const MergeSchema = z.object({
   projectId: z.string().uuid(),
@@ -44,6 +45,13 @@ export async function POST(req: NextRequest) {
   if (action === 'link') {
     const parsed = LinkSchema.safeParse(body)
     if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+    const access = await assertKeysAccess(
+      user.id,
+      [parsed.data.parentKeyId, parsed.data.childKeyId],
+      'translator',
+      { requireSameBranch: true }
+    )
+    if (!access.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     const result = await linkKeys(parsed.data.parentKeyId, parsed.data.childKeyId)
     if ('error' in result) return NextResponse.json({ error: result.error }, { status: 500 })
     return NextResponse.json({ success: true })
@@ -52,6 +60,18 @@ export async function POST(req: NextRequest) {
   // default: merge
   const parsed = MergeSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  const [projectAccess, keysAccess] = await Promise.all([
+    assertProjectAccess(user.id, parsed.data.projectId, 'admin'),
+    assertKeysAccess(
+      user.id,
+      [parsed.data.parentKeyId, ...parsed.data.childKeyIds],
+      'admin',
+      { projectId: parsed.data.projectId, requireSameBranch: true }
+    ),
+  ])
+  if (!projectAccess.ok || !keysAccess.ok) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
   const result = await mergeKeys(
     parsed.data.parentKeyId,
     parsed.data.childKeyIds,

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { updateMemberRole, removeMember } from '@/lib/supabase/queries/organizations'
 import type { MemberRole } from '@/types'
+import { assertOrgAccess } from '@/lib/auth/access'
 
 const UpdateRoleSchema = z.object({
   role: z.enum(['admin', 'translator', 'viewer']),
@@ -16,15 +17,16 @@ export async function PATCH(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Only owner/admin can change roles
-  const { data: requesterMember } = await supabase
+  const access = await assertOrgAccess(user.id, params.orgId, 'admin')
+  if (!access.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const { data: targetMember } = await supabase
     .from('members')
     .select('role')
     .eq('org_id', params.orgId)
-    .eq('user_id', user.id)
+    .eq('id', params.memberId)
     .maybeSingle()
-
-  if (!requesterMember || !['owner', 'admin'].includes(requesterMember.role ?? '')) {
+  if (!targetMember || (targetMember.role === 'owner' && access.role !== 'owner')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -50,15 +52,16 @@ export async function DELETE(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Only owner/admin can remove members
-  const { data: requesterMember } = await supabase
+  const access = await assertOrgAccess(user.id, params.orgId, 'admin')
+  if (!access.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const { data: targetMember } = await supabase
     .from('members')
     .select('role')
     .eq('org_id', params.orgId)
-    .eq('user_id', user.id)
+    .eq('id', params.memberId)
     .maybeSingle()
-
-  if (!requesterMember || !['owner', 'admin'].includes(requesterMember.role ?? '')) {
+  if (!targetMember || (targetMember.role === 'owner' && access.role !== 'owner')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

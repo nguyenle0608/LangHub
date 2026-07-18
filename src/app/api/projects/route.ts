@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createProject, getProjects } from '@/lib/supabase/queries/projects'
+import { assertOrgAccess } from '@/lib/auth/access'
 
 const CreateProjectSchema = z.object({
   orgId: z.string().uuid(),
@@ -30,6 +31,9 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   }
+
+  const access = await assertOrgAccess(user.id, parsed.data.orgId, 'admin')
+  if (!access.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const result = await createProject({
     orgId: parsed.data.orgId,

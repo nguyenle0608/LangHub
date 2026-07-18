@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { updateProject, deleteProject } from '@/lib/supabase/queries/projects'
+import { assertProjectAccess } from '@/lib/auth/access'
 
 const UpdateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -20,6 +21,9 @@ export async function PATCH(
   const parsed = UpdateSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
+  const access = await assertProjectAccess(user.id, params.projectId, 'admin')
+  if (!access.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const result = await updateProject(params.projectId, {
     ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
     ...(parsed.data.description !== undefined ? { description: parsed.data.description } : {}),
@@ -35,6 +39,9 @@ export async function DELETE(
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const access = await assertProjectAccess(user.id, params.projectId, 'owner')
+  if (!access.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   await deleteProject(params.projectId)
   return NextResponse.json({ success: true })

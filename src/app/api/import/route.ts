@@ -15,6 +15,7 @@ import {
   sanitizeNamespaceSegment,
   type JsonImportStructure,
 } from '@/lib/localization-namespaces'
+import { assertBranchAccess, assertLocalesAccess, assertProjectAccess } from '@/lib/auth/access'
 
 const SUPPORTED_FORMATS = ['json', 'arb', 'csv', 'yaml', 'yml', 'android', 'ios'] as const
 
@@ -40,8 +41,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
+  const projectAccess = await assertProjectAccess(user.id, projectId, 'translator')
+  if (!projectAccess.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const branchId = await resolveBranchId(projectId, branchParam)
   if (!branchId) return NextResponse.json({ error: 'No branch found for project' }, { status: 400 })
+  const [branchAccess, localeAccess] = await Promise.all([
+    assertBranchAccess(user.id, branchId, 'translator', projectId),
+    assertLocalesAccess(user.id, [localeId], 'translator', projectId),
+  ])
+  if (!branchAccess.ok || !localeAccess.ok) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
   if (!SUPPORTED_FORMATS.includes(format as typeof SUPPORTED_FORMATS[number])) {
     return NextResponse.json({ error: `Unsupported format: ${format}` }, { status: 400 })
   }
