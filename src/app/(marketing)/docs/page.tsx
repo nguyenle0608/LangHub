@@ -32,7 +32,7 @@ const githubActionsExample = `- name: Pull LangHub translations
     curl --fail-with-body \\
       -H "Authorization: Bearer __DOLLAR__LANGHUB_TOKEN" \\
       -o app/locales/en.json \\
-      "https://your-langhub.example/api/v1/projects/__DOLLAR__PROJECT_ID/export?locale=en&format=json"`.replaceAll('__DOLLAR__', String.fromCharCode(36))
+      "https://lang-hub.netlify.app/api/v1/projects/__DOLLAR__PROJECT_ID/export?locale=en&format=json"`.replaceAll('__DOLLAR__', String.fromCharCode(36))
 
 export default function DocsPage() {
   return (
@@ -120,8 +120,8 @@ export default function DocsPage() {
             <h3 className="font-semibold">Pull translations</h3>
             <CurlCodeBlock>{`curl --fail-with-body \\
   -H "Authorization: Bearer $LANGHUB_TOKEN" \\
-  "https://your-langhub.example/api/v1/projects/$PROJECT_ID/translations?locale=en&branch=main"`}</CurlCodeBlock>
-            <p className="mt-2 text-sm text-muted-foreground">Copy produces a one-line command using this website&apos;s URL. Replace <code className="rounded bg-muted px-1">YOUR_LANGHUB_TOKEN</code> and <code className="rounded bg-muted px-1">YOUR_PROJECT_ID</code>; in Postman, paste it into Import → Raw text.</p>
+  "https://lang-hub.netlify.app/api/v1/projects/$PROJECT_ID/translations?locale=en&branch=main"`}</CurlCodeBlock>
+            <p className="mt-2 text-sm text-muted-foreground">Copy produces a one-line command using the production API URL. Replace <code className="rounded bg-muted px-1">YOUR_LANGHUB_TOKEN</code> and <code className="rounded bg-muted px-1">YOUR_PROJECT_ID</code>; in Postman, paste it into Import → Raw text.</p>
             <p className="mt-2 text-sm text-muted-foreground">List projects accepts <code className="rounded bg-muted px-1">limit=1..100</code> and the opaque <code className="rounded bg-muted px-1">cursor</code> returned in <code className="rounded bg-muted px-1">pagination.nextCursor</code>.</p>
           </div>
 
@@ -130,7 +130,7 @@ export default function DocsPage() {
             <CurlCodeBlock>{`curl --fail-with-body \\
   -H "Authorization: Bearer $LANGHUB_TOKEN" \\
   -o en.json \\
-  "https://your-langhub.example/api/v1/projects/$PROJECT_ID/export?locale=en&format=json&filter=approved"`}</CurlCodeBlock>
+  "https://lang-hub.netlify.app/api/v1/projects/$PROJECT_ID/export?locale=en&format=json&filter=approved"`}</CurlCodeBlock>
             <p className="mt-2 text-sm text-muted-foreground">Repeat <code className="rounded bg-muted px-1">locale</code> for multi-locale export. Formats: <code className="rounded bg-muted px-1">json</code>, <code className="rounded bg-muted px-1">arb</code>, <code className="rounded bg-muted px-1">csv</code>, <code className="rounded bg-muted px-1">yaml</code>, <code className="rounded bg-muted px-1">android</code>, and <code className="rounded bg-muted px-1">ios</code>.</p>
           </div>
 
@@ -143,7 +143,7 @@ export default function DocsPage() {
   -F "locale=en" \\
   -F "branch=main" \\
   -F "format=json" \\
-  "https://your-langhub.example/api/v1/projects/$PROJECT_ID/import"`}</CurlCodeBlock>
+  "https://lang-hub.netlify.app/api/v1/projects/$PROJECT_ID/import"`}</CurlCodeBlock>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">The key is bound to the token and normalized request. An identical completed retry replays the stored response; changed content returns 409. Requests are limited to 5 MiB, 5,000 keys, 200 characters per key, and 100,000 characters per value.</p>
           </div>
 

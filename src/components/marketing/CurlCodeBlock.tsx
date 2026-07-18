@@ -7,9 +7,8 @@ type CurlCodeBlockProps = {
   children: string
 }
 
-export function toPostmanCurl(command: string, origin: string) {
+export function toPostmanCurl(command: string) {
   return command
-    .replaceAll('https://your-langhub.example', origin.replace(/\/$/, ''))
     .replaceAll('$LANGHUB_WRITE_TOKEN', 'YOUR_LANGHUB_WRITE_TOKEN')
     .replaceAll('$LANGHUB_TOKEN', 'YOUR_LANGHUB_TOKEN')
     .replaceAll('$PROJECT_ID', 'YOUR_PROJECT_ID')
@@ -29,7 +28,7 @@ export function CurlCodeBlock({ children }: CurlCodeBlockProps) {
   }, [copied])
 
   async function copyCurl() {
-    const command = toPostmanCurl(children, window.location.origin)
+    const command = toPostmanCurl(children)
     await navigator.clipboard.writeText(command)
     setCopied(true)
   }
