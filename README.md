@@ -95,6 +95,7 @@ See [`docs/project-struct.md`](docs/project-struct.md) for a detailed breakdown.
 - All DB queries are in `lib/supabase/queries/` — components never call Supabase directly
 - Auto-snapshot fires before every destructive operation (import, bulk delete, restore) — rollback is always one click away
 - Public API tokens are stored only as SHA-256 hashes; v1 routes remain unavailable unless `PUBLIC_API_ENABLED=true`
+- Translation Memory and Glossary editor assistance remains unavailable unless `TRANSLATION_ASSISTANCE_ENABLED=true`
 
 ## Public API operations
 

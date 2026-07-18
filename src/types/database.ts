@@ -194,6 +194,14 @@ export type Database = {
           },
         ]
       }
+      glossary_terms: {
+        Row: { case_sensitive: boolean; created_at: string; created_by: string | null; description: string | null; id: string; org_id: string; source_locale: string; source_normalized: string; source_term: string; target_locale: string; target_term: string; updated_at: string; whole_word: boolean }
+        Insert: { case_sensitive?: boolean; created_at?: string; created_by?: string | null; description?: string | null; id?: string; org_id: string; source_locale: string; source_normalized: string; source_term: string; target_locale: string; target_term: string; updated_at?: string; whole_word?: boolean }
+        Update: { case_sensitive?: boolean; created_at?: string; created_by?: string | null; description?: string | null; id?: string; org_id?: string; source_locale?: string; source_normalized?: string; source_term?: string; target_locale?: string; target_term?: string; updated_at?: string; whole_word?: boolean }
+        Relationships: [
+          { foreignKeyName: "glossary_terms_org_id_fkey"; columns: ["org_id"]; isOneToOne: false; referencedRelation: "organizations"; referencedColumns: ["id"] },
+        ]
+      }
       locales: {
         Row: {
           code: string
@@ -362,6 +370,17 @@ export type Database = {
             referencedRelation: "translations"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      translation_memory_entries: {
+        Row: { branch_id: string | null; created_at: string; fingerprint: string; id: string; key_id: string | null; last_used_at: string | null; org_id: string; project_id: string | null; quality: string; source_locale: string; source_normalized: string; source_text: string; target_locale: string; target_text: string; updated_at: string; usage_count: number }
+        Insert: { branch_id?: string | null; created_at?: string; fingerprint: string; id?: string; key_id?: string | null; last_used_at?: string | null; org_id: string; project_id?: string | null; quality?: string; source_locale: string; source_normalized: string; source_text: string; target_locale: string; target_text: string; updated_at?: string; usage_count?: number }
+        Update: { branch_id?: string | null; created_at?: string; fingerprint?: string; id?: string; key_id?: string | null; last_used_at?: string | null; org_id?: string; project_id?: string | null; quality?: string; source_locale?: string; source_normalized?: string; source_text?: string; target_locale?: string; target_text?: string; updated_at?: string; usage_count?: number }
+        Relationships: [
+          { foreignKeyName: "translation_memory_entries_branch_id_fkey"; columns: ["branch_id"]; isOneToOne: false; referencedRelation: "branches"; referencedColumns: ["id"] },
+          { foreignKeyName: "translation_memory_entries_key_id_fkey"; columns: ["key_id"]; isOneToOne: false; referencedRelation: "translation_keys"; referencedColumns: ["id"] },
+          { foreignKeyName: "translation_memory_entries_org_id_fkey"; columns: ["org_id"]; isOneToOne: false; referencedRelation: "organizations"; referencedColumns: ["id"] },
+          { foreignKeyName: "translation_memory_entries_project_id_fkey"; columns: ["project_id"]; isOneToOne: false; referencedRelation: "projects"; referencedColumns: ["id"] },
         ]
       }
       translation_keys: {
@@ -660,6 +679,10 @@ export type Database = {
         Args: { p_active_limit?: number; p_expires_at?: string | null; p_name: string; p_org_id: string; p_scope: string; p_token_hash: string; p_token_prefix: string; p_user_id: string }
         Returns: { created_at: string; created_by: string | null; expires_at: string | null; id: string; last_used_at: string | null; name: string; revoked_at: string | null; scope: string; token_prefix: string }[]
       }
+      backfill_translation_memory: {
+        Args: { p_after_translation_id?: string | null; p_batch_size?: number }
+        Returns: Json
+      }
       get_branches_bootstrap: {
         Args: {
           p_project_id: string
@@ -731,6 +754,14 @@ export type Database = {
           member_count: number
           project_count: number
         }[]
+      }
+      record_translation_memory_usage: {
+        Args: { p_entry_id: string; p_org_id: string }
+        Returns: boolean
+      }
+      search_translation_memory: {
+        Args: { p_limit?: number; p_org_id: string; p_source_locale: string; p_source_text: string; p_target_locale: string; p_threshold?: number }
+        Returns: { id: string; last_used_at: string | null; match_kind: string; project_id: string | null; score: number; source_text: string; target_text: string; usage_count: number }[]
       }
     }
     Enums: {

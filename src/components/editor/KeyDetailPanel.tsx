@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, Info, Tag, Clock, Send, Trash2, Pencil, Check, Monitor, Smartphone, ChevronDown, AlertTriangle } from 'lucide-react'
+import { X, Info, Tag, Clock, Send, Trash2, Pencil, Check, Monitor, Smartphone, ChevronDown, AlertTriangle, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { StatusBadge } from './StatusBadge'
 import { cn } from '@/lib/utils'
 import { checkTranslation } from '@/lib/qa/checks'
+import { checkGlossaryConsistency } from '@/lib/translation-assistance/matcher'
+import type { TranslationAssistance } from '@/lib/translation-assistance/types'
 import type { KeyWithTranslations } from '@/lib/supabase/queries/translations'
 import type { LocaleWithStats } from '@/types'
 import { localeFlag } from '@/lib/locale-flag'
@@ -88,8 +90,15 @@ function TranslationsPane({
   const [saving, setSaving] = useState<Set<string>>(new Set())
   const [approving, setApproving] = useState<Set<string>>(new Set())
   const [reviewing, setReviewing] = useState<Set<string>>(new Set())
+  const [assistance, setAssistance] = useState<Map<string, TranslationAssistance>>(new Map())
+  const [assistanceLoading, setAssistanceLoading] = useState<Set<string>>(new Set())
+  const [assistanceFailed, setAssistanceFailed] = useState<Set<string>>(new Set())
+  const assistanceRequests = useRef<Map<string, AbortController>>(new Map())
 
   useEffect(() => {
+    const requests = assistanceRequests.current
+    requests.forEach((controller) => controller.abort())
+    requests.clear()
     setDrafts(() => {
       const m = new Map<string, string>()
       for (const locale of locales) {
@@ -98,7 +107,36 @@ function TranslationsPane({
       }
       return m
     })
+    setAssistance(new Map())
+    setAssistanceFailed(new Set())
+    return () => {
+      requests.forEach((controller) => controller.abort())
+      requests.clear()
+    }
   }, [keyItem.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loadAssistance = async (localeId: string) => {
+    if (!keyItem.project_id || assistance.has(localeId) || assistanceLoading.has(localeId)) return
+    setAssistanceLoading((previous) => new Set(previous).add(localeId))
+    setAssistanceFailed((previous) => { const next = new Set(previous); next.delete(localeId); return next })
+    const controller = new AbortController()
+    assistanceRequests.current.set(localeId, controller)
+    try {
+      const query = new URLSearchParams({ branchId, keyId: keyItem.id, localeId })
+      const response = await fetch(`/api/projects/${keyItem.project_id}/translation-assistance?${query}`, { signal: controller.signal })
+      if (response.status === 404) return
+      if (!response.ok) throw new Error('Unavailable')
+      const json = await response.json() as { data?: TranslationAssistance }
+      if (json.data) setAssistance((previous) => new Map(previous).set(localeId, json.data!))
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) {
+        setAssistanceFailed((previous) => new Set(previous).add(localeId))
+      }
+    } finally {
+      assistanceRequests.current.delete(localeId)
+      setAssistanceLoading((previous) => { const next = new Set(previous); next.delete(localeId); return next })
+    }
+  }
 
   const saveTranslation = async (localeId: string) => {
     const value = drafts.get(localeId) ?? ''
@@ -189,7 +227,11 @@ function TranslationsPane({
         const canApprove = canEdit && !!draft.trim() && t?.status !== 'approved'
         const charLimit = keyItem.char_limit
         const overLimit = charLimit !== null && draft.length > charLimit
-        const qaIssues = locale.is_base ? [] : checkTranslation(baseValue, draft)
+        const localeAssistance = assistance.get(locale.id)
+        const qaIssues = locale.is_base ? [] : [
+          ...checkTranslation(baseValue, draft),
+          ...checkGlossaryConsistency(baseValue, draft, localeAssistance?.glossary ?? []),
+        ]
 
         return (
           <div
@@ -221,6 +263,7 @@ function TranslationsPane({
             <textarea
               value={draft}
               onChange={(e) => canEdit && setDrafts((p) => new Map(p).set(locale.id, e.target.value))}
+              onFocus={() => { if (!locale.is_base) void loadAssistance(locale.id) }}
               onBlur={() => canEdit && void saveTranslation(locale.id)}
               rows={3}
               placeholder={locale.is_base ? 'Source text…' : 'Translation…'}
@@ -230,6 +273,50 @@ function TranslationsPane({
                 !canEdit && 'cursor-default select-text'
               )}
             />
+
+            {!locale.is_base && assistanceLoading.has(locale.id) && (
+              <div className="border-t border-border/60 px-3 py-2 text-[11px] text-muted-foreground">Loading translation memory…</div>
+            )}
+            {!locale.is_base && assistanceFailed.has(locale.id) && (
+              <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => void loadAssistance(locale.id)} className="w-full border-t border-border/60 px-3 py-2 text-left text-[11px] text-amber-600 dark:text-amber-400">
+                Translation assistance unavailable — retry
+              </button>
+            )}
+            {!locale.is_base && localeAssistance && localeAssistance.sourceText && localeAssistance.suggestions.length === 0 && localeAssistance.glossary.length === 0 && (
+              <div className="border-t border-border/60 px-3 py-2 text-[11px] text-muted-foreground">No translation memory or glossary suggestions.</div>
+            )}
+            {!locale.is_base && localeAssistance && (localeAssistance.suggestions.length > 0 || localeAssistance.glossary.length > 0) && (
+              <div className="border-t border-border/60 bg-muted/20 px-3 py-2 space-y-2">
+                {localeAssistance.suggestions.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"><Sparkles className="h-3 w-3" /> Translation memory</div>
+                    {localeAssistance.suggestions.map((suggestion) => (
+                      <button
+                        key={suggestion.id}
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          setDrafts((previous) => new Map(previous).set(locale.id, suggestion.targetText))
+                          if (keyItem.project_id) void fetch(`/api/projects/${keyItem.project_id}/translation-assistance/${suggestion.id}/usage`, { method: 'POST' })
+                        }}
+                        className="flex w-full items-start gap-2 rounded border border-border bg-background/70 px-2 py-1.5 text-left hover:border-blue-500/40"
+                      >
+                        <span className="rounded bg-blue-500/10 px-1 py-0.5 text-[9px] font-semibold text-blue-700 dark:text-blue-300">{Math.round(suggestion.score * 100)}%</span>
+                        <span className="min-w-0 text-xs text-foreground">{suggestion.targetText}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {localeAssistance.glossary.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Glossary</div>
+                    {localeAssistance.glossary.map((term) => (
+                      <div key={term.id} className="flex items-center gap-1.5 text-[11px]"><span className="text-muted-foreground">{term.sourceTerm}</span><span>→</span><span className="font-medium text-foreground">{term.targetTerm}</span></div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* QA checks */}
             {qaIssues.length > 0 && (

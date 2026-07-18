@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { OrgMember, OrgWithStats, MemberRole } from '@/types'
 import { ApiTokensPanel } from './ApiTokensPanel'
+import { GlossaryPanel } from './GlossaryPanel'
 
 interface Props {
   org: OrgWithStats
@@ -290,6 +291,8 @@ export function OrgSettingsClient({ org, members: initialMembers, currentUserId 
         </section>
 
         <ApiTokensPanel orgId={org.id} />
+
+        <GlossaryPanel orgId={org.id} canManage={org.role === 'owner' || org.role === 'admin'} />
 
         {/* Danger Zone — owners only */}
         {isOwner && (
