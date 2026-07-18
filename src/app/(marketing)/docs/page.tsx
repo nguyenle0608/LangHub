@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowRight, BookOpen, Download, GitBranch, History, KeyRound, Languages, Terminal } from 'lucide-react'
+import { CurlCodeBlock } from '@/components/marketing/CurlCodeBlock'
 
 export const metadata: Metadata = {
   title: 'Docs · LangHub',
@@ -117,31 +118,32 @@ export default function DocsPage() {
 
           <div>
             <h3 className="font-semibold">Pull translations</h3>
-            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`curl --fail-with-body \\
+            <CurlCodeBlock>{`curl --fail-with-body \\
   -H "Authorization: Bearer $LANGHUB_TOKEN" \\
-  "https://your-langhub.example/api/v1/projects/$PROJECT_ID/translations?locale=en&branch=main"`}</code></pre>
+  "https://your-langhub.example/api/v1/projects/$PROJECT_ID/translations?locale=en&branch=main"`}</CurlCodeBlock>
+            <p className="mt-2 text-sm text-muted-foreground">Copy produces a one-line command using this website&apos;s URL. Replace <code className="rounded bg-muted px-1">YOUR_LANGHUB_TOKEN</code> and <code className="rounded bg-muted px-1">YOUR_PROJECT_ID</code>; in Postman, paste it into Import → Raw text.</p>
             <p className="mt-2 text-sm text-muted-foreground">List projects accepts <code className="rounded bg-muted px-1">limit=1..100</code> and the opaque <code className="rounded bg-muted px-1">cursor</code> returned in <code className="rounded bg-muted px-1">pagination.nextCursor</code>.</p>
           </div>
 
           <div>
             <h3 className="font-semibold">Export a localization file</h3>
-            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`curl --fail-with-body \\
+            <CurlCodeBlock>{`curl --fail-with-body \\
   -H "Authorization: Bearer $LANGHUB_TOKEN" \\
   -o en.json \\
-  "https://your-langhub.example/api/v1/projects/$PROJECT_ID/export?locale=en&format=json&filter=approved"`}</code></pre>
+  "https://your-langhub.example/api/v1/projects/$PROJECT_ID/export?locale=en&format=json&filter=approved"`}</CurlCodeBlock>
             <p className="mt-2 text-sm text-muted-foreground">Repeat <code className="rounded bg-muted px-1">locale</code> for multi-locale export. Formats: <code className="rounded bg-muted px-1">json</code>, <code className="rounded bg-muted px-1">arb</code>, <code className="rounded bg-muted px-1">csv</code>, <code className="rounded bg-muted px-1">yaml</code>, <code className="rounded bg-muted px-1">android</code>, and <code className="rounded bg-muted px-1">ios</code>.</p>
           </div>
 
           <div>
             <h3 className="font-semibold">Import with retry safety</h3>
-            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`curl --fail-with-body -X POST \\
+            <CurlCodeBlock>{`curl --fail-with-body -X POST \\
   -H "Authorization: Bearer $LANGHUB_WRITE_TOKEN" \\
   -H "Idempotency-Key: deploy-$GITHUB_RUN_ID" \\
   -F "file=@locales/en.json" \\
   -F "locale=en" \\
   -F "branch=main" \\
   -F "format=json" \\
-  "https://your-langhub.example/api/v1/projects/$PROJECT_ID/import"`}</code></pre>
+  "https://your-langhub.example/api/v1/projects/$PROJECT_ID/import"`}</CurlCodeBlock>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">The key is bound to the token and normalized request. An identical completed retry replays the stored response; changed content returns 409. Requests are limited to 5 MiB, 5,000 keys, 200 characters per key, and 100,000 characters per value.</p>
           </div>
 
