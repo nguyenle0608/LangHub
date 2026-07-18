@@ -59,6 +59,8 @@ interface Props {
   branches: Branch[]
   activeBranchId: string
   user: { id: string; email?: string | undefined; role: MemberRole; plan?: string | null }
+  // Optional initial search (e.g. deep-linked from the QA report via ?q=).
+  initialSearch?: string
 }
 
 type FilterStatus = 'all' | 'empty' | 'pending' | 'reviewed' | 'approved'
@@ -287,7 +289,7 @@ function serializeClipboardTable(grid: string[][]): string {
 // Main TranslationTable
 // ---------------------------------------------------------------------------
 
-export function TranslationTable({ project, initialKeys, totalKeyCount, branches: initialBranches, activeBranchId: initialBranchId, user }: Props) {
+export function TranslationTable({ project, initialKeys, totalKeyCount, branches: initialBranches, activeBranchId: initialBranchId, user, initialSearch }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const SIDEBAR_MIN_WIDTH = 180
   const SIDEBAR_MAX_WIDTH = 420
@@ -312,7 +314,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   const [activeBranchId, setActiveBranchId] = useState(initialBranchId)
   const [branches, setBranches] = useState(initialBranches)
   const [switchingBranch, setSwitchingBranch] = useState(false)
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(initialSearch ?? '')
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
   const [editingCell, setEditingCell] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')

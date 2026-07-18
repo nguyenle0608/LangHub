@@ -12,13 +12,13 @@ const INITIAL_KEYS = 200
 
 interface Props {
   params: Promise<{ projectId: string }>
-  searchParams: Promise<{ branch?: string }>
+  searchParams: Promise<{ branch?: string; q?: string }>
 }
 
 export default async function EditorPage({ params, searchParams }: Props) {
   const startedAt = Date.now()
   const { projectId } = await params
-  const { branch: branchParam } = await searchParams
+  const { branch: branchParam, q: initialSearch } = await searchParams
   const user = await getUser()
   if (!user) redirect('/login')
 
@@ -69,6 +69,7 @@ export default async function EditorPage({ params, searchParams }: Props) {
       branches={branches}
       activeBranchId={activeBranchId}
       user={{ id: user.id, email: user.email ?? undefined, role: role ?? 'viewer', plan }}
+      initialSearch={initialSearch}
     />
   )
 }
