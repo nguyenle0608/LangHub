@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, Info, Tag, Clock, Send, Trash2, Pencil, Check, Monitor, Smartphone, ChevronDown, AlertTriangle, Sparkles } from 'lucide-react'
+import { X, Info, Tag, Clock, Send, Trash2, Pencil, Check, Monitor, Smartphone, ChevronDown, AlertTriangle, Sparkles, BookPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -70,12 +70,14 @@ export function TranslationsPane({
   keyItem,
   locales,
   branchId,
+  orgId,
   onUpdated,
   canEdit,
 }: {
   keyItem: KeyWithTranslations
   locales: LocaleWithStats[]
   branchId: string
+  orgId?: string
   onUpdated: (patch: Partial<KeyWithTranslations>) => void
   canEdit: boolean
 }) {
@@ -115,8 +117,8 @@ export function TranslationsPane({
     }
   }, [keyItem.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const loadAssistance = async (localeId: string) => {
-    if (!keyItem.project_id || assistance.has(localeId) || assistanceLoading.has(localeId)) return
+  const loadAssistance = async (localeId: string, force = false) => {
+    if (!keyItem.project_id || (!force && assistance.has(localeId)) || assistanceLoading.has(localeId)) return
     setAssistanceLoading((previous) => new Set(previous).add(localeId))
     setAssistanceFailed((previous) => { const next = new Set(previous); next.delete(localeId); return next })
     const controller = new AbortController()
@@ -136,6 +138,61 @@ export function TranslationsPane({
       assistanceRequests.current.delete(localeId)
       setAssistanceLoading((previous) => { const next = new Set(previous); next.delete(localeId); return next })
     }
+  }
+
+  // ── Quick Add glossary term (in-context) ──────────────────────────────────
+  const [glossaryForm, setGlossaryForm] = useState<
+    { localeId: string; sourceTerm: string; targetTerm: string; caseSensitive: boolean; wholeWord: boolean } | null
+  >(null)
+  const [glossarySubmitting, setGlossarySubmitting] = useState(false)
+
+  const openGlossaryAdd = (localeId: string) => {
+    const base = locales.find((l) => l.is_base)
+    const source = base ? (drafts.get(base.id) ?? '') : ''
+    setGlossaryForm({
+      localeId,
+      sourceTerm: source.trim(),
+      targetTerm: (drafts.get(localeId) ?? '').trim(),
+      caseSensitive: false,
+      wholeWord: true,
+    })
+  }
+
+  const submitGlossaryTerm = async () => {
+    if (!glossaryForm || !orgId) return
+    const base = locales.find((l) => l.is_base)
+    const target = locales.find((l) => l.id === glossaryForm.localeId)
+    const sourceTerm = glossaryForm.sourceTerm.trim()
+    const targetTerm = glossaryForm.targetTerm.trim()
+    if (!base || !target) return
+    if (!sourceTerm || !targetTerm) { toast.error('Source and target term are required'); return }
+    if (base.code.toLowerCase() === target.code.toLowerCase()) { toast.error('Source and target locales must differ'); return }
+
+    setGlossarySubmitting(true)
+    try {
+      const resp = await fetch(`/api/organizations/${orgId}/glossary`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourceLocale: base.code,
+          targetLocale: target.code,
+          sourceTerm,
+          targetTerm,
+          caseSensitive: glossaryForm.caseSensitive,
+          wholeWord: glossaryForm.wholeWord,
+        }),
+      })
+      if (resp.status === 409) { toast.error('This term already exists for this locale pair'); return }
+      if (resp.status === 403) { toast.error('You do not have permission to add glossary terms'); return }
+      if (!resp.ok) { toast.error('Failed to add glossary term'); return }
+      toast.success('Glossary term added')
+      const localeId = glossaryForm.localeId
+      setGlossaryForm(null)
+      // Refresh assistance so the new term shows up as a glossary match immediately.
+      setAssistance((previous) => { const next = new Map(previous); next.delete(localeId); return next })
+      void loadAssistance(localeId, true)
+    } catch { toast.error('Network error') }
+    finally { setGlossarySubmitting(false) }
   }
 
   const saveTranslation = async (localeId: string) => {
@@ -316,6 +373,58 @@ export function TranslationsPane({
                   </div>
                 )}
               </div>
+            )}
+
+            {/* Quick Add glossary term (translator+, in-context) */}
+            {!locale.is_base && canEdit && orgId && baseLocale && (
+              glossaryForm?.localeId === locale.id ? (
+                <div className="border-t border-border/60 bg-muted/10 px-3 py-2 space-y-2">
+                  <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    <BookPlus className="h-3 w-3" /> Add glossary term · {baseLocale.code} → {locale.code}
+                  </div>
+                  <input
+                    value={glossaryForm.sourceTerm}
+                    onChange={(e) => setGlossaryForm((f) => (f ? { ...f, sourceTerm: e.target.value } : f))}
+                    placeholder={`Source term (${baseLocale.code})`}
+                    aria-label="Glossary source term"
+                    className="w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <input
+                    value={glossaryForm.targetTerm}
+                    onChange={(e) => setGlossaryForm((f) => (f ? { ...f, targetTerm: e.target.value } : f))}
+                    placeholder={`Target term (${locale.code})`}
+                    aria-label="Glossary target term"
+                    className="w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                    <label className="flex cursor-pointer items-center gap-1.5">
+                      <input type="checkbox" checked={glossaryForm.wholeWord} onChange={(e) => setGlossaryForm((f) => (f ? { ...f, wholeWord: e.target.checked } : f))} />
+                      Whole word
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-1.5">
+                      <input type="checkbox" checked={glossaryForm.caseSensitive} onChange={(e) => setGlossaryForm((f) => (f ? { ...f, caseSensitive: e.target.checked } : f))} />
+                      Case sensitive
+                    </label>
+                  </div>
+                  <div className="flex justify-end gap-1.5">
+                    <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px]" onClick={() => setGlossaryForm(null)} disabled={glossarySubmitting}>
+                      Cancel
+                    </Button>
+                    <Button size="sm" className="h-6 px-2 text-[11px]" onClick={() => void submitGlossaryTerm()} disabled={glossarySubmitting}>
+                      {glossarySubmitting ? 'Adding…' : 'Add term'}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => openGlossaryAdd(locale.id)}
+                  className="flex w-full items-center gap-1.5 border-t border-border/60 px-3 py-1.5 text-left text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <BookPlus className="h-3 w-3" /> Add to glossary
+                </button>
+              )
             )}
 
             {/* QA checks */}
@@ -649,6 +758,7 @@ interface Props {
   locales: LocaleWithStats[]
   userId: string
   branchId: string
+  orgId?: string
   canEdit: boolean
   canEditKeys: boolean
   onClose: () => void
@@ -656,7 +766,7 @@ interface Props {
   onKeyDeleted: (keyId: string) => void
 }
 
-export function KeyDetailPanel({ keyItem, locales, userId, branchId, canEdit, canEditKeys, onClose, onKeyUpdated, onKeyDeleted }: Props) {
+export function KeyDetailPanel({ keyItem, locales, userId, branchId, orgId, canEdit, canEditKeys, onClose, onKeyUpdated, onKeyDeleted }: Props) {
   return (
     <Dialog open={!!keyItem} onOpenChange={(v) => { if (!v) onClose() }}>
       <DialogContent className="max-w-4xl p-0 bg-background border-border flex flex-col max-h-[88vh] [&>button]:hidden">
@@ -682,6 +792,7 @@ export function KeyDetailPanel({ keyItem, locales, userId, branchId, canEdit, ca
                   keyItem={keyItem}
                   locales={locales}
                   branchId={branchId}
+                  orgId={orgId}
                   onUpdated={onKeyUpdated}
                   canEdit={canEdit}
                 />

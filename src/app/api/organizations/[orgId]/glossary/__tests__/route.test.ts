@@ -45,11 +45,19 @@ describe('organization glossary routes', () => {
     expect(mocks.range).toHaveBeenCalledWith(0, 49)
   })
 
-  it('denies translator glossary mutation before touching the table', async () => {
+  it('requires translator+ and denies when the access check fails', async () => {
     mocks.assertOrgAccess.mockResolvedValue({ ok: false })
     const response = await POST(new Request('https://langhub.dev', { method: 'POST', body: JSON.stringify(validTerm) }), params)
     expect(response.status).toBe(403)
+    expect(mocks.assertOrgAccess).toHaveBeenCalledWith('user-a', 'org-a', 'translator')
     expect(mocks.from).not.toHaveBeenCalled()
+  })
+
+  it('allows a translator to create a term (in-context capture)', async () => {
+    mocks.assertOrgAccess.mockResolvedValue({ ok: true, role: 'translator', orgId: 'org-a' })
+    const response = await POST(new Request('https://langhub.dev', { method: 'POST', body: JSON.stringify(validTerm) }), params)
+    expect(response.status).toBe(201)
+    expect(mocks.assertOrgAccess).toHaveBeenCalledWith('user-a', 'org-a', 'translator')
   })
 
   it('rejects invalid or identical locale pairs', async () => {

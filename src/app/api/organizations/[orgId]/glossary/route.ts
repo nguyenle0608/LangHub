@@ -22,7 +22,7 @@ const ListSchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 })
 
-async function userAndRole(orgId: string, minRole: 'viewer' | 'admin') {
+async function userAndRole(orgId: string, minRole: 'viewer' | 'translator' | 'admin') {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
@@ -53,7 +53,9 @@ export async function GET(request: Request, { params }: { params: { orgId: strin
 }
 
 export async function POST(request: Request, { params }: { params: { orgId: string } }) {
-  const auth = await userAndRole(params.orgId, 'admin')
+  // Creating a term is a translator+ action so terms can be captured in-context
+  // while translating. Editing/deleting terms stays admin-only (curation).
+  const auth = await userAndRole(params.orgId, 'translator')
   if (!auth) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const parsed = CreateSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })

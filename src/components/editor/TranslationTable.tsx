@@ -3049,6 +3049,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
           locales={locales}
           userId={user.id}
           branchId={activeBranchId}
+          orgId={project.org_id ?? undefined}
           canEdit={canEdit}
           canEditKeys={canEditKeys}
           onClose={() => setSelectedKeyId(null)}
