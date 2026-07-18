@@ -8,7 +8,7 @@ import {
   Sparkles, ListFilter, Layers2, ChevronDown,
   Columns3, Eye, EyeOff, Pin, PinOff, Lock, Unlock, GripVertical, Undo2, Redo2,
   MoreHorizontal, Copy, History, GitBranch as GitBranchIcon, Loader2, ArrowUp, ArrowLeft,
-  Info, X, Folder, FolderOpen, FileKey2, PanelLeftClose, PanelLeftOpen,
+  Info, X, Folder, FolderOpen, FileKey2, PanelLeftClose, PanelLeftOpen, ShieldCheck,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -1940,6 +1940,12 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
               <button className="w-full text-left text-xs text-foreground hover:text-foreground px-2 py-1.5 rounded hover:bg-muted/60 flex items-center gap-2">
                 <History className="h-3.5 w-3.5 text-muted-foreground" />
                 Versions
+              </button>
+            </Link>
+            <Link href={`/dashboard/${project.id}/qa`}>
+              <button className="w-full text-left text-xs text-foreground hover:text-foreground px-2 py-1.5 rounded hover:bg-muted/60 flex items-center gap-2">
+                <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
+                QA Report
               </button>
             </Link>
             <div className="border-t border-border my-1" />
