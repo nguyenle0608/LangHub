@@ -315,6 +315,15 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   const [branches, setBranches] = useState(initialBranches)
   const [switchingBranch, setSwitchingBranch] = useState(false)
   const [search, setSearch] = useState(initialSearch ?? '')
+
+  // Keep the ?q= URL param in sync with the search box so clearing the filter
+  // (and reloading or sharing the link) reflects the actual state.
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    if (search) url.searchParams.set('q', search)
+    else url.searchParams.delete('q')
+    window.history.replaceState(null, '', `${url.pathname}${url.search}`)
+  }, [search])
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
   const [editingCell, setEditingCell] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
