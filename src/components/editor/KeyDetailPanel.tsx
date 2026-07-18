@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, Info, Tag, Clock, Send, Trash2, Pencil, Check, Monitor, Smartphone, ChevronDown } from 'lucide-react'
+import { X, Info, Tag, Clock, Send, Trash2, Pencil, Check, Monitor, Smartphone, ChevronDown, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { StatusBadge } from './StatusBadge'
 import { cn } from '@/lib/utils'
+import { checkTranslation } from '@/lib/qa/checks'
 import type { KeyWithTranslations } from '@/lib/supabase/queries/translations'
 import type { LocaleWithStats } from '@/types'
 import { localeFlag } from '@/lib/locale-flag'
@@ -170,6 +171,11 @@ function TranslationsPane({
 
   const orderedLocales = [...locales.filter((l) => l.is_base), ...locales.filter((l) => !l.is_base)]
 
+  const baseLocale = locales.find((l) => l.is_base)
+  const baseValue = baseLocale
+    ? (drafts.get(baseLocale.id) ?? keyItem.translations.find((tr) => tr.locale_id === baseLocale.id)?.value ?? '')
+    : ''
+
   return (
     <div className="space-y-3 py-1">
       {orderedLocales.map((locale) => {
@@ -183,6 +189,7 @@ function TranslationsPane({
         const canApprove = canEdit && !!draft.trim() && t?.status !== 'approved'
         const charLimit = keyItem.char_limit
         const overLimit = charLimit !== null && draft.length > charLimit
+        const qaIssues = locale.is_base ? [] : checkTranslation(baseValue, draft)
 
         return (
           <div
@@ -223,6 +230,24 @@ function TranslationsPane({
                 !canEdit && 'cursor-default select-text'
               )}
             />
+
+            {/* QA checks */}
+            {qaIssues.length > 0 && (
+              <div className="px-3 pb-2 space-y-1" role="alert">
+                {qaIssues.map((issue) => (
+                  <div
+                    key={issue.rule}
+                    className={cn(
+                      'flex items-start gap-1.5 text-[11px]',
+                      issue.severity === 'error' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'
+                    )}
+                  >
+                    <AlertTriangle className="h-3 w-3 flex-shrink-0 mt-0.5" />
+                    <span>{issue.message}</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* footer */}
             {(isDirty || canReview || canApprove) && (
