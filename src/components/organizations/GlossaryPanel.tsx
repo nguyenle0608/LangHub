@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { BookOpen, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { BookOpen, Loader2, Pencil, Plus, Trash2, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import type { Database } from '@/types/database'
 
 type GlossaryRow = Database['public']['Tables']['glossary_terms']['Row']
+type ImportResult = { totalRows: number; created: number; skipped: number; errors: string[] }
 
 export function GlossaryPanel({ orgId, canManage }: { orgId: string; canManage: boolean }) {
   const [terms, setTerms] = useState<GlossaryRow[]>([])
@@ -26,6 +27,9 @@ export function GlossaryPanel({ orgId, canManage }: { orgId: string; canManage: 
   const [wholeWord, setWholeWord] = useState(true)
   const [filterSource, setFilterSource] = useState('')
   const [filterTarget, setFilterTarget] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<ImportResult | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetch(`/api/organizations/${orgId}/glossary?limit=50&offset=0`, { cache: 'no-store' })
@@ -63,6 +67,32 @@ export function GlossaryPanel({ orgId, canManage }: { orgId: string; canManage: 
       setTerms(json.data ?? []); setNextOffset(json.pagination?.nextOffset ?? null)
     } catch { toast.error('Failed to filter glossary terms') }
     finally { setLoading(false) }
+  }
+
+  async function importCSV(file: File) {
+    setImporting(true)
+    setImportResult(null)
+    try {
+      const body = new FormData()
+      body.append('file', file)
+      const response = await fetch(`/api/organizations/${orgId}/glossary/import`, { method: 'POST', body })
+      const json = await response.json() as { data?: ImportResult; error?: string }
+      if (!response.ok || !json.data) {
+        toast.error(typeof json.error === 'string' ? json.error : 'Failed to import glossary terms')
+        return
+      }
+      setImportResult(json.data)
+      if (json.data.created > 0) {
+        toast.success(`Imported ${json.data.created} glossary term${json.data.created === 1 ? '' : 's'}`)
+        await applyFilters()
+      } else {
+        toast.info('No new glossary terms were imported')
+      }
+    } catch { toast.error('Network error') }
+    finally {
+      setImporting(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
   }
 
   async function saveTerm(event: React.FormEvent) {
@@ -119,6 +149,42 @@ export function GlossaryPanel({ orgId, canManage }: { orgId: string; canManage: 
             <Button type="submit" disabled={saving || !sourceTerm.trim() || !targetTerm.trim()} className={editingId ? 'gap-1.5 bg-blue-600 text-white hover:bg-blue-500' : 'ml-auto gap-1.5 bg-blue-600 text-white hover:bg-blue-500'}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editingId ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />} {editingId ? 'Save changes' : 'Add term'}</Button>
           </div>
         </form>
+      )}
+      {canManage && (
+        <div className="space-y-2.5 border-b border-border px-6 py-5">
+          <div>
+            <p className="text-sm font-medium">Bulk import (CSV)</p>
+            <p className="text-xs text-muted-foreground">
+              Columns: <code className="rounded bg-muted px-1">source_locale,target_locale,source_term,target_term,case_sensitive,whole_word</code>. The last two are optional (default false/true).
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              aria-label="Glossary CSV file"
+              disabled={importing}
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                if (file) void importCSV(file)
+              }}
+              className="text-xs text-muted-foreground file:mr-3 file:rounded-md file:border file:border-border file:bg-background file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-foreground hover:file:bg-muted"
+            />
+            {importing && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+          </div>
+          {importResult && (
+            <div className="rounded-lg border border-border bg-background px-3 py-2 text-xs">
+              <p className="flex items-center gap-1.5 font-medium"><Upload className="h-3.5 w-3.5" /> {importResult.created} imported · {importResult.skipped} skipped (already exist) · {importResult.totalRows} rows read</p>
+              {importResult.errors.length > 0 && (
+                <ul className="mt-1.5 space-y-0.5 text-muted-foreground">
+                  {importResult.errors.slice(0, 10).map((message) => <li key={message}>{message}</li>)}
+                  {importResult.errors.length > 10 && <li>+{importResult.errors.length - 10} more</li>}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
       )}
       <div className="flex flex-wrap items-end gap-2 border-b border-border px-6 py-3">
         <div className="space-y-1"><Label htmlFor="glossary-filter-source" className="text-xs">Source locale</Label><Input id="glossary-filter-source" value={filterSource} onChange={(event) => setFilterSource(event.target.value)} placeholder="All" className="h-8 w-24" /></div>
