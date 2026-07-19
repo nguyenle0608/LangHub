@@ -25,7 +25,23 @@ export async function listBranches(projectId: string): Promise<Branch[]> {
   return data ?? []
 }
 
-type BranchDashboardRow = Database['public']['Functions']['get_branches_dashboard']['Returns'][number]
+// get_branches_dashboard is `language sql` + `returns table(...)`: Postgres
+// exposes no NOT NULL metadata for such function return columns, so the CLI's
+// generated type infers every column as non-null even though these are
+// plain selects off `branches`, which genuinely allows null (e.g. the
+// default/root branch has no parent_branch_id). Restore the true nullability
+// so this stays correct across regenerations of database.ts.
+type BranchDashboardRow = Omit<
+  Database['public']['Functions']['get_branches_dashboard']['Returns'][number],
+  'parent_branch_id' | 'is_default' | 'is_locked' | 'base_snapshot_id' | 'created_by' | 'created_at'
+> & {
+  parent_branch_id: string | null
+  is_default: boolean | null
+  is_locked: boolean | null
+  base_snapshot_id: string | null
+  created_by: string | null
+  created_at: string | null
+}
 
 function mapBranchDashboardRow(row: BranchDashboardRow): BranchWithStats {
   return {

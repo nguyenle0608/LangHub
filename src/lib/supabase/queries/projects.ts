@@ -330,7 +330,9 @@ export async function getEditorBootstrap(
   const supabase = await createClient()
   const { data, error } = await supabase.rpc('get_editor_bootstrap', {
     p_project_id: projectId,
-    p_branch_id: branchId ?? null,
+    // p_branch_id has a SQL default of NULL; the generated Args type renders
+    // that as undefined-only.
+    p_branch_id: branchId ?? undefined,
   })
   const row = data?.[0]
   if (error || !row) {

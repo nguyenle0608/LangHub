@@ -77,32 +77,168 @@ export type Database = {
           token_id?: string | null
         }
         Relationships: [
-          { foreignKeyName: "api_audit_events_branch_id_fkey"; columns: ["branch_id"]; isOneToOne: false; referencedRelation: "branches"; referencedColumns: ["id"] },
-          { foreignKeyName: "api_audit_events_org_id_fkey"; columns: ["org_id"]; isOneToOne: false; referencedRelation: "organizations"; referencedColumns: ["id"] },
-          { foreignKeyName: "api_audit_events_project_id_fkey"; columns: ["project_id"]; isOneToOne: false; referencedRelation: "projects"; referencedColumns: ["id"] },
-          { foreignKeyName: "api_audit_events_token_id_fkey"; columns: ["token_id"]; isOneToOne: false; referencedRelation: "api_tokens"; referencedColumns: ["id"] },
+          {
+            foreignKeyName: "api_audit_events_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "api_audit_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "api_audit_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "api_audit_events_token_id_fkey"
+            columns: ["token_id"]
+            isOneToOne: false
+            referencedRelation: "api_tokens"
+            referencedColumns: ["id"]
+          },
         ]
       }
       api_idempotency_keys: {
-        Row: { created_at: string; expires_at: string; idempotency_key: string; request_hash: string; response_body: Json | null; response_status: number | null; snapshot_id: string | null; state: string; token_id: string; updated_at: string }
-        Insert: { created_at?: string; expires_at?: string; idempotency_key: string; request_hash: string; response_body?: Json | null; response_status?: number | null; snapshot_id?: string | null; state?: string; token_id: string; updated_at?: string }
-        Update: { created_at?: string; expires_at?: string; idempotency_key?: string; request_hash?: string; response_body?: Json | null; response_status?: number | null; snapshot_id?: string | null; state?: string; token_id?: string; updated_at?: string }
+        Row: {
+          created_at: string
+          expires_at: string
+          idempotency_key: string
+          request_hash: string
+          response_body: Json | null
+          response_status: number | null
+          snapshot_id: string | null
+          state: string
+          token_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          idempotency_key: string
+          request_hash: string
+          response_body?: Json | null
+          response_status?: number | null
+          snapshot_id?: string | null
+          state?: string
+          token_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          idempotency_key?: string
+          request_hash?: string
+          response_body?: Json | null
+          response_status?: number | null
+          snapshot_id?: string | null
+          state?: string
+          token_id?: string
+          updated_at?: string
+        }
         Relationships: [
-          { foreignKeyName: "api_idempotency_keys_snapshot_id_fkey"; columns: ["snapshot_id"]; isOneToOne: false; referencedRelation: "versions"; referencedColumns: ["id"] },
-          { foreignKeyName: "api_idempotency_keys_token_id_fkey"; columns: ["token_id"]; isOneToOne: false; referencedRelation: "api_tokens"; referencedColumns: ["id"] },
+          {
+            foreignKeyName: "api_idempotency_keys_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "api_idempotency_keys_token_id_fkey"
+            columns: ["token_id"]
+            isOneToOne: false
+            referencedRelation: "api_tokens"
+            referencedColumns: ["id"]
+          },
         ]
       }
       api_rate_limit_buckets: {
-        Row: { bucket_start: string; request_count: number; request_kind: string; token_id: string }
-        Insert: { bucket_start: string; request_count?: number; request_kind: string; token_id: string }
-        Update: { bucket_start?: string; request_count?: number; request_kind?: string; token_id?: string }
-        Relationships: [{ foreignKeyName: "api_rate_limit_buckets_token_id_fkey"; columns: ["token_id"]; isOneToOne: false; referencedRelation: "api_tokens"; referencedColumns: ["id"] }]
+        Row: {
+          bucket_start: string
+          request_count: number
+          request_kind: string
+          token_id: string
+        }
+        Insert: {
+          bucket_start: string
+          request_count?: number
+          request_kind: string
+          token_id: string
+        }
+        Update: {
+          bucket_start?: string
+          request_count?: number
+          request_kind?: string
+          token_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_rate_limit_buckets_token_id_fkey"
+            columns: ["token_id"]
+            isOneToOne: false
+            referencedRelation: "api_tokens"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       api_tokens: {
-        Row: { created_at: string; created_by: string | null; expires_at: string | null; id: string; last_used_at: string | null; name: string; org_id: string; revoked_at: string | null; scope: string; token_hash: string; token_prefix: string }
-        Insert: { created_at?: string; created_by?: string | null; expires_at?: string | null; id?: string; last_used_at?: string | null; name: string; org_id: string; revoked_at?: string | null; scope?: string; token_hash: string; token_prefix: string }
-        Update: { created_at?: string; created_by?: string | null; expires_at?: string | null; id?: string; last_used_at?: string | null; name?: string; org_id?: string; revoked_at?: string | null; scope?: string; token_hash?: string; token_prefix?: string }
-        Relationships: [{ foreignKeyName: "api_tokens_org_id_fkey"; columns: ["org_id"]; isOneToOne: false; referencedRelation: "organizations"; referencedColumns: ["id"] }]
+        Row: {
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          last_used_at: string | null
+          name: string
+          org_id: string
+          revoked_at: string | null
+          scope: string
+          token_hash: string
+          token_prefix: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          last_used_at?: string | null
+          name: string
+          org_id: string
+          revoked_at?: string | null
+          scope?: string
+          token_hash: string
+          token_prefix: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          last_used_at?: string | null
+          name?: string
+          org_id?: string
+          revoked_at?: string | null
+          scope?: string
+          token_hash?: string
+          token_prefix?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_tokens_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       branches: {
         Row: {
@@ -195,11 +331,59 @@ export type Database = {
         ]
       }
       glossary_terms: {
-        Row: { case_sensitive: boolean; created_at: string; created_by: string | null; description: string | null; id: string; org_id: string; source_locale: string; source_normalized: string; source_term: string; target_locale: string; target_term: string; updated_at: string; whole_word: boolean }
-        Insert: { case_sensitive?: boolean; created_at?: string; created_by?: string | null; description?: string | null; id?: string; org_id: string; source_locale: string; source_normalized: string; source_term: string; target_locale: string; target_term: string; updated_at?: string; whole_word?: boolean }
-        Update: { case_sensitive?: boolean; created_at?: string; created_by?: string | null; description?: string | null; id?: string; org_id?: string; source_locale?: string; source_normalized?: string; source_term?: string; target_locale?: string; target_term?: string; updated_at?: string; whole_word?: boolean }
+        Row: {
+          case_sensitive: boolean
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          org_id: string
+          source_locale: string
+          source_normalized: string
+          source_term: string
+          target_locale: string
+          target_term: string
+          updated_at: string
+          whole_word: boolean
+        }
+        Insert: {
+          case_sensitive?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          org_id: string
+          source_locale: string
+          source_normalized: string
+          source_term: string
+          target_locale: string
+          target_term: string
+          updated_at?: string
+          whole_word?: boolean
+        }
+        Update: {
+          case_sensitive?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          org_id?: string
+          source_locale?: string
+          source_normalized?: string
+          source_term?: string
+          target_locale?: string
+          target_term?: string
+          updated_at?: string
+          whole_word?: boolean
+        }
         Relationships: [
-          { foreignKeyName: "glossary_terms_org_id_fkey"; columns: ["org_id"]; isOneToOne: false; referencedRelation: "organizations"; referencedColumns: ["id"] },
+          {
+            foreignKeyName: "glossary_terms_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
         ]
       }
       locales: {
@@ -372,17 +556,6 @@ export type Database = {
           },
         ]
       }
-      translation_memory_entries: {
-        Row: { branch_id: string | null; created_at: string; fingerprint: string; id: string; key_id: string | null; last_used_at: string | null; org_id: string; project_id: string | null; quality: string; source_locale: string; source_normalized: string; source_text: string; target_locale: string; target_text: string; updated_at: string; usage_count: number }
-        Insert: { branch_id?: string | null; created_at?: string; fingerprint: string; id?: string; key_id?: string | null; last_used_at?: string | null; org_id: string; project_id?: string | null; quality?: string; source_locale: string; source_normalized: string; source_text: string; target_locale: string; target_text: string; updated_at?: string; usage_count?: number }
-        Update: { branch_id?: string | null; created_at?: string; fingerprint?: string; id?: string; key_id?: string | null; last_used_at?: string | null; org_id?: string; project_id?: string | null; quality?: string; source_locale?: string; source_normalized?: string; source_text?: string; target_locale?: string; target_text?: string; updated_at?: string; usage_count?: number }
-        Relationships: [
-          { foreignKeyName: "translation_memory_entries_branch_id_fkey"; columns: ["branch_id"]; isOneToOne: false; referencedRelation: "branches"; referencedColumns: ["id"] },
-          { foreignKeyName: "translation_memory_entries_key_id_fkey"; columns: ["key_id"]; isOneToOne: false; referencedRelation: "translation_keys"; referencedColumns: ["id"] },
-          { foreignKeyName: "translation_memory_entries_org_id_fkey"; columns: ["org_id"]; isOneToOne: false; referencedRelation: "organizations"; referencedColumns: ["id"] },
-          { foreignKeyName: "translation_memory_entries_project_id_fkey"; columns: ["project_id"]; isOneToOne: false; referencedRelation: "projects"; referencedColumns: ["id"] },
-        ]
-      }
       translation_keys: {
         Row: {
           branch_id: string
@@ -449,6 +622,92 @@ export type Database = {
             columns: ["reference_key_id"]
             isOneToOne: false
             referencedRelation: "translation_keys"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      translation_memory_entries: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          fingerprint: string
+          id: string
+          key_id: string | null
+          last_used_at: string | null
+          org_id: string
+          project_id: string | null
+          quality: string
+          source_locale: string
+          source_normalized: string
+          source_text: string
+          target_locale: string
+          target_text: string
+          updated_at: string
+          usage_count: number
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          fingerprint: string
+          id?: string
+          key_id?: string | null
+          last_used_at?: string | null
+          org_id: string
+          project_id?: string | null
+          quality?: string
+          source_locale: string
+          source_normalized: string
+          source_text: string
+          target_locale: string
+          target_text: string
+          updated_at?: string
+          usage_count?: number
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          fingerprint?: string
+          id?: string
+          key_id?: string | null
+          last_used_at?: string | null
+          org_id?: string
+          project_id?: string | null
+          quality?: string
+          source_locale?: string
+          source_normalized?: string
+          source_text?: string
+          target_locale?: string
+          target_text?: string
+          updated_at?: string
+          usage_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "translation_memory_entries_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "translation_memory_entries_key_id_fkey"
+            columns: ["key_id"]
+            isOneToOne: false
+            referencedRelation: "translation_keys"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "translation_memory_entries_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "translation_memory_entries_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -664,95 +923,136 @@ export type Database = {
     }
     Functions: {
       apply_idempotent_translation_import: {
-        Args: { p_actor_user_id?: string | null; p_api_token_id: string; p_branch_id: string; p_entries: Json; p_filename: string; p_idempotency_key: string; p_locale_id: string; p_project_id: string; p_request_hash: string; p_request_id: string; p_skipped?: number; p_snapshot_id: string; p_total?: number }
+        Args: {
+          p_actor_user_id?: string
+          p_api_token_id: string
+          p_branch_id: string
+          p_entries: Json
+          p_filename: string
+          p_idempotency_key: string
+          p_locale_id: string
+          p_project_id: string
+          p_request_hash: string
+          p_request_id: string
+          p_skipped?: number
+          p_snapshot_id: string
+          p_total?: number
+        }
         Returns: Json
       }
       apply_translation_import: {
-        Args: { p_actor_user_id?: string | null; p_api_token_id?: string | null; p_branch_id: string; p_entries: Json; p_locale_id: string; p_project_id: string; p_request_id?: string }
+        Args: {
+          p_actor_user_id?: string
+          p_api_token_id?: string
+          p_branch_id: string
+          p_entries: Json
+          p_locale_id: string
+          p_project_id: string
+          p_request_id?: string
+        }
+        Returns: Json
+      }
+      backfill_translation_memory: {
+        Args: { p_after_translation_id?: string; p_batch_size?: number }
         Returns: Json
       }
       consume_api_rate_limit: {
-        Args: { p_limit: number; p_request_kind: string; p_token_id: string; p_window_seconds?: number }
-        Returns: { allowed: boolean; remaining: number; reset_at: string }[]
-      }
-      create_api_token: {
-        Args: { p_active_limit?: number; p_expires_at?: string | null; p_name: string; p_org_id: string; p_scope: string; p_token_hash: string; p_token_prefix: string; p_user_id: string }
-        Returns: { created_at: string; created_by: string | null; expires_at: string | null; id: string; last_used_at: string | null; name: string; revoked_at: string | null; scope: string; token_prefix: string }[]
-      }
-      backfill_translation_memory: {
-        Args: { p_after_translation_id?: string | null; p_batch_size?: number }
-        Returns: Json
-      }
-      get_branches_bootstrap: {
         Args: {
-          p_project_id: string
+          p_limit: number
+          p_request_kind: string
+          p_token_id: string
+          p_window_seconds?: number
         }
         Returns: {
-          project: Json
+          allowed: boolean
+          remaining: number
+          reset_at: string
+        }[]
+      }
+      create_api_token: {
+        Args: {
+          p_active_limit?: number
+          p_expires_at?: string
+          p_name: string
+          p_org_id: string
+          p_scope: string
+          p_token_hash: string
+          p_token_prefix: string
+          p_user_id: string
+        }
+        Returns: {
+          created_at: string
+          created_by: string
+          expires_at: string
+          id: string
+          last_used_at: string
+          name: string
+          revoked_at: string
+          scope: string
+          token_prefix: string
+        }[]
+      }
+      get_branches_bootstrap: {
+        Args: { p_project_id: string }
+        Returns: {
           branches: Json
-          role: string | null
+          project: Json
+          role: string
         }[]
       }
       get_branches_dashboard: {
-        Args: {
-          p_project_id: string
-        }
+        Args: { p_project_id: string }
         Returns: {
-          id: string
-          project_id: string
-          name: string
-          parent_branch_id: string | null
-          is_default: boolean | null
-          is_locked: boolean | null
-          base_snapshot_id: string | null
-          created_by: string | null
-          created_at: string | null
-          key_count: number
-          locale_count: number
           approved_percent: number
-        }[]
-      }
-      get_projects_dashboard: {
-        Args: {
-          p_org_id: string
-        }
-        Returns: {
+          base_snapshot_id: string
+          created_at: string
+          created_by: string
           id: string
-          org_id: string | null
-          name: string
-          slug: string
-          description: string | null
-          base_locale: string | null
-          created_at: string | null
+          is_default: boolean
+          is_locked: boolean
           key_count: number
           locale_count: number
-          overall_percent: number
-          locales: Json
+          name: string
+          parent_branch_id: string
+          project_id: string
         }[]
       }
       get_editor_bootstrap: {
-        Args: {
-          p_project_id: string
-          p_branch_id?: string | null
-        }
+        Args: { p_branch_id?: string; p_project_id: string }
         Returns: {
-          project: Json
+          active_branch_id: string
           branches: Json
-          active_branch_id: string | null
-          role: string | null
+          project: Json
+          role: string
+        }[]
+      }
+      get_projects_dashboard: {
+        Args: { p_org_id: string }
+        Returns: {
+          base_locale: string
+          created_at: string
+          description: string
+          id: string
+          key_count: number
+          locale_count: number
+          locales: Json
+          name: string
+          org_id: string
+          overall_percent: number
+          slug: string
         }[]
       }
       get_user_organizations: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
+          created_at: string
           id: string
-          name: string
-          slug: string
-          plan: string
-          created_at: string | null
-          role: string
           member_count: number
+          name: string
+          plan: string
           project_count: number
+          role: string
+          slug: string
         }[]
       }
       record_translation_memory_usage: {
@@ -760,8 +1060,24 @@ export type Database = {
         Returns: boolean
       }
       search_translation_memory: {
-        Args: { p_limit?: number; p_org_id: string; p_source_locale: string; p_source_text: string; p_target_locale: string; p_threshold?: number }
-        Returns: { id: string; last_used_at: string | null; match_kind: string; project_id: string | null; score: number; source_text: string; target_text: string; usage_count: number }[]
+        Args: {
+          p_limit?: number
+          p_org_id: string
+          p_source_locale: string
+          p_source_text: string
+          p_target_locale: string
+          p_threshold?: number
+        }
+        Returns: {
+          id: string
+          last_used_at: string
+          match_kind: string
+          project_id: string
+          score: number
+          source_text: string
+          target_text: string
+          usage_count: number
+        }[]
       }
     }
     Enums: {

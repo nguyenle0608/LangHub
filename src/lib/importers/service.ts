@@ -83,15 +83,17 @@ export async function executeImport(command: ImportCommand): Promise<ImportResul
   const rpcResult = command.actor.kind === 'api_token'
     ? await admin.rpc('apply_idempotent_translation_import', {
         p_project_id: command.projectId, p_branch_id: command.branchId, p_locale_id: command.localeId,
-        p_entries: entries as unknown as Json, p_actor_user_id: userId,
+        p_entries: entries as unknown as Json, p_actor_user_id: userId ?? undefined,
         p_api_token_id: command.actor.context.tokenId, p_request_id: command.actor.requestId,
         p_idempotency_key: command.idempotency!.key, p_request_hash: command.idempotency!.requestHash,
         p_snapshot_id: snapshotId!, p_filename: command.filename, p_skipped: skipped, p_total: total,
       })
     : await admin.rpc('apply_translation_import', {
         p_project_id: command.projectId, p_branch_id: command.branchId, p_locale_id: command.localeId,
-        p_entries: entries as unknown as Json, p_actor_user_id: userId,
-        p_api_token_id: null, p_request_id: crypto.randomUUID(),
+        p_entries: entries as unknown as Json, p_actor_user_id: userId ?? undefined,
+        // p_api_token_id has a SQL default of NULL for user-initiated imports;
+        // the generated Args type renders that as undefined-only.
+        p_api_token_id: undefined, p_request_id: crypto.randomUUID(),
       })
   const { data, error } = rpcResult
   if (error || !data) {

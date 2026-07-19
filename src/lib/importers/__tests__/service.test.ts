@@ -41,7 +41,7 @@ describe('shared import service', () => {
   it('snapshots before invoking the transactional user import RPC', async () => {
     await expect(executeImport(base)).resolves.toMatchObject({ created: 1, snapshotId: 'snapshot-a', filename: 'en.json' })
     expect(mocks.snapshot.mock.invocationCallOrder[0]).toBeLessThan(mocks.rpc.mock.invocationCallOrder[0]!)
-    expect(mocks.rpc).toHaveBeenCalledWith('apply_translation_import', expect.objectContaining({ p_actor_user_id: 'user-a', p_api_token_id: null }))
+    expect(mocks.rpc).toHaveBeenCalledWith('apply_translation_import', expect.objectContaining({ p_actor_user_id: 'user-a', p_api_token_id: undefined }))
   })
 
   it('rejects a mismatched branch or locale before snapshot and mutation', async () => {

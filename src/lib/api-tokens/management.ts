@@ -48,7 +48,10 @@ export async function createOrganizationApiToken(input: {
   const token = generateApiToken()
   const { data: rows, error } = await admin.rpc('create_api_token', {
     p_org_id: input.orgId, p_user_id: input.userId, p_name: input.name,
-    p_scope: input.scope, p_expires_at: input.expiresAt,
+    // The RPC's `p_expires_at` parameter has a SQL default of NULL, which the
+    // generated Args type renders as an optional (undefined-only) property —
+    // omitting the key is equivalent to passing SQL NULL via PostgREST.
+    p_scope: input.scope, p_expires_at: input.expiresAt ?? undefined,
     p_token_hash: hashApiToken(token), p_token_prefix: apiTokenDisplayPrefix(token),
     p_active_limit: MAX_ACTIVE_API_TOKENS,
   })
