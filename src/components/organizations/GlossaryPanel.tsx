@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { BookOpen, Loader2, Pencil, Plus, Trash2, Upload, X } from 'lucide-react'
+import { BookOpen, Download, Loader2, Pencil, Plus, Trash2, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,6 +29,7 @@ export function GlossaryPanel({ orgId, canManage }: { orgId: string; canManage: 
   const [filterTarget, setFilterTarget] = useState('')
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
+  const [exporting, setExporting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -67,6 +68,26 @@ export function GlossaryPanel({ orgId, canManage }: { orgId: string; canManage: 
       setTerms(json.data ?? []); setNextOffset(json.pagination?.nextOffset ?? null)
     } catch { toast.error('Failed to filter glossary terms') }
     finally { setLoading(false) }
+  }
+
+  async function exportCSV() {
+    setExporting(true)
+    try {
+      const filters = new URLSearchParams()
+      if (filterSource.trim()) filters.set('sourceLocale', filterSource.trim())
+      if (filterTarget.trim()) filters.set('targetLocale', filterTarget.trim())
+      const query = filters.toString()
+      const response = await fetch(`/api/organizations/${orgId}/glossary/export${query ? `?${query}` : ''}`, { cache: 'no-store' })
+      if (!response.ok) throw new Error('Failed')
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'glossary.csv'
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch { toast.error('Failed to export glossary terms') }
+    finally { setExporting(false) }
   }
 
   async function importCSV(file: File) {
@@ -155,7 +176,7 @@ export function GlossaryPanel({ orgId, canManage }: { orgId: string; canManage: 
           <div>
             <p className="text-sm font-medium">Bulk import (CSV)</p>
             <p className="text-xs text-muted-foreground">
-              Columns: <code className="rounded bg-muted px-1">source_locale,target_locale,source_term,target_term,case_sensitive,whole_word</code>. The last two are optional (default false/true).
+              Columns: <code className="rounded bg-muted px-1">source_locale,target_locale,source_term,target_term,case_sensitive,whole_word,description</code>. The last three are optional. Use <strong>Export CSV</strong> below to get a file in this exact format.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -200,6 +221,10 @@ export function GlossaryPanel({ orgId, canManage }: { orgId: string; canManage: 
         <div className="space-y-1"><Label htmlFor="glossary-filter-source" className="text-xs">Source locale</Label><Input id="glossary-filter-source" value={filterSource} onChange={(event) => setFilterSource(event.target.value)} placeholder="All" className="h-8 w-24" /></div>
         <div className="space-y-1"><Label htmlFor="glossary-filter-target" className="text-xs">Target locale</Label><Input id="glossary-filter-target" value={filterTarget} onChange={(event) => setFilterTarget(event.target.value)} placeholder="All" className="h-8 w-24" /></div>
         <Button type="button" variant="outline" size="sm" onClick={() => void applyFilters()}>Filter</Button>
+        <Button type="button" variant="outline" size="sm" disabled={exporting} onClick={() => void exportCSV()} className="ml-auto gap-1.5">
+          {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          Export CSV
+        </Button>
       </div>
       <div className="divide-y divide-border">
         {loading ? <div className="flex justify-center px-6 py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>

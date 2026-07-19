@@ -1,10 +1,14 @@
 import Papa from 'papaparse'
 
-// Bulk glossary import format (distinct from the translation-file CSV format
-// in src/lib/parsers/csv.ts): one row per term pair.
+// Bulk glossary import/export format (distinct from the translation-file CSV
+// format in src/lib/parsers/csv.ts): one row per term pair.
 //
-//   source_locale,target_locale,source_term,target_term,case_sensitive,whole_word
-//   en,vi,Sign in,Đăng nhập,false,true
+//   source_locale,target_locale,source_term,target_term,case_sensitive,whole_word,description
+//   en,vi,Sign in,Đăng nhập,false,true,
+//
+// `description` is optional on import (omitted entirely or left blank ->
+// null) and always included on export, so export -> edit -> re-import
+// round-trips without losing it.
 
 export interface GlossaryCSVRow {
   sourceLocale: string
@@ -13,6 +17,7 @@ export interface GlossaryCSVRow {
   targetTerm: string
   caseSensitive: boolean
   wholeWord: boolean
+  description: string | null
 }
 
 export interface GlossaryCSVParseResult {
@@ -80,6 +85,12 @@ export function parseGlossaryCSV(content: string): GlossaryCSVParseResult {
     if (sourceTerm.length > MAX_TERM_LENGTH) { errors.push(`Row ${rowNum}: source_term exceeds ${MAX_TERM_LENGTH} characters`); return }
     if (targetTerm.length > MAX_TERM_LENGTH) { errors.push(`Row ${rowNum}: target_term exceeds ${MAX_TERM_LENGTH} characters`); return }
 
+    const description = record.description
+    if (description && description.length > 2000) {
+      errors.push(`Row ${rowNum}: description exceeds 2000 characters`)
+      return
+    }
+
     rows.push({
       sourceLocale,
       targetLocale,
@@ -87,8 +98,39 @@ export function parseGlossaryCSV(content: string): GlossaryCSVParseResult {
       targetTerm,
       caseSensitive: parseBoolean(record.case_sensitive, false),
       wholeWord: parseBoolean(record.whole_word, true),
+      description: description || null,
     })
   })
 
   return { rows, errors }
+}
+
+// Exports terms in the same shape parseGlossaryCSV reads, so an exported
+// file can be edited and re-imported without a format conversion step.
+export interface GlossaryExportRow {
+  sourceLocale: string
+  targetLocale: string
+  sourceTerm: string
+  targetTerm: string
+  caseSensitive: boolean
+  wholeWord: boolean
+  description: string | null
+}
+
+export function exportGlossaryCSV(rows: GlossaryExportRow[]): string {
+  return Papa.unparse(
+    {
+      fields: ['source_locale', 'target_locale', 'source_term', 'target_term', 'case_sensitive', 'whole_word', 'description'],
+      data: rows.map((row) => [
+        row.sourceLocale,
+        row.targetLocale,
+        row.sourceTerm,
+        row.targetTerm,
+        String(row.caseSensitive),
+        String(row.wholeWord),
+        row.description ?? '',
+      ]),
+    },
+    { newline: '\n' }
+  )
 }

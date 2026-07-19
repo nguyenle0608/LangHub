@@ -49,6 +49,7 @@ export async function POST(request: Request, { params }: { params: { orgId: stri
       target_term: row.targetTerm,
       case_sensitive: row.caseSensitive,
       whole_word: row.wholeWord,
+      description: row.description,
       created_by: user.id,
     }))
     // ON CONFLICT DO NOTHING: pre-existing terms and duplicate rows within the

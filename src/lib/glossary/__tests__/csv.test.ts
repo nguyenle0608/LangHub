@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseGlossaryCSV } from '../csv'
+import { parseGlossaryCSV, exportGlossaryCSV } from '../csv'
 
 describe('parseGlossaryCSV', () => {
   it('parses valid rows with default case_sensitive/whole_word', () => {
@@ -7,8 +7,20 @@ describe('parseGlossaryCSV', () => {
     const result = parseGlossaryCSV(csv)
     expect(result.errors).toEqual([])
     expect(result.rows).toEqual([
-      { sourceLocale: 'en', targetLocale: 'vi', sourceTerm: 'Sign in', targetTerm: 'Đăng nhập', caseSensitive: false, wholeWord: true },
+      { sourceLocale: 'en', targetLocale: 'vi', sourceTerm: 'Sign in', targetTerm: 'Đăng nhập', caseSensitive: false, wholeWord: true, description: null },
     ])
+  })
+
+  it('parses an optional description column', () => {
+    const csv = 'source_locale,target_locale,source_term,target_term,case_sensitive,whole_word,description\nen,vi,API,API,true,false,Keep as-is'
+    const result = parseGlossaryCSV(csv)
+    expect(result.rows[0]?.description).toBe('Keep as-is')
+  })
+
+  it('rejects a description longer than 2000 characters', () => {
+    const csv = `source_locale,target_locale,source_term,target_term,case_sensitive,whole_word,description\nen,vi,API,API,false,true,${'a'.repeat(2001)}`
+    const result = parseGlossaryCSV(csv)
+    expect(result.errors).toEqual(['Row 2: description exceeds 2000 characters'])
   })
 
   it('parses explicit case_sensitive/whole_word booleans', () => {
@@ -22,7 +34,7 @@ describe('parseGlossaryCSV', () => {
     const result = parseGlossaryCSV(csv)
     expect(result.errors).toEqual([])
     expect(result.rows).toEqual([
-      { sourceLocale: 'en', targetLocale: 'vi', sourceTerm: 'Sign in', targetTerm: 'Đăng nhập', caseSensitive: false, wholeWord: true },
+      { sourceLocale: 'en', targetLocale: 'vi', sourceTerm: 'Sign in', targetTerm: 'Đăng nhập', caseSensitive: false, wholeWord: true, description: null },
     ])
   })
 
@@ -80,8 +92,8 @@ describe('parseGlossaryCSV', () => {
     ].join('\n')
     const result = parseGlossaryCSV(csv)
     expect(result.rows).toEqual([
-      { sourceLocale: 'en', targetLocale: 'vi', sourceTerm: 'Sign in', targetTerm: 'Đăng nhập', caseSensitive: false, wholeWord: true },
-      { sourceLocale: 'en', targetLocale: 'vi', sourceTerm: 'Workspace', targetTerm: 'Không gian làm việc', caseSensitive: false, wholeWord: true },
+      { sourceLocale: 'en', targetLocale: 'vi', sourceTerm: 'Sign in', targetTerm: 'Đăng nhập', caseSensitive: false, wholeWord: true, description: null },
+      { sourceLocale: 'en', targetLocale: 'vi', sourceTerm: 'Workspace', targetTerm: 'Không gian làm việc', caseSensitive: false, wholeWord: true, description: null },
     ])
   })
 
@@ -90,5 +102,24 @@ describe('parseGlossaryCSV', () => {
     const result = parseGlossaryCSV(csv)
     expect(result.rows).toEqual([])
     expect(result.errors.length).toBeGreaterThan(0)
+  })
+})
+
+describe('exportGlossaryCSV', () => {
+  it('emits a header row and one line per term', () => {
+    const csv = exportGlossaryCSV([
+      { sourceLocale: 'en', targetLocale: 'vi', sourceTerm: 'Sign in', targetTerm: 'Đăng nhập', caseSensitive: false, wholeWord: true, description: null },
+    ])
+    expect(csv).toBe('source_locale,target_locale,source_term,target_term,case_sensitive,whole_word,description\nen,vi,Sign in,Đăng nhập,false,true,')
+  })
+
+  it('round-trips through parseGlossaryCSV, including description', () => {
+    const original = [
+      { sourceLocale: 'en', targetLocale: 'vi', sourceTerm: 'Sign in', targetTerm: 'Đăng nhập', caseSensitive: false, wholeWord: true, description: 'Auth CTA' },
+      { sourceLocale: 'en', targetLocale: 'vi', sourceTerm: 'a, b', targetTerm: 'c "d"', caseSensitive: true, wholeWord: false, description: null },
+    ]
+    const result = parseGlossaryCSV(exportGlossaryCSV(original))
+    expect(result.errors).toEqual([])
+    expect(result.rows).toEqual(original)
   })
 })
