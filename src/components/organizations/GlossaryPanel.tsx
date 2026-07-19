@@ -169,9 +169,19 @@ export function GlossaryPanel({ orgId, canManage }: { orgId: string; canManage: 
                 const file = event.target.files?.[0]
                 if (file) void importCSV(file)
               }}
-              className="text-xs text-muted-foreground file:mr-3 file:rounded-md file:border file:border-border file:bg-background file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-foreground hover:file:bg-muted"
+              className="hidden"
             />
-            {importing && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={importing}
+              onClick={() => fileInputRef.current?.click()}
+              className="gap-1.5"
+            >
+              {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              {importing ? 'Importing…' : 'Choose CSV file'}
+            </Button>
           </div>
           {importResult && (
             <div className="rounded-lg border border-border bg-background px-3 py-2 text-xs">
