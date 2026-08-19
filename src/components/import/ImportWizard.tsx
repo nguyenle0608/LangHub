@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { ArrowLeft, Upload, Check, ChevronRight, FileText, Info, X, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -157,6 +158,7 @@ function PreviewKeyList({
 }
 
 export function ImportWizard({ project, branchId }: Props) {
+  const router = useRouter()
   const [step, setStep] = useState(0)
   const [files, setFiles] = useState<FileEntry[]>([])
   const [namespace, setNamespace] = useState('')
@@ -393,6 +395,11 @@ export function ImportWizard({ project, branchId }: Props) {
 
     setResults(allResults)
     setStep(4)
+    // The editor is a Server Component, so its rendered output sits in the
+    // client router cache from before the import. Without invalidating it,
+    // "View in Editor" replays the pre-import payload — a project that started
+    // empty still shows "No keys yet".
+    if (allResults.some((result) => !result.error)) router.refresh()
   }
 
   // Locales that appear more than once across the file list. Multiple files for
