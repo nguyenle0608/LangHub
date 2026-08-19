@@ -148,17 +148,33 @@ export function BranchesPage({ project, initialBranches, canManage }: Props) {
         {/* New branch form */}
         {creating && (
           <form onSubmit={handleCreate} className="border border-border rounded-xl p-4 bg-card/40 space-y-3">
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="flex-1 space-y-1">
-                <label className="text-[11px] uppercase tracking-wider text-muted-foreground">Name</label>
-                <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="feature/checkout-copy" autoFocus className="h-8 text-sm bg-muted border-border" />
+            {/* Each column is its own flex-col: <label> is inline by default, so it
+                only wrapped above the Input because shadcn's Input is display:flex.
+                Beside the inline-block <select> it stayed on the same line, which
+                left the two controls 24px out of alignment. */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="flex flex-1 flex-col gap-1">
+                <label htmlFor="branch-name" className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                  Name
+                </label>
+                <Input
+                  id="branch-name"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="feature/checkout-copy"
+                  autoFocus
+                  className="h-8 text-sm bg-muted border-border"
+                />
               </div>
-              <div className="space-y-1">
-                <label className="text-[11px] uppercase tracking-wider text-muted-foreground">Fork from</label>
+              <div className="flex flex-col gap-1 sm:w-48">
+                <label htmlFor="branch-fork-from" className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                  Fork from
+                </label>
                 <select
+                  id="branch-fork-from"
                   value={sourceId}
                   onChange={(e) => setSourceId(e.target.value)}
-                  className="h-8 text-sm bg-muted border border-border rounded-md px-2 text-foreground w-full sm:w-48"
+                  className="h-8 w-full rounded-md border border-border bg-muted px-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 >
                   {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                 </select>
