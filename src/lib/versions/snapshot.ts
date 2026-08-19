@@ -1,9 +1,11 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchBranchTranslations } from '@/lib/branches/fetch'
+import { loadAllPages } from '@/lib/supabase/paginate'
 import type { Database } from '@/types/database'
 
 type VersionRow = Database['public']['Tables']['versions']['Row']
 type VersionStatsRow = Database['public']['Tables']['version_stats']['Row']
+type SnapshotRow = Database['public']['Tables']['version_snapshots']['Row']
 
 export type VersionWithStats = VersionRow & { stats: VersionStatsRow | null }
 
@@ -41,14 +43,23 @@ export async function createSnapshot(
     return { error: message }
   }
 
-  // 2. Fetch all keys for this project
-  const { data: keys, error: keysError } = await admin
-    .from('translation_keys')
-    .select('id, key')
-    .eq('project_id', projectId)
-
-  if (keysError) return fail(`Failed to snapshot keys: ${keysError.message}`)
-  if (!keys?.length) {
+  // 2. Fetch all keys for this project. Paginated: an unpaged select stops at
+  //    1000 rows, which left every key past the cap with an empty key_name in
+  //    the snapshot and made the restore silently skip it.
+  let keys: Array<{ id: string; key: string }>
+  try {
+    keys = await loadAllPages('snapshot keys', (from, to) =>
+      admin
+        .from('translation_keys')
+        .select('id, key')
+        .eq('project_id', projectId)
+        .order('id', { ascending: true })
+        .range(from, to)
+    )
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : 'Failed to snapshot keys')
+  }
+  if (!keys.length) {
     // No keys — still create empty version with zero stats
     const { error: statsError } = await admin.from('version_stats').insert({
       version_id: version.id,
@@ -197,33 +208,49 @@ export async function restoreSnapshot(
     backupVersionId = backup.id
   }
 
-  // 2. Fetch snapshot rows, filtered by scope
-  let query = admin
-    .from('version_snapshots')
-    .select('*')
-    .eq('version_id', versionId)
-
-  if (options.scope === 'locale' && options.localeCode) {
-    query = query.eq('locale_code', options.localeCode)
-  } else if (options.scope === 'keys' && options.keyNames?.length) {
-    query = query.in('key_name', options.keyNames)
+  // 2. Fetch snapshot rows, filtered by scope. Paginated: version_snapshots
+  //    holds one row per key per locale, so it passes 1000 rows well before the
+  //    project does, and a truncated read restores only part of the snapshot.
+  let snapshots: SnapshotRow[]
+  try {
+    snapshots = await loadAllPages<SnapshotRow>('snapshot rows', (from, to) => {
+      let query = admin
+        .from('version_snapshots')
+        .select('*')
+        .eq('version_id', versionId)
+      if (options.scope === 'locale' && options.localeCode) {
+        query = query.eq('locale_code', options.localeCode)
+      } else if (options.scope === 'keys' && options.keyNames?.length) {
+        query = query.in('key_name', options.keyNames)
+      }
+      return query.order('id', { ascending: true }).range(from, to)
+    })
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to load snapshot rows' }
   }
-
-  const { data: snapshots } = await query
-  if (!snapshots?.length) return { restored: 0, skipped: 0, backupVersionId }
+  if (!snapshots.length) return { restored: 0, skipped: 0, backupVersionId }
 
   // 3. Fetch current keys (on the target branch — keys are per-branch) and locales
-  const { data: keys } = await admin
-    .from('translation_keys')
-    .select('id, key')
-    .eq('branch_id', branchId)
+  let keys: Array<{ id: string; key: string }>
+  try {
+    keys = await loadAllPages('restore keys', (from, to) =>
+      admin
+        .from('translation_keys')
+        .select('id, key')
+        .eq('branch_id', branchId)
+        .order('id', { ascending: true })
+        .range(from, to)
+    )
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to load keys for restore' }
+  }
 
   const { data: locales } = await admin
     .from('locales')
     .select('id, code')
     .eq('project_id', projectId)
 
-  const keyIdByName = Object.fromEntries((keys ?? []).map((k) => [k.key, k.id]))
+  const keyIdByName = Object.fromEntries(keys.map((k) => [k.key, k.id]))
   const localeIdByCode = Object.fromEntries((locales ?? []).map((l) => [l.code, l.id]))
 
   let restored = 0

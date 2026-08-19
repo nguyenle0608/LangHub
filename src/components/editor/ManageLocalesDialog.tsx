@@ -8,6 +8,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { LoadingButton } from '@/components/ui/loading-button'
 import { LocaleCombobox } from '@/components/ui/LocaleCombobox'
 import type { LocaleOption } from '@/app/api/locales-list/route'
 import type { ProjectWithStats } from '@/types'
@@ -35,7 +36,6 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
   const [locales, setLocales] = useState<LocaleItem[]>(project.locales)
   const [addingCode, setAddingCode] = useState('')
   const [addingLocale, setAddingLocale] = useState<LocaleOption | null>(null)
-  const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
 
@@ -50,13 +50,11 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
 
   async function handleAdd() {
     if (!addingCode || !addingLocale) return
-    setLoading(true)
     const res = await fetch(`/api/projects/${project.id}/locales`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code: addingCode, name: addingLocale.name }),
     })
-    setLoading(false)
     if (res.ok) {
       const json = await res.json() as { locale?: LocaleItem }
       // Optimistic update — list reflects immediately
@@ -231,18 +229,15 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
                 excludeCodes={existingCodes}
               />
             </div>
-            <Button
+            <LoadingButton
               onClick={handleAdd}
-              disabled={!addingCode || loading}
+              disabled={!addingCode}
               className="bg-blue-600 hover:bg-blue-500 text-white flex-shrink-0"
               size="sm"
+              loadingText={null}
             >
-              {loading ? (
-                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Plus className="h-4 w-4" />
-              )}
-            </Button>
+              <Plus className="h-4 w-4" />
+            </LoadingButton>
           </div>
         </div>
       </DialogContent>

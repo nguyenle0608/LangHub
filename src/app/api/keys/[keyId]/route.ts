@@ -3,9 +3,10 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { renameKey, updateKeyMeta } from '@/lib/supabase/queries/keys'
 import { assertKeysAccess } from '@/lib/auth/access'
+import { TRANSLATION_KEY_MAX_LENGTH, TRANSLATION_KEY_PATTERN } from '@/lib/translation-keys'
 
 const PatchSchema = z.object({
-  key: z.string().min(1).max(200).regex(/^[a-z0-9_.]+$/).optional(),
+  key: z.string().min(1).max(TRANSLATION_KEY_MAX_LENGTH).regex(TRANSLATION_KEY_PATTERN).optional(),
   description: z.string().max(500).optional(),
   tags: z.array(z.string()).optional(),
   platforms: z.array(z.string()).optional(),

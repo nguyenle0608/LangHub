@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { fetchBranchTranslations } from '@/lib/branches/fetch'
+import { loadAllPages } from '@/lib/supabase/paginate'
 
 export type DiffType = 'added' | 'removed' | 'changed' | 'unchanged'
 
@@ -12,6 +13,22 @@ export type DiffEntry = {
   valueB: string | null
   statusA: string | null
   statusB: string | null
+}
+
+type SnapshotCell = { key_name: string; locale_code: string; value: string | null; status: string | null }
+
+function loadSnapshotCells(
+  admin: ReturnType<typeof createAdminClient>,
+  versionId: string
+): Promise<SnapshotCell[]> {
+  return loadAllPages<SnapshotCell>('snapshot cells', (from, to) =>
+    admin
+      .from('version_snapshots')
+      .select('key_name, locale_code, value, status')
+      .eq('version_id', versionId)
+      .order('id', { ascending: true })
+      .range(from, to)
+  )
 }
 
 type SnapshotKey = string // "key_name::locale_code"
@@ -69,14 +86,13 @@ export async function diffVersions(
 ): Promise<DiffEntry[]> {
   const admin = createAdminClient()
 
-  // Fetch snapshot A
-  const { data: snapshotsA } = await admin
-    .from('version_snapshots')
-    .select('key_name, locale_code, value, status')
-    .eq('version_id', versionIdA)
+  // Fetch snapshot A. Paginated — version_snapshots holds one row per key per
+  // locale, so an unpaged select silently stops at 1000 rows and the diff then
+  // reports every truncated cell as removed.
+  const snapshotsA = await loadSnapshotCells(admin, versionIdA)
 
   const mapA = new Map<SnapshotKey, { value: string | null; status: string | null }>()
-  for (const s of snapshotsA ?? []) {
+  for (const s of snapshotsA) {
     mapA.set(snapshotKey(s.key_name, s.locale_code), { value: s.value, status: s.status })
   }
 
@@ -86,12 +102,16 @@ export async function diffVersions(
   if (versionIdB === 'current') {
     const supabase = await createClient()
 
-    const { data: keys } = await supabase
-      .from('translation_keys')
-      .select('id, key')
-      .eq('project_id', projectId)
+    const keys = await loadAllPages<{ id: string; key: string }>('diff keys', (from, to) =>
+      supabase
+        .from('translation_keys')
+        .select('id, key')
+        .eq('project_id', projectId)
+        .order('id', { ascending: true })
+        .range(from, to)
+    )
 
-    if (keys?.length && branchId) {
+    if (keys.length && branchId) {
       const keyNameById = Object.fromEntries(keys.map((k) => [k.id, k.key]))
 
       const { data: locales } = await supabase
@@ -112,12 +132,9 @@ export async function diffVersions(
       }
     }
   } else {
-    const { data: snapshotsB } = await admin
-      .from('version_snapshots')
-      .select('key_name, locale_code, value, status')
-      .eq('version_id', versionIdB)
+    const snapshotsB = await loadSnapshotCells(admin, versionIdB)
 
-    for (const s of snapshotsB ?? []) {
+    for (const s of snapshotsB) {
       mapB.set(snapshotKey(s.key_name, s.locale_code), { value: s.value, status: s.status })
     }
   }

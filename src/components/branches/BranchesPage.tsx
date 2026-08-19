@@ -4,11 +4,12 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  ArrowLeft, GitBranch, GitMerge, Plus, Trash2, Pencil, Check, Star, Lock, Loader2, ExternalLink,
+  ArrowLeft, GitBranch, GitMerge, Plus, Trash2, Pencil, Star, Lock, ExternalLink,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { LoadingButton } from '@/components/ui/loading-button'
 import { Input } from '@/components/ui/input'
 import { MergeDialog } from '@/components/editor/MergeDialog'
 import type { ProjectWithStats } from '@/types'
@@ -27,13 +28,17 @@ function formatDate(s: string | null): string {
 
 export function BranchesPage({ project, initialBranches, canManage }: Props) {
   const router = useRouter()
-  const [branches] = useState(initialBranches)
+  // Read straight from props. Copying them into state froze the list at first
+  // render, so router.refresh() re-ran the server component and changed
+  // nothing on screen — every action looked like it had failed until a reload.
+  const branches = initialBranches
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
-  const [sourceId, setSourceId] = useState(() => branches.find((b) => b.is_default)?.id ?? branches[0]?.id ?? '')
+  const [sourceId, setSourceId] = useState(() => initialBranches.find((b) => b.is_default)?.id ?? initialBranches[0]?.id ?? '')
   const [busy, setBusy] = useState(false)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [mergeSource, setMergeSource] = useState<BranchWithStats | null>(null)
 
   const nameById = Object.fromEntries(branches.map((b) => [b.id, b.name]))
@@ -92,7 +97,10 @@ export function BranchesPage({ project, initialBranches, canManage }: Props) {
   }
 
   async function handleDelete(branch: Branch) {
-    if (!confirm(`Delete branch "${branch.name}"? This removes its keys and translations and cannot be undone.`)) return
+    // Arm on the first click, delete on the second — window.confirm() is
+    // suppressed by some browsers, and there it returned false so nothing
+    // happened at all.
+    if (confirmDeleteId !== branch.id) { setConfirmDeleteId(branch.id); return }
     setBusy(true)
     try {
       const res = await fetch('/api/branches', {
@@ -103,6 +111,7 @@ export function BranchesPage({ project, initialBranches, canManage }: Props) {
       const json = await res.json() as { error?: string }
       if (!res.ok) { toast.error(json.error ?? 'Delete failed'); return }
       toast.success(`Deleted "${branch.name}"`)
+      setConfirmDeleteId(null)
       router.refresh()
     } catch { toast.error('Network error') } finally { setBusy(false) }
   }
@@ -139,17 +148,33 @@ export function BranchesPage({ project, initialBranches, canManage }: Props) {
         {/* New branch form */}
         {creating && (
           <form onSubmit={handleCreate} className="border border-border rounded-xl p-4 bg-card/40 space-y-3">
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="flex-1 space-y-1">
-                <label className="text-[11px] uppercase tracking-wider text-muted-foreground">Name</label>
-                <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="feature/checkout-copy" autoFocus className="h-8 text-sm bg-muted border-border" />
+            {/* Each column is its own flex-col: <label> is inline by default, so it
+                only wrapped above the Input because shadcn's Input is display:flex.
+                Beside the inline-block <select> it stayed on the same line, which
+                left the two controls 24px out of alignment. */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="flex flex-1 flex-col gap-1">
+                <label htmlFor="branch-name" className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                  Name
+                </label>
+                <Input
+                  id="branch-name"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="feature/checkout-copy"
+                  autoFocus
+                  className="h-8 text-sm bg-muted border-border"
+                />
               </div>
-              <div className="space-y-1">
-                <label className="text-[11px] uppercase tracking-wider text-muted-foreground">Fork from</label>
+              <div className="flex flex-col gap-1 sm:w-48">
+                <label htmlFor="branch-fork-from" className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                  Fork from
+                </label>
                 <select
+                  id="branch-fork-from"
                   value={sourceId}
                   onChange={(e) => setSourceId(e.target.value)}
-                  className="h-8 text-sm bg-muted border border-border rounded-md px-2 text-foreground w-full sm:w-48"
+                  className="h-8 w-full rounded-md border border-border bg-muted px-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 >
                   {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                 </select>
@@ -157,9 +182,9 @@ export function BranchesPage({ project, initialBranches, canManage }: Props) {
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setCreating(false); setNewName('') }}>Cancel</Button>
-              <Button type="submit" size="sm" className="h-7 text-xs gap-1.5" disabled={busy || !newName.trim()}>
-                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Create
-              </Button>
+              <LoadingButton type="submit" size="sm" className="h-7 text-xs gap-1.5" loading={busy} disabled={!newName.trim()} loadingText="Create">
+                <Plus className="h-3.5 w-3.5" /> Create
+              </LoadingButton>
             </div>
           </form>
         )}
@@ -168,10 +193,15 @@ export function BranchesPage({ project, initialBranches, canManage }: Props) {
         <div className="space-y-2.5">
           {branches.map((b) => (
             <div key={b.id} className="border border-border rounded-xl p-4 bg-card/30 hover:bg-card/60 transition-colors">
-              <div className="flex items-start gap-3">
-                <GitBranch className={cn('h-4 w-4 mt-0.5 flex-shrink-0', b.is_default ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground')} />
+              {/* Stacked on mobile. The action cluster is flex-shrink-0 and ~218px
+                  wide, so sharing a row with it left the info column 35px on a 375px
+                  screen: the branch name truncated to three characters and every meta
+                  value wrapped one word per line. */}
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                <div className="flex min-w-0 flex-1 items-start gap-3">
+                  <GitBranch className={cn('h-4 w-4 mt-0.5 flex-shrink-0', b.is_default ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground')} />
 
-                <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0">
                   {/* Name + badges */}
                   <div className="flex items-center gap-2 flex-wrap">
                     {renamingId === b.id ? (
@@ -210,15 +240,14 @@ export function BranchesPage({ project, initialBranches, canManage }: Props) {
                     </div>
                     <span className="text-[10px] text-muted-foreground tabular-nums w-8 text-right">{b.approvedPercent}%</span>
                   </div>
+                  </div>
                 </div>
 
-                {/* Actions */}
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <Link href={`/dashboard/${project.id}/editor?branch=${b.id}`}>
-                    <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground" title="Open in editor">
-                      <ExternalLink className="h-3.5 w-3.5" /> Open
-                    </Button>
-                  </Link>
+                {/* Management actions sit to the left of a divider; Open is the row's
+                    primary action and stays last, so it lands in the same column on
+                    every row — including the default branch, which has no management
+                    actions — and never sits adjacent to Delete. */}
+                <div className="flex flex-shrink-0 items-center gap-1 self-end sm:self-auto">
                   {canManage && !b.is_default && (
                     <>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-blue-600 dark:text-blue-400" title={`Merge into ${defaultBranch?.name ?? 'main'}`} onClick={() => setMergeSource(b)}>
@@ -230,14 +259,26 @@ export function BranchesPage({ project, initialBranches, canManage }: Props) {
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" title="Rename" onClick={() => { setRenamingId(b.id); setRenameValue(b.name) }} disabled={busy}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" title="Delete" onClick={() => void handleDelete(b)} disabled={busy}>
+                      <LoadingButton
+                        variant={confirmDeleteId === b.id ? 'destructive' : 'ghost'}
+                        size={confirmDeleteId === b.id ? 'sm' : 'icon'}
+                        className={confirmDeleteId === b.id ? 'h-7 text-xs gap-1' : 'h-7 w-7 text-muted-foreground hover:text-destructive'}
+                        title={confirmDeleteId === b.id ? `Confirm deleting ${b.name}` : 'Delete'}
+                        onClick={() => handleDelete(b)}
+                        disabled={busy}
+                        loadingText={null}
+                      >
                         <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                        {confirmDeleteId === b.id && 'Confirm'}
+                      </LoadingButton>
+                      <span aria-hidden className="mx-1 h-4 w-px bg-border" />
                     </>
                   )}
-                  {b.is_default && (
-                    <span className="text-[10px] text-muted-foreground flex items-center gap-1 px-2"><Check className="h-3 w-3" />main</span>
-                  )}
+                  <Link href={`/dashboard/${project.id}/editor?branch=${b.id}`}>
+                    <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground" title="Open in editor">
+                      <ExternalLink className="h-3.5 w-3.5" /> Open
+                    </Button>
+                  </Link>
                 </div>
               </div>
             </div>

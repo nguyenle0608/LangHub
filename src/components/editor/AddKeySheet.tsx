@@ -5,9 +5,11 @@ import { X, Plus, Minus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { LoadingButton } from '@/components/ui/loading-button'
 import { Input } from '@/components/ui/input'
 import { Slider } from '@/components/ui/slider'
 import { Badge } from '@/components/ui/badge'
+import { TRANSLATION_KEY_FORMAT_HINT, TRANSLATION_KEY_PATTERN } from '@/lib/translation-keys'
 import type { KeyWithTranslations } from '@/lib/supabase/queries/translations'
 import type { LocaleWithStats } from '@/types'
 
@@ -56,7 +58,7 @@ export function AddKeySheet({ open, projectId, branchId, locales, existingKeys, 
 
   const keyError = (() => {
     if (!keyName) return ''
-    if (!/^[a-z0-9_.]+$/.test(keyName)) return 'Lowercase letters, numbers, dots, underscores only'
+    if (!TRANSLATION_KEY_PATTERN.test(keyName)) return TRANSLATION_KEY_FORMAT_HINT
     if (existingKeys.includes(keyName)) return 'Key already exists in this project'
     return ''
   })()
@@ -337,9 +339,9 @@ export function AddKeySheet({ open, projectId, branchId, locales, existingKeys, 
               <Button type="button" variant="outline" size="sm" onClick={handleClose} className="border-border">
                 Cancel
               </Button>
-              <Button type="submit" size="sm" disabled={loading || !keyName.trim() || !!keyError}>
-                {loading ? 'Creating…' : 'Create Key'}
-              </Button>
+              <LoadingButton type="submit" size="sm" loading={loading} disabled={!keyName.trim() || !!keyError} loadingText="Creating…">
+                Create Key
+              </LoadingButton>
             </div>
           </form>
 

@@ -5,6 +5,7 @@ import { X, Info, Tag, Clock, Send, Trash2, Pencil, Check, Monitor, Smartphone, 
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { LoadingButton } from '@/components/ui/loading-button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { StatusBadge } from './StatusBadge'
@@ -15,7 +16,9 @@ import type { TranslationAssistance } from '@/lib/translation-assistance/types'
 import type { KeyWithTranslations } from '@/lib/supabase/queries/translations'
 import type { LocaleWithStats } from '@/types'
 import { localeFlag } from '@/lib/locale-flag'
+import { TRANSLATION_KEY_FORMAT_HINT, TRANSLATION_KEY_PATTERN } from '@/lib/translation-keys'
 import type { Database } from '@/types/database'
+import { useAsyncAction } from '@/hooks/useAsyncAction'
 
 type HistoryRow = Database['public']['Tables']['translation_history']['Row'] & {
   locale: { code: string; name: string }
@@ -539,8 +542,6 @@ function DetailsPane({
   const [editingDesc, setEditingDesc] = useState(false)
   const [descDraft, setDescDraft] = useState(keyItem.description ?? '')
   const [tagInput, setTagInput] = useState('')
-  const [savingKey, setSavingKey] = useState(false)
-  const [savingDesc, setSavingDesc] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
@@ -586,20 +587,19 @@ function DetailsPane({
 
   const saveKey = async () => {
     if (!keyDraft.trim() || keyDraft === keyItem.key) { setEditingKey(false); return }
-    if (!/^[a-z0-9_.]+$/.test(keyDraft)) { toast.error('Invalid key format'); return }
-    setSavingKey(true)
+    if (!TRANSLATION_KEY_PATTERN.test(keyDraft)) { toast.error(TRANSLATION_KEY_FORMAT_HINT); return }
     const resp = await fetch(`/api/keys/${keyItem.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: keyDraft }) })
-    setSavingKey(false)
     if (!resp.ok) { toast.error('Failed to rename'); return }
     onUpdated({ key: keyDraft }); setEditingKey(false); toast.success('Key renamed')
   }
 
   const saveDesc = async () => {
-    setSavingDesc(true)
     const ok = await patchMeta({ description: descDraft || '' })
-    setSavingDesc(false)
     if (ok) setEditingDesc(false)
   }
+
+  const renameKey = useAsyncAction(saveKey)
+  const saveDescription = useAsyncAction(saveDesc)
 
   const submitComment = async () => {
     if (!message.trim()) return
@@ -640,7 +640,7 @@ function DetailsPane({
             {editingKey ? (
               <div className="flex gap-1">
                 <Input value={keyDraft} onChange={(e) => setKeyDraft(e.target.value)} className="font-mono text-xs bg-background border-border h-6 flex-1 px-2" autoFocus onKeyDown={(e) => { if (e.key === 'Enter') void saveKey(); if (e.key === 'Escape') setEditingKey(false) }} />
-                <button onClick={saveKey} disabled={savingKey} className="text-green-400"><Check className="h-3.5 w-3.5" /></button>
+                <button onClick={renameKey.run} disabled={renameKey.pending} className="text-green-400"><Check className="h-3.5 w-3.5" /></button>
                 <button onClick={() => setEditingKey(false)} className="text-muted-foreground"><X className="h-3.5 w-3.5" /></button>
               </div>
             ) : (
@@ -659,7 +659,7 @@ function DetailsPane({
                 <textarea value={descDraft} onChange={(e) => setDescDraft(e.target.value)} rows={2} autoFocus className="w-full bg-background border border-border rounded px-2 py-1.5 text-foreground focus:outline-none focus:border-blue-500 resize-none text-xs" />
                 <div className="flex gap-2 justify-end text-[10px]">
                   <button onClick={() => setEditingDesc(false)} className="text-muted-foreground hover:text-foreground">Cancel</button>
-                  <button onClick={saveDesc} disabled={savingDesc} className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:text-blue-300">Save</button>
+                  <button onClick={saveDescription.run} disabled={saveDescription.pending} className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:text-blue-300">Save</button>
                 </div>
               </div>
             ) : (
@@ -724,9 +724,9 @@ function DetailsPane({
             <div ref={bottomRef} />
             <div className="flex gap-1.5 pt-1">
               <Input value={message} onChange={(e) => setMessage(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void submitComment() } }} placeholder="Add a comment…" className="text-xs bg-background border-border h-7 flex-1" />
-              <Button size="sm" onClick={submitComment} disabled={submitting || !message.trim()} className="h-7 px-2">
+              <LoadingButton size="sm" onClick={submitComment} loading={submitting} disabled={!message.trim()} className="h-7 px-2" loadingText={null}>
                 <Send className="h-3 w-3" />
-              </Button>
+              </LoadingButton>
             </div>
           </div>
         )}
@@ -775,7 +775,7 @@ function DetailsPane({
             <div className="space-y-2">
               <p className="text-xs text-destructive">Delete this key and all its translations?</p>
               <div className="flex gap-2">
-                <Button size="sm" variant="destructive" className="h-7 text-xs flex-1" onClick={handleDelete} disabled={deleting}>{deleting ? 'Deleting…' : 'Confirm Delete'}</Button>
+                <LoadingButton size="sm" variant="destructive" className="h-7 text-xs flex-1" onClick={handleDelete} loading={deleting} loadingText="Deleting…">Confirm Delete</LoadingButton>
                 <Button size="sm" variant="outline" className="h-7 text-xs border-border" onClick={() => setConfirmDelete(false)}>Cancel</Button>
               </div>
             </div>

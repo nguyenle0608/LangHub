@@ -7,6 +7,7 @@ import { MoreHorizontal, Settings, Trash2, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import type { ProjectWithStats } from '@/types'
 import { localeFlag } from '@/lib/locale-flag'
+import { useAsyncAction } from '@/hooks/useAsyncAction'
 
 function ProgressBar({ percent }: { percent: number }) {
   const color =
@@ -22,7 +23,6 @@ export function ProjectCard({ project, canDelete }: { project: ProjectWithStats;
   const router = useRouter()
   const [menuOpen, setMenuOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [deleting, setDeleting] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   const percentColor =
@@ -52,10 +52,8 @@ export function ProjectCard({ project, canDelete }: { project: ProjectWithStats;
     }
   }, [menuOpen])
 
-  async function handleDelete() {
-    setDeleting(true)
+  async function deleteProject() {
     const res = await fetch(`/api/projects/${project.id}`, { method: 'DELETE' })
-    setDeleting(false)
     if (res.ok) {
       toast.success(`"${project.name}" deleted`)
       router.refresh()
@@ -65,6 +63,8 @@ export function ProjectCard({ project, canDelete }: { project: ProjectWithStats;
     setMenuOpen(false)
     setConfirmDelete(false)
   }
+
+  const removeProject = useAsyncAction(deleteProject)
 
   return (
     <div className="group relative bg-card border border-border rounded-xl p-5 hover:border-foreground/20 hover:bg-accent/40 transition-all">
@@ -158,11 +158,11 @@ export function ProjectCard({ project, canDelete }: { project: ProjectWithStats;
                 <div className="flex gap-1.5">
                   <button
                     type="button"
-                    onClick={handleDelete}
-                    disabled={deleting}
+                    onClick={removeProject.run}
+                    disabled={removeProject.pending}
                     className="flex-1 text-xs bg-destructive text-destructive-foreground hover:opacity-90 rounded px-2 py-1 transition-opacity disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    {deleting ? 'Deleting…' : 'Delete'}
+                    {removeProject.pending ? 'Deleting…' : 'Delete'}
                   </button>
                   <button
                     type="button"

@@ -2,9 +2,11 @@
 
 import { useState, useRef, useCallback } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { ArrowLeft, Upload, Check, ChevronRight, FileText, Info, X, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { LoadingButton } from '@/components/ui/loading-button'
 import { Input } from '@/components/ui/input'
 import {
   deriveNamespaceFromFilename,
@@ -157,6 +159,7 @@ function PreviewKeyList({
 }
 
 export function ImportWizard({ project, branchId }: Props) {
+  const router = useRouter()
   const [step, setStep] = useState(0)
   const [files, setFiles] = useState<FileEntry[]>([])
   const [namespace, setNamespace] = useState('')
@@ -273,9 +276,18 @@ export function ImportWizard({ project, branchId }: Props) {
   }, [files, namespace, jsonImportStructure, project.locales, conflictStrategy])
 
   async function handleGoToPreview() {
+    try {
+      await loadPreview()
+    } catch {
+      toast.error('Could not read the selected files — check the format and try again')
+    }
+  }
+
+  async function loadPreview() {
     const params = new URLSearchParams({ projectId: project.id })
     if (branchId) params.set('branch', branchId)
     const resp = await fetch(`/api/keys?${params}`)
+    if (!resp.ok) throw new Error('Failed to load existing keys')
     const json = await resp.json() as {
       data?: Array<{
         key: string
@@ -393,6 +405,11 @@ export function ImportWizard({ project, branchId }: Props) {
 
     setResults(allResults)
     setStep(4)
+    // The editor is a Server Component, so its rendered output sits in the
+    // client router cache from before the import. Without invalidating it,
+    // "View in Editor" replays the pre-import payload — a project that started
+    // empty still shows "No keys yet".
+    if (allResults.some((result) => !result.error)) router.refresh()
   }
 
   // Locales that appear more than once across the file list. Multiple files for
@@ -688,9 +705,9 @@ export function ImportWizard({ project, branchId }: Props) {
 
               <div className="flex justify-between">
                 <Button variant="outline" size="sm" className="border-border" onClick={() => setStep(0)}>Back</Button>
-                <Button size="sm" onClick={handleGoToPreview} disabled={!canContinue}>
+                <LoadingButton size="sm" onClick={handleGoToPreview} disabled={!canContinue}>
                   Preview <ChevronRight className="h-3.5 w-3.5 ml-1" />
-                </Button>
+                </LoadingButton>
               </div>
             </div>
           )}
