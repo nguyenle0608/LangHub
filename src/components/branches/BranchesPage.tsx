@@ -238,12 +238,11 @@ export function BranchesPage({ project, initialBranches, canManage }: Props) {
                 </div>
 
                 {/* Actions */}
+                {/* Management actions sit to the left of a divider; Open is the row's
+                    primary action and stays last, so it lands in the same column on
+                    every row — including the default branch, which has no management
+                    actions — and never sits adjacent to Delete. */}
                 <div className="flex items-center gap-1 flex-shrink-0">
-                  <Link href={`/dashboard/${project.id}/editor?branch=${b.id}`}>
-                    <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground" title="Open in editor">
-                      <ExternalLink className="h-3.5 w-3.5" /> Open
-                    </Button>
-                  </Link>
                   {canManage && !b.is_default && (
                     <>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-blue-600 dark:text-blue-400" title={`Merge into ${defaultBranch?.name ?? 'main'}`} onClick={() => setMergeSource(b)}>
@@ -267,15 +266,14 @@ export function BranchesPage({ project, initialBranches, canManage }: Props) {
                         <Trash2 className="h-3.5 w-3.5" />
                         {confirmDeleteId === b.id && 'Confirm'}
                       </LoadingButton>
+                      <span aria-hidden className="mx-1 h-4 w-px bg-border" />
                     </>
                   )}
-                  {canManage && b.is_default && (
-                    /* The default branch has no per-row actions, but Open still
-                       belongs in the same column as every other row. Reserve the
-                       action cluster's footprint: four 28px buttons and the three
-                       4px gaps between them. */
-                    <div aria-hidden className="w-[7.75rem]" />
-                  )}
+                  <Link href={`/dashboard/${project.id}/editor?branch=${b.id}`}>
+                    <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground" title="Open in editor">
+                      <ExternalLink className="h-3.5 w-3.5" /> Open
+                    </Button>
+                  </Link>
                 </div>
               </div>
             </div>
