@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Slider } from '@/components/ui/slider'
 import { Badge } from '@/components/ui/badge'
+import { TRANSLATION_KEY_FORMAT_HINT, TRANSLATION_KEY_PATTERN } from '@/lib/translation-keys'
 import type { KeyWithTranslations } from '@/lib/supabase/queries/translations'
 import type { LocaleWithStats } from '@/types'
 
@@ -56,7 +57,7 @@ export function AddKeySheet({ open, projectId, branchId, locales, existingKeys, 
 
   const keyError = (() => {
     if (!keyName) return ''
-    if (!/^[a-z0-9_.]+$/.test(keyName)) return 'Lowercase letters, numbers, dots, underscores only'
+    if (!TRANSLATION_KEY_PATTERN.test(keyName)) return TRANSLATION_KEY_FORMAT_HINT
     if (existingKeys.includes(keyName)) return 'Key already exists in this project'
     return ''
   })()

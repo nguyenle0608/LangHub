@@ -15,6 +15,7 @@ import type { TranslationAssistance } from '@/lib/translation-assistance/types'
 import type { KeyWithTranslations } from '@/lib/supabase/queries/translations'
 import type { LocaleWithStats } from '@/types'
 import { localeFlag } from '@/lib/locale-flag'
+import { TRANSLATION_KEY_FORMAT_HINT, TRANSLATION_KEY_PATTERN } from '@/lib/translation-keys'
 import type { Database } from '@/types/database'
 
 type HistoryRow = Database['public']['Tables']['translation_history']['Row'] & {
@@ -586,7 +587,7 @@ function DetailsPane({
 
   const saveKey = async () => {
     if (!keyDraft.trim() || keyDraft === keyItem.key) { setEditingKey(false); return }
-    if (!/^[a-z0-9_.]+$/.test(keyDraft)) { toast.error('Invalid key format'); return }
+    if (!TRANSLATION_KEY_PATTERN.test(keyDraft)) { toast.error(TRANSLATION_KEY_FORMAT_HINT); return }
     setSavingKey(true)
     const resp = await fetch(`/api/keys/${keyItem.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: keyDraft }) })
     setSavingKey(false)
