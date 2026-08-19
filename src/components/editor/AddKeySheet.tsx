@@ -5,6 +5,7 @@ import { X, Plus, Minus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { LoadingButton } from '@/components/ui/loading-button'
 import { Input } from '@/components/ui/input'
 import { Slider } from '@/components/ui/slider'
 import { Badge } from '@/components/ui/badge'
@@ -338,9 +339,9 @@ export function AddKeySheet({ open, projectId, branchId, locales, existingKeys, 
               <Button type="button" variant="outline" size="sm" onClick={handleClose} className="border-border">
                 Cancel
               </Button>
-              <Button type="submit" size="sm" disabled={loading || !keyName.trim() || !!keyError}>
-                {loading ? 'Creating…' : 'Create Key'}
-              </Button>
+              <LoadingButton type="submit" size="sm" loading={loading} disabled={!keyName.trim() || !!keyError} loadingText="Creating…">
+                Create Key
+              </LoadingButton>
             </div>
           </form>
 

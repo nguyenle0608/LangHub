@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Check, Copy, KeyRound, Loader2, Plus, Shield, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { LoadingButton } from '@/components/ui/loading-button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { ApiTokenMetadata } from '@/lib/api-tokens/management'
@@ -14,7 +15,6 @@ export function ApiTokensPanel({ orgId }: { orgId: string }) {
   const [tokens, setTokens] = useState<ApiTokenMetadata[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
-  const [revoking, setRevoking] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [scope, setScope] = useState<'read' | 'write'>('read')
   const [expiration, setExpiration] = useState<ExpirationChoice>('90')
@@ -57,14 +57,12 @@ export function ApiTokensPanel({ orgId }: { orgId: string }) {
   }
 
   async function revokeToken(tokenId: string) {
-    setRevoking(tokenId)
     const response = await fetch(`/api/organizations/${orgId}/tokens/${tokenId}`, { method: 'DELETE' })
     if (response.ok) {
       const revokedAt = new Date().toISOString()
       setTokens((current) => current.map((token) => token.id === tokenId ? { ...token, revokedAt } : token))
       toast.success('API token revoked')
     } else toast.error('Failed to revoke API token')
-    setRevoking(null)
   }
 
   async function copySecret() {
@@ -126,10 +124,10 @@ export function ApiTokensPanel({ orgId }: { orgId: string }) {
               <option value="never">Never</option>
             </select>
           </div>
-          <Button type="submit" disabled={creating || !name.trim()} className="gap-1.5 bg-blue-600 text-white hover:bg-blue-500">
-            {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          <LoadingButton type="submit" loading={creating} disabled={!name.trim()} className="gap-1.5 bg-blue-600 text-white hover:bg-blue-500" loadingText="Create">
+            <Plus className="h-4 w-4" />
             Create
-          </Button>
+          </LoadingButton>
         </div>
         {scope === 'write' && <p className="text-xs text-amber-600">Write tokens can import and overwrite translations across this workspace.</p>}
         {expiration === 'never' && <p className="text-xs text-amber-600">Non-expiring credentials remain valid until explicitly revoked.</p>}
@@ -155,10 +153,17 @@ export function ApiTokensPanel({ orgId }: { orgId: string }) {
                 </p>
               </div>
               {!inactive && (
-                <Button type="button" variant="ghost" size="sm" disabled={revoking === token.id} onClick={() => revokeToken(token.id)} className="text-destructive hover:text-destructive">
-                  {revoking === token.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                <LoadingButton
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => revokeToken(token.id)}
+                  className="text-destructive hover:text-destructive"
+                  loadingText={<span className="sr-only">Revoking {token.name}</span>}
+                >
+                  <Trash2 className="h-4 w-4" />
                   <span className="sr-only">Revoke {token.name}</span>
-                </Button>
+                </LoadingButton>
               )}
             </div>
           )

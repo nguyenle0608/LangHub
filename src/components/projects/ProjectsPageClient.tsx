@@ -13,6 +13,7 @@ import { OrgSwitcher } from '@/components/organizations/OrgSwitcher'
 import { Button } from '@/components/ui/button'
 import { UserAccountMenu } from '@/components/auth/UserAccountMenu'
 import type { OrgWithStats, ProjectWithStats } from '@/types'
+import { useAsyncAction } from '@/hooks/useAsyncAction'
 
 const CreateProjectDialog = dynamic(() => import('./CreateProjectDialog').then((m) => m.CreateProjectDialog))
 const CreateOrgDialog = dynamic(() => import('@/components/organizations/CreateOrgDialog').then((m) => m.CreateOrgDialog))
@@ -231,16 +232,13 @@ export function ProjectsPageClient({ projects, orgs, currentOrgId, userEmail, us
 function ProjectListRow({ project, canDelete }: { project: ProjectWithStats; canDelete: boolean }) {
   const router = useRouter()
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [deleting, setDeleting] = useState(false)
 
   const percentColor =
     project.overall_percent >= 80 ? 'text-emerald-600 dark:text-emerald-400' :
     project.overall_percent >= 50 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'
 
-  async function handleDelete() {
-    setDeleting(true)
+  async function deleteProject() {
     const res = await fetch(`/api/projects/${project.id}`, { method: 'DELETE' })
-    setDeleting(false)
     if (res.ok) {
       toast.success(`"${project.name}" deleted`)
       router.refresh()
@@ -249,6 +247,8 @@ function ProjectListRow({ project, canDelete }: { project: ProjectWithStats; can
     }
     setConfirmDelete(false)
   }
+
+  const removeProject = useAsyncAction(deleteProject)
 
   return (
     <div className="relative grid grid-cols-[1fr_80px_60px_60px_44px] px-4 py-3 gap-4 border-b border-border/60 last:border-0 hover:bg-muted/60 transition-colors items-center group">
@@ -280,11 +280,11 @@ function ProjectListRow({ project, canDelete }: { project: ProjectWithStats; can
           <div className="flex gap-1">
             <button
               type="button"
-              onClick={handleDelete}
-              disabled={deleting}
+              onClick={removeProject.run}
+              disabled={removeProject.pending}
               className="text-xs bg-destructive text-destructive-foreground hover:opacity-90 rounded px-2 py-1 transition-opacity disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {deleting ? 'Deleting…' : 'Delete'}
+              {removeProject.pending ? 'Deleting…' : 'Delete'}
             </button>
             <button
               type="button"

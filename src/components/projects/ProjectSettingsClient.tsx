@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Plus, Loader2 } from 'lucide-react'
 import type { ProjectWithStats } from '@/types'
 import { Button } from '@/components/ui/button'
+import { LoadingButton } from '@/components/ui/loading-button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
@@ -264,15 +265,16 @@ export function ProjectSettingsClient({ project }: { project: ProjectWithStats }
                   placeholder={project.name}
                   className="bg-muted border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-red-600 max-w-xs"
                 />
-                <Button
+                <LoadingButton
                   onClick={handleDelete}
-                  disabled={deleteConfirm !== project.name || deleting}
+                  loading={deleting}
+                  disabled={deleteConfirm !== project.name}
                   variant="destructive"
                   className="bg-red-700 hover:bg-red-600 disabled:opacity-30"
+                  loadingText="Deleting…"
                 >
-                  {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {deleting ? 'Deleting…' : 'Delete project'}
-                </Button>
+                  Delete project
+                </LoadingButton>
               </div>
             </div>
           </div>

@@ -6,6 +6,7 @@ import { GitBranch, Plus, Check, Trash2, Loader2, GitMerge, Settings2 } from 'lu
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { LoadingButton } from '@/components/ui/loading-button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { Branch } from '@/lib/branches/queries'
@@ -169,9 +170,9 @@ export function BranchSwitcher({
                   Forks from <span className="text-muted-foreground">{active?.name ?? 'main'}</span>
                 </p>
                 <div className="flex gap-1.5">
-                  <Button type="submit" size="sm" disabled={busy || !newName.trim()} className="h-6 text-xs flex-1">
-                    {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Create'}
-                  </Button>
+                  <LoadingButton type="submit" size="sm" loading={busy} disabled={!newName.trim()} className="h-6 text-xs flex-1" loadingText={null}>
+                    Create
+                  </LoadingButton>
                   <Button type="button" variant="ghost" size="sm" className="h-6 text-xs" onClick={() => { setCreating(false); setNewName('') }}>
                     Cancel
                   </Button>

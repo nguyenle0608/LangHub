@@ -4,11 +4,12 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  ArrowLeft, GitBranch, GitMerge, Plus, Trash2, Pencil, Check, Star, Lock, Loader2, ExternalLink,
+  ArrowLeft, GitBranch, GitMerge, Plus, Trash2, Pencil, Check, Star, Lock, ExternalLink,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { LoadingButton } from '@/components/ui/loading-button'
 import { Input } from '@/components/ui/input'
 import { MergeDialog } from '@/components/editor/MergeDialog'
 import type { ProjectWithStats } from '@/types'
@@ -157,9 +158,9 @@ export function BranchesPage({ project, initialBranches, canManage }: Props) {
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setCreating(false); setNewName('') }}>Cancel</Button>
-              <Button type="submit" size="sm" className="h-7 text-xs gap-1.5" disabled={busy || !newName.trim()}>
-                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Create
-              </Button>
+              <LoadingButton type="submit" size="sm" className="h-7 text-xs gap-1.5" loading={busy} disabled={!newName.trim()} loadingText="Create">
+                <Plus className="h-3.5 w-3.5" /> Create
+              </LoadingButton>
             </div>
           </form>
         )}
