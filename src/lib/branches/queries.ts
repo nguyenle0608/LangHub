@@ -1,6 +1,8 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { createSnapshot } from '@/lib/versions/snapshot'
+import { fetchBranchTranslations } from '@/lib/branches/fetch'
+import { loadAllPages } from '@/lib/supabase/paginate'
 import type { ProjectWithStats } from '@/types'
 import type { Database, Json } from '@/types/database'
 
@@ -223,58 +225,88 @@ export async function createBranch(args: {
     branch.base_snapshot_id = base.id
   }
 
+  // A half-copied fork is worse than none: the branch would look real but be
+  // missing keys, so undo the branch row rather than leave that behind.
+  const abandon = async (message: string): Promise<{ error: string }> => {
+    await admin.from('branches').delete().eq('id', branch.id)
+    return { error: message }
+  }
+
   // Copy the source branch's KEYS into the new branch (M2: keys are per-branch),
   // building an old→new key id map so translations can be remapped.
-  const { data: srcKeys } = await admin
-    .from('translation_keys')
-    .select('id, key, description, tags, platforms, char_limit, is_plural, plural_forms')
-    .eq('branch_id', sourceBranchId)
+  // Paginated: an unpaged select stops at 1000 rows, which forked a 1191-key
+  // branch as 1000 keys with no error.
+  type SourceKey = {
+    id: string
+    key: string
+    description: string | null
+    tags: string[] | null
+    platforms: string[] | null
+    char_limit: number | null
+    is_plural: boolean | null
+    plural_forms: Json | null
+  }
+  let srcKeys: SourceKey[]
+  try {
+    srcKeys = await loadAllPages<SourceKey>('source branch keys', (from, to) =>
+      admin
+        .from('translation_keys')
+        .select('id, key, description, tags, platforms, char_limit, is_plural, plural_forms')
+        .eq('branch_id', sourceBranchId)
+        .order('id', { ascending: true })
+        .range(from, to)
+    )
+  } catch (error) {
+    return abandon(error instanceof Error ? error.message : 'Failed to read source branch keys')
+  }
 
   const newKeyIdByOld = new Map<string, string>()
-  if (srcKeys?.length) {
-    for (let i = 0; i < srcKeys.length; i += 200) {
-      const chunk = srcKeys.slice(i, i + 200)
-      const { data: inserted } = await admin
-        .from('translation_keys')
-        .insert(chunk.map((k) => ({
-          project_id: projectId,
-          branch_id: branch.id,
-          key: k.key,
-          description: k.description,
-          tags: k.tags,
-          platforms: k.platforms,
-          char_limit: k.char_limit,
-          is_plural: k.is_plural,
-          plural_forms: k.plural_forms,
-          created_by: userId,
-        })))
-        .select('id, key')
-      // Map by key name (stable within a branch)
-      const newIdByName = Object.fromEntries((inserted ?? []).map((r) => [r.key, r.id]))
-      for (const k of chunk) {
-        const newId = newIdByName[k.key]
-        if (newId) newKeyIdByOld.set(k.id, newId)
-      }
+  for (let i = 0; i < srcKeys.length; i += 200) {
+    const chunk = srcKeys.slice(i, i + 200)
+    const { data: inserted, error: keyErr } = await admin
+      .from('translation_keys')
+      .insert(chunk.map((k) => ({
+        project_id: projectId,
+        branch_id: branch.id,
+        key: k.key,
+        description: k.description,
+        tags: k.tags,
+        platforms: k.platforms,
+        char_limit: k.char_limit,
+        is_plural: k.is_plural,
+        plural_forms: k.plural_forms,
+        created_by: userId,
+      })))
+      .select('id, key')
+    if (keyErr) return abandon(`Failed to copy branch keys: ${keyErr.message}`)
+    // Map by key name (stable within a branch)
+    const newIdByName = Object.fromEntries((inserted ?? []).map((r) => [r.key, r.id]))
+    for (const k of chunk) {
+      const newId = newIdByName[k.key]
+      if (newId) newKeyIdByOld.set(k.id, newId)
     }
   }
 
-  // Copy the source branch's translation rows, remapping key_id to the new keys
-  const { data: srcRows } = await admin
-    .from('translations')
-    .select('key_id, locale_id, value, status')
-    .eq('branch_id', sourceBranchId)
+  // Copy the source branch's translation rows, remapping key_id to the new keys.
+  // Paginated for the same reason — this table holds one row per key per locale,
+  // so it passes 1000 rows well before the key list does.
+  let srcRows
+  try {
+    srcRows = await fetchBranchTranslations(admin, sourceBranchId, { throwOnError: true })
+  } catch (error) {
+    return abandon(error instanceof Error ? error.message : 'Failed to read source branch translations')
+  }
 
-  if (srcRows?.length) {
-    const copies = srcRows
-      .map((r) => {
-        const newKeyId = r.key_id ? newKeyIdByOld.get(r.key_id) : undefined
-        if (!newKeyId) return null
-        return { branch_id: branch.id, key_id: newKeyId, locale_id: r.locale_id, value: r.value, status: r.status }
-      })
-      .filter((r): r is NonNullable<typeof r> => r !== null)
-    for (let i = 0; i < copies.length; i += 500) {
-      await admin.from('translations').insert(copies.slice(i, i + 500))
-    }
+  const copies = srcRows
+    .map((r) => {
+      const newKeyId = r.key_id ? newKeyIdByOld.get(r.key_id) : undefined
+      if (!newKeyId) return null
+      return { branch_id: branch.id, key_id: newKeyId, locale_id: r.locale_id, value: r.value, status: r.status }
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null)
+  for (let i = 0; i < copies.length; i += 500) {
+    const { error: rowErr } = await admin.from('translations').insert(copies.slice(i, i + 500))
+    if (rowErr) return abandon(`Failed to copy branch translations: ${rowErr.message}`)
   }
 
   return branch
