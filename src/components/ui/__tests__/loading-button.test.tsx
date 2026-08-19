@@ -1,4 +1,5 @@
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { StrictMode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LoadingButton } from '../loading-button'
 
@@ -82,6 +83,26 @@ describe('LoadingButton', () => {
     render(<LoadingButton loading loadingText={null}><span>icon</span></LoadingButton>)
     expect(screen.queryByText('icon')).toBeNull()
     expect(spinner()).not.toBeNull()
+  })
+
+  // StrictMode mounts, cleans up, then mounts again. A mounted-ref that is only
+  // armed by its initialiser reads false on the second mount, which left the
+  // spinner stuck on forever after the first click.
+  it('clears the pending state under StrictMode double-mounting', async () => {
+    const d = deferred()
+    render(
+      <StrictMode>
+        <LoadingButton onClick={() => d.promise}>Delete</LoadingButton>
+      </StrictMode>
+    )
+
+    await act(async () => { button().click() })
+    expect(button().disabled).toBe(true)
+
+    await act(async () => { d.resolve(); await d.promise })
+    await waitFor(() => expect(button().disabled).toBe(false))
+    expect(spinner()).toBeNull()
+    expect(button().textContent).toContain('Delete')
   })
 
   it('honours parent-driven loading, as a form submit needs', () => {

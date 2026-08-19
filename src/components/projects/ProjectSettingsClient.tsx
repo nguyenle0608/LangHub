@@ -22,6 +22,7 @@ export function ProjectSettingsClient({ project }: { project: ProjectWithStats }
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [removingLocaleId, setRemovingLocaleId] = useState<string | null>(null)
+  const [confirmRemoveLocaleId, setConfirmRemoveLocaleId] = useState<string | null>(null)
   const [localeError, setLocaleError] = useState<string | null>(null)
 
   // For adding a new locale
@@ -84,7 +85,10 @@ export function ProjectSettingsClient({ project }: { project: ProjectWithStats }
 
   async function handleRemoveLocale(localeId: string, isBase: boolean | null) {
     if (isBase) return
-    if (!confirm('Remove this locale? All translations for it will be deleted.')) return
+    // Arm first, remove second — window.confirm() is suppressed by some
+    // browsers, where it returns false and the removal never ran.
+    if (confirmRemoveLocaleId !== localeId) { setConfirmRemoveLocaleId(localeId); return }
+    setConfirmRemoveLocaleId(null)
     setRemovingLocaleId(localeId)
     try {
       await fetch(`/api/projects/${project.id}/locales/${localeId}`, { method: 'DELETE' })
@@ -191,11 +195,15 @@ export function ProjectSettingsClient({ project }: { project: ProjectWithStats }
                         <button
                           onClick={() => handleRemoveLocale(locale.id, locale.is_base)}
                           disabled={removingLocaleId === locale.id}
-                          className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
-                          title="Remove locale"
+                          className={confirmRemoveLocaleId === locale.id
+                            ? 'text-destructive text-[10px] font-medium transition-colors disabled:opacity-50'
+                            : 'text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50'}
+                          title={confirmRemoveLocaleId === locale.id ? 'Confirm removing this locale' : 'Remove locale'}
                         >
                           {removingLocaleId === locale.id ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : confirmRemoveLocaleId === locale.id ? (
+                            'Confirm?'
                           ) : (
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />

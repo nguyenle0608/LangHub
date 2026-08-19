@@ -28,13 +28,17 @@ function formatDate(s: string | null): string {
 
 export function BranchesPage({ project, initialBranches, canManage }: Props) {
   const router = useRouter()
-  const [branches] = useState(initialBranches)
+  // Read straight from props. Copying them into state froze the list at first
+  // render, so router.refresh() re-ran the server component and changed
+  // nothing on screen — every action looked like it had failed until a reload.
+  const branches = initialBranches
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
-  const [sourceId, setSourceId] = useState(() => branches.find((b) => b.is_default)?.id ?? branches[0]?.id ?? '')
+  const [sourceId, setSourceId] = useState(() => initialBranches.find((b) => b.is_default)?.id ?? initialBranches[0]?.id ?? '')
   const [busy, setBusy] = useState(false)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [mergeSource, setMergeSource] = useState<BranchWithStats | null>(null)
 
   const nameById = Object.fromEntries(branches.map((b) => [b.id, b.name]))
@@ -93,7 +97,10 @@ export function BranchesPage({ project, initialBranches, canManage }: Props) {
   }
 
   async function handleDelete(branch: Branch) {
-    if (!confirm(`Delete branch "${branch.name}"? This removes its keys and translations and cannot be undone.`)) return
+    // Arm on the first click, delete on the second — window.confirm() is
+    // suppressed by some browsers, and there it returned false so nothing
+    // happened at all.
+    if (confirmDeleteId !== branch.id) { setConfirmDeleteId(branch.id); return }
     setBusy(true)
     try {
       const res = await fetch('/api/branches', {
@@ -104,6 +111,7 @@ export function BranchesPage({ project, initialBranches, canManage }: Props) {
       const json = await res.json() as { error?: string }
       if (!res.ok) { toast.error(json.error ?? 'Delete failed'); return }
       toast.success(`Deleted "${branch.name}"`)
+      setConfirmDeleteId(null)
       router.refresh()
     } catch { toast.error('Network error') } finally { setBusy(false) }
   }
@@ -231,9 +239,18 @@ export function BranchesPage({ project, initialBranches, canManage }: Props) {
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" title="Rename" onClick={() => { setRenamingId(b.id); setRenameValue(b.name) }} disabled={busy}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" title="Delete" onClick={() => void handleDelete(b)} disabled={busy}>
+                      <LoadingButton
+                        variant={confirmDeleteId === b.id ? 'destructive' : 'ghost'}
+                        size={confirmDeleteId === b.id ? 'sm' : 'icon'}
+                        className={confirmDeleteId === b.id ? 'h-7 text-xs gap-1' : 'h-7 w-7 text-muted-foreground hover:text-destructive'}
+                        title={confirmDeleteId === b.id ? `Confirm deleting ${b.name}` : 'Delete'}
+                        onClick={() => handleDelete(b)}
+                        disabled={busy}
+                        loadingText={null}
+                      >
                         <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                        {confirmDeleteId === b.id && 'Confirm'}
+                      </LoadingButton>
                     </>
                   )}
                   {b.is_default && (

@@ -23,7 +23,14 @@ export function useAsyncAction<Args extends unknown[]>(
   const mounted = useRef(true)
   const inFlight = useRef(false)
 
-  useEffect(() => () => { mounted.current = false }, [])
+  // The ref must be re-armed in the effect body, not just initialised: React
+  // StrictMode mounts, cleans up, then mounts again, and a ref initialiser runs
+  // only once. Setting it false in cleanup alone left it false for the second
+  // mount, so setPending(false) never ran and the spinner stuck forever.
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
 
   const run = useCallback((...args: Args) => {
     if (inFlight.current) return
