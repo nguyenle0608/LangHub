@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Upload, Check, ChevronRight, FileText, Info, X, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
+import { ArrowLeft, Upload, Check, ChevronRight, FileText, Info, X, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { LoadingButton } from '@/components/ui/loading-button'
@@ -15,6 +15,7 @@ import {
   type JsonImportStructure,
 } from '@/lib/localization-namespaces'
 import { allKeysOf, applyGroupSelection, computeSkipKeys, countSelected } from '@/lib/importers/selection'
+import { SelectableKeyList } from './SelectableKeyList'
 import type { ProjectWithStats } from '@/types'
 
 type Format = 'json' | 'arb' | 'csv' | 'yaml' | 'android' | 'ios'
@@ -52,7 +53,6 @@ interface Props {
 
 const FORMAT_LABELS: Record<Format, string> = { json: 'JSON', arb: 'ARB', csv: 'CSV', yaml: 'YAML', android: 'Android XML', ios: 'iOS .strings' }
 const STEP_LABELS = ['Upload', 'Configure', 'Preview', 'Import', 'Done']
-const MAX_PREVIEW_ROWS = 300
 
 function detectFormat(filename: string): Format | null {
   const ext = filename.split('.').pop()?.toLowerCase()
@@ -107,120 +107,6 @@ function StepIndicator({ step }: { step: number }) {
   )
 }
 
-function SelectAllNone({ onAll, onNone }: { onAll: () => void; onNone: () => void }) {
-  return (
-    <div className="flex items-center gap-2">
-      <button
-        type="button"
-        className="text-[10px] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
-        onClick={onAll}
-      >
-        All
-      </button>
-      <span className="text-border">·</span>
-      <button
-        type="button"
-        className="text-[10px] text-muted-foreground hover:text-foreground"
-        onClick={onNone}
-      >
-        None
-      </button>
-    </div>
-  )
-}
-
-function PreviewKeyList({
-  title,
-  keys,
-  tone,
-  parsedKeys,
-  expanded,
-  onToggle,
-  selected,
-  onToggleKey,
-  onSetAll,
-}: {
-  title: string
-  keys: string[]
-  tone: 'new' | 'fill'
-  parsedKeys?: Record<string, string>
-  expanded: boolean
-  onToggle: () => void
-  selected: Set<string>
-  onToggleKey: (dotKey: string) => void
-  onSetAll: (checked: boolean) => void
-}) {
-  if (keys.length === 0) return null
-  const toneClass = tone === 'new'
-    ? 'bg-emerald-500/5 border-emerald-200 dark:border-emerald-900/40 text-emerald-700 dark:text-emerald-400'
-    : 'bg-blue-500/5 border-blue-200 dark:border-blue-900/40 text-blue-600 dark:text-blue-400'
-  const selectedCount = keys.reduce((sum, dotKey) => sum + (selected.has(dotKey) ? 1 : 0), 0)
-
-  return (
-    <div className="border-t border-border">
-      <button
-        type="button"
-        onClick={onToggle}
-        className={`w-full flex items-center justify-between px-3 py-2 text-xs border-b hover:bg-card/30 ${toneClass}`}
-      >
-        <span>
-          <span className="font-medium">{title}</span>
-          <span className="ml-1 text-muted-foreground">
-            ({selectedCount} of {keys.length} selected)
-          </span>
-        </span>
-        {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-      </button>
-      {expanded && (
-        <>
-          <div className="flex items-center gap-3 px-3 py-2 bg-card/60 border-b border-border/60">
-            <span className="text-[10px] text-muted-foreground flex-1">Key</span>
-            <span className="text-[10px] text-muted-foreground flex-1">Value</span>
-            {/* All/None cover every key in the group, including rows beyond the
-                MAX_PREVIEW_ROWS render cap. */}
-            <SelectAllNone onAll={() => onSetAll(true)} onNone={() => onSetAll(false)} />
-          </div>
-          <div className="max-h-48 overflow-y-auto divide-y divide-border/50">
-            {keys.slice(0, MAX_PREVIEW_ROWS).map((dotKey) => {
-              const isSelected = selected.has(dotKey)
-              return (
-                <label
-                  key={dotKey}
-                  className="flex items-start gap-3 px-3 py-2 hover:bg-card/30 cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => onToggleKey(dotKey)}
-                    className="mt-0.5 rounded border-border flex-shrink-0"
-                  />
-                  <span className={[
-                    'text-[11px] font-mono flex-1 min-w-0 truncate',
-                    isSelected ? 'text-foreground' : 'text-muted-foreground line-through',
-                  ].join(' ')}>
-                    {dotKey}
-                  </span>
-                  <span className={[
-                    'text-[11px] text-muted-foreground flex-1 min-w-0 truncate',
-                    isSelected ? '' : 'line-through',
-                  ].join(' ')}>
-                    {parsedKeys?.[dotKey] ?? ''}
-                  </span>
-                </label>
-              )
-            })}
-            {keys.length > MAX_PREVIEW_ROWS && (
-              <div className="px-3 py-2 text-xs text-muted-foreground">
-                … and {keys.length - MAX_PREVIEW_ROWS} more (not listed, but included by All / None)
-              </div>
-            )}
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
-
 export function ImportWizard({ project, branchId }: Props) {
   const router = useRouter()
   const [step, setStep] = useState(0)
@@ -239,7 +125,6 @@ export function ImportWizard({ project, branchId }: Props) {
   // is imported unless it is in this set.
   const [selectionMap, setSelectionMap] = useState<Record<string, Set<string>>>({})
   // Which files have their duplicates section expanded
-  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set())
   const [expandedPreviewGroups, setExpandedPreviewGroups] = useState<Set<string>>(new Set())
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -375,12 +260,12 @@ export function ImportWizard({ project, branchId }: Props) {
     const { entries, selMap } = await computeKeyCounts(existingKeySet, filledKeysByLocale)
     setFiles(entries)
     setSelectionMap(selMap)
-    // Auto-expand files that have duplicates
-    const withDupes = new Set(entries.filter((e) => (e.duplicateKeys?.length ?? 0) > 0).map((e) => e.key))
-    setExpandedFiles(withDupes)
+    // Expand every non-empty group, duplicates included, so nothing that will
+    // be written is hidden behind a collapsed section.
     setExpandedPreviewGroups(new Set(entries.flatMap((e) => [
       ...(e.newKeys?.length ? [`${e.key}:new`] : []),
       ...(e.fillKeys?.length ? [`${e.key}:fill`] : []),
+      ...(e.duplicateKeys?.length ? [`${e.key}:dupe`] : []),
     ])))
     setStep(2)
   }
@@ -796,8 +681,7 @@ export function ImportWizard({ project, branchId }: Props) {
                   const fillKeys = entry.fillKeys ?? []
                   const dupes = entry.duplicateKeys ?? []
                   const selected = selectionMap[entry.key] ?? new Set<string>()
-                  const isExpanded = expandedFiles.has(entry.key)
-                  const selectedNew = countSelected(newKeys, selected)
+                                  const selectedNew = countSelected(newKeys, selected)
                   const selectedFill = countSelected(fillKeys, selected)
                   const selectedDupes = countSelected(dupes, selected)
                   const isEmpty = selectedCountFor(entry) === 0
@@ -841,7 +725,7 @@ export function ImportWizard({ project, branchId }: Props) {
                         </span>
                       </div>
 
-                      <PreviewKeyList
+                      <SelectableKeyList
                         title="New keys"
                         keys={newKeys}
                         tone="new"
@@ -850,10 +734,10 @@ export function ImportWizard({ project, branchId }: Props) {
                         onToggle={() => togglePreviewGroup(`${entry.key}:new`)}
                         selected={selected}
                         onToggleKey={(dotKey) => toggleKey(entry.key, dotKey)}
-                        onSetAll={(checked) => setGroupSelection(entry.key, newKeys, checked)}
+                        onSetAll={(groupKeys, checked) => setGroupSelection(entry.key, groupKeys, checked)}
                       />
 
-                      <PreviewKeyList
+                      <SelectableKeyList
                         title="Fill empty translations"
                         keys={fillKeys}
                         tone="fill"
@@ -862,88 +746,21 @@ export function ImportWizard({ project, branchId }: Props) {
                         onToggle={() => togglePreviewGroup(`${entry.key}:fill`)}
                         selected={selected}
                         onToggleKey={(dotKey) => toggleKey(entry.key, dotKey)}
-                        onSetAll={(checked) => setGroupSelection(entry.key, fillKeys, checked)}
+                        onSetAll={(groupKeys, checked) => setGroupSelection(entry.key, groupKeys, checked)}
                       />
 
-                      {dupes.length > 0 && (
-                        <>
-                          <button
-                            className="w-full flex items-center justify-between px-3 py-2 bg-amber-500/5 border-t border-border text-xs text-amber-700 dark:text-amber-400/80 hover:bg-amber-500/10 transition-colors"
-                            onClick={() => setExpandedFiles((prev) => {
-                              const next = new Set(prev)
-                              if (next.has(entry.key)) next.delete(entry.key); else next.add(entry.key)
-                              return next
-                            })}
-                          >
-                            <span>
-                              {selectedDupes} of {dupes.length} duplicate{dupes.length !== 1 ? 's' : ''} will be overwritten
-                            </span>
-                            {isExpanded
-                              ? <ChevronUp className="h-3.5 w-3.5" />
-                              : <ChevronDown className="h-3.5 w-3.5" />}
-                          </button>
+                      <SelectableKeyList
+                        title="Overwrite existing values"
+                        keys={dupes}
+                        tone="dupe"
+                        parsedKeys={entry.parsedKeys}
+                        expanded={expandedPreviewGroups.has(`${entry.key}:dupe`)}
+                        onToggle={() => togglePreviewGroup(`${entry.key}:dupe`)}
+                        selected={selected}
+                        onToggleKey={(dotKey) => toggleKey(entry.key, dotKey)}
+                        onSetAll={(groupKeys, checked) => setGroupSelection(entry.key, groupKeys, checked)}
+                      />
 
-                          {isExpanded && (
-                            <div className="border-t border-border">
-                              {/* Select all / none */}
-                              <div className="flex items-center gap-3 px-3 py-2 bg-card/60 border-b border-border/60">
-                                <span className="text-[10px] font-medium text-amber-700 dark:text-amber-400">Overwrite existing values</span>
-                                <span className="text-[10px] text-muted-foreground flex-1">Key</span>
-                                <span className="text-[10px] text-muted-foreground flex-1">New value</span>
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    className="text-[10px] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:text-blue-300"
-                                    onClick={() => setGroupSelection(entry.key, dupes, true)}
-                                  >
-                                    All
-                                  </button>
-                                  <span className="text-border">·</span>
-                                  <button
-                                    className="text-[10px] text-muted-foreground hover:text-foreground"
-                                    onClick={() => setGroupSelection(entry.key, dupes, false)}
-                                  >
-                                    None
-                                  </button>
-                                </div>
-                              </div>
-
-                              <div className="max-h-72 overflow-y-auto divide-y divide-border/50">
-                                {dupes.slice(0, MAX_PREVIEW_ROWS).map((dotKey) => {
-                                  const newVal = entry.parsedKeys?.[dotKey] ?? ''
-                                  const willOverwrite = selected.has(dotKey)
-                                  return (
-                                    <label
-                                      key={dotKey}
-                                      className="flex items-start gap-3 px-3 py-2 hover:bg-card/40 cursor-pointer"
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        checked={willOverwrite}
-                                        onChange={() => toggleKey(entry.key, dotKey)}
-                                        className="mt-0.5 rounded border-border flex-shrink-0"
-                                      />
-                                      <span className="text-[11px] font-mono text-foreground flex-1 min-w-0 truncate">
-                                        {dotKey}
-                                      </span>
-                                      <span className={[
-                                        'text-[11px] flex-1 min-w-0 truncate',
-                                        willOverwrite ? 'text-muted-foreground' : 'text-muted-foreground line-through',
-                                      ].join(' ')}>
-                                        {newVal}
-                                      </span>
-                                    </label>
-                                  )
-                                })}
-                                {dupes.length > MAX_PREVIEW_ROWS && (
-                                  <div className="px-3 py-2 text-xs text-muted-foreground">
-                                    … and {dupes.length - MAX_PREVIEW_ROWS} more
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      )}
                     </div>
                   )
                 })}
