@@ -193,10 +193,15 @@ export function BranchesPage({ project, initialBranches, canManage }: Props) {
         <div className="space-y-2.5">
           {branches.map((b) => (
             <div key={b.id} className="border border-border rounded-xl p-4 bg-card/30 hover:bg-card/60 transition-colors">
-              <div className="flex items-start gap-3">
-                <GitBranch className={cn('h-4 w-4 mt-0.5 flex-shrink-0', b.is_default ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground')} />
+              {/* Stacked on mobile. The action cluster is flex-shrink-0 and ~218px
+                  wide, so sharing a row with it left the info column 35px on a 375px
+                  screen: the branch name truncated to three characters and every meta
+                  value wrapped one word per line. */}
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                <div className="flex min-w-0 flex-1 items-start gap-3">
+                  <GitBranch className={cn('h-4 w-4 mt-0.5 flex-shrink-0', b.is_default ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground')} />
 
-                <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0">
                   {/* Name + badges */}
                   <div className="flex items-center gap-2 flex-wrap">
                     {renamingId === b.id ? (
@@ -235,14 +240,14 @@ export function BranchesPage({ project, initialBranches, canManage }: Props) {
                     </div>
                     <span className="text-[10px] text-muted-foreground tabular-nums w-8 text-right">{b.approvedPercent}%</span>
                   </div>
+                  </div>
                 </div>
 
-                {/* Actions */}
                 {/* Management actions sit to the left of a divider; Open is the row's
                     primary action and stays last, so it lands in the same column on
                     every row — including the default branch, which has no management
                     actions — and never sits adjacent to Delete. */}
-                <div className="flex items-center gap-1 flex-shrink-0">
+                <div className="flex flex-shrink-0 items-center gap-1 self-end sm:self-auto">
                   {canManage && !b.is_default && (
                     <>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-blue-600 dark:text-blue-400" title={`Merge into ${defaultBranch?.name ?? 'main'}`} onClick={() => setMergeSource(b)}>
