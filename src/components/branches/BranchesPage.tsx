@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  ArrowLeft, GitBranch, GitMerge, Plus, Trash2, Pencil, Check, Star, Lock, ExternalLink,
+  ArrowLeft, GitBranch, GitMerge, Plus, Trash2, Pencil, Star, Lock, ExternalLink,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -269,8 +269,12 @@ export function BranchesPage({ project, initialBranches, canManage }: Props) {
                       </LoadingButton>
                     </>
                   )}
-                  {b.is_default && (
-                    <span className="text-[10px] text-muted-foreground flex items-center gap-1 px-2"><Check className="h-3 w-3" />main</span>
+                  {canManage && b.is_default && (
+                    /* The default branch has no per-row actions, but Open still
+                       belongs in the same column as every other row. Reserve the
+                       action cluster's footprint: four 28px buttons and the three
+                       4px gaps between them. */
+                    <div aria-hidden className="w-[7.75rem]" />
                   )}
                 </div>
               </div>
