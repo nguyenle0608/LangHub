@@ -709,7 +709,8 @@ function DetailsPane({
                 value={keyItem.tags ?? []}
                 suggestions={allTags}
                 disabled={!canEditKeys}
-                onChange={(next) => void patchMeta({ tags: next })}
+                // Returned, not voided: TagInput needs the promise to show per-tag pending state.
+                onChange={(next) => patchMeta({ tags: next })}
               />
             </div>
 
