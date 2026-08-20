@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, X, Languages, Star, Check, Loader2 } from 'lucide-react'
+import { Plus, X, Languages, Star, Check, Loader2, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import {
@@ -13,6 +13,7 @@ import { LocaleCombobox } from '@/components/ui/LocaleCombobox'
 import type { LocaleOption } from '@/app/api/locales-list/route'
 import type { ProjectWithStats } from '@/types'
 import { localeFlag } from '@/lib/locale-flag'
+import { normalizeLocaleCode } from '@/lib/locale-code'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -47,6 +48,9 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
   const [bulkRemoving, setBulkRemoving] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
+  // Which language is having its code rewritten, and the code being typed.
+  const [editingCodeId, setEditingCodeId] = useState<string | null>(null)
+  const [codeDraft, setCodeDraft] = useState('')
 
   // Sync from props when dialog opens
   function handleOpenChange(next: boolean) {
@@ -57,6 +61,7 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
     setConfirmBulkRemove(false)
     setRemovingIds(new Set())
     setBulkRemoving(false)
+    setEditingCodeId(null)
     setOpen(next)
   }
 
@@ -148,6 +153,32 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
     }
   }
 
+  /**
+   * Rewrite a language's code — `en` becomes `en-US` once a project starts
+   * tracking a second English, or a code was simply mistyped. Translations are
+   * attached to the language's id, so nothing moves with it.
+   */
+  async function handleUpdateCode(localeId: string) {
+    const code = normalizeLocaleCode(codeDraft)
+    if (!code) return
+    const res = await fetch(`/api/projects/${project.id}/locales/${localeId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    })
+    const json = await res.json().catch(() => ({})) as { error?: string }
+
+    if (res.ok) {
+      setLocales((prev) => prev.map((l) => l.id === localeId ? { ...l, code } : l))
+      setEditingCodeId(null)
+      toast.success(`Code changed to ${code}`)
+      onLocalesChanged()
+      router.refresh()
+    } else {
+      toast.error(json.error ?? 'Failed to change the code')
+    }
+  }
+
   async function handleSetBase(localeId: string, localeName: string) {
     if (busy) return
     setPendingAction(null)
@@ -228,6 +259,12 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
         <div className="space-y-1 max-h-64 overflow-y-auto">
           {locales.map((locale) => {
             const isPending = pendingAction?.id === locale.id
+            const isEditingCode = editingCodeId === locale.id
+            const draftCode = normalizeLocaleCode(codeDraft)
+            // Refuse a code the project already uses elsewhere before the
+            // unique constraint does, and refuse a no-op save.
+            const draftTaken = !!draftCode && locales.some((l) => l.id !== locale.id && l.code === draftCode)
+            const canSaveCode = !!draftCode && !draftTaken && draftCode !== locale.code
             const percent = localePercent?.get(locale.id) ?? locale.percent
             const approved = localeApproved?.get(locale.id) ?? locale.approved
             const total = totalKeys ?? locale.total
@@ -266,23 +303,62 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
                       <span className="truncate text-sm text-foreground">{locale.name}</span>
-                      <span className="flex-shrink-0 whitespace-nowrap font-mono text-[11px] text-muted-foreground">{locale.code}</span>
+                      {isEditingCode ? (
+                        <input
+                          value={codeDraft}
+                          autoFocus
+                          onChange={(e) => setCodeDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && canSaveCode) void handleUpdateCode(locale.id)
+                            if (e.key === 'Escape') setEditingCodeId(null)
+                          }}
+                          aria-label={`Language code for ${locale.name}`}
+                          aria-invalid={!!codeDraft && !draftCode}
+                          className="h-6 w-20 flex-shrink-0 rounded border border-border bg-muted px-1.5 font-mono text-[11px] text-foreground"
+                        />
+                      ) : (
+                        <span className="flex-shrink-0 whitespace-nowrap font-mono text-[11px] text-muted-foreground">{locale.code}</span>
+                      )}
                       {locale.is_base && (
                         <span className="text-[10px] text-muted-foreground border border-border rounded px-1 flex-shrink-0">base</span>
                       )}
                     </div>
-                    <span
-                      className={cn('text-[11px] tabular-nums', percentColor)}
-                      title={`${approved} of ${total} keys approved`}
-                    >
-                      {percent}% complete
-                    </span>
+                    {isEditingCode && codeDraft && !draftCode ? (
+                      <span className="text-[11px] text-destructive">Use a code like &quot;ms&quot; or &quot;en-CA&quot;</span>
+                    ) : isEditingCode && draftTaken ? (
+                      <span className="text-[11px] text-destructive">{draftCode} is already in this project</span>
+                    ) : (
+                      <span
+                        className={cn('text-[11px] tabular-nums', percentColor)}
+                        title={`${approved} of ${total} keys approved`}
+                      >
+                        {percent}% complete
+                      </span>
+                    )}
                   </div>
                 </div>
 
                 {removingIds.has(locale.id) ? (
                   <div className="flex flex-shrink-0 items-center gap-1 px-1">
                     <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" aria-label={`Removing ${locale.name}`} />
+                  </div>
+                ) : isEditingCode ? (
+                  <div className="flex flex-shrink-0 items-center gap-1.5">
+                    <LoadingButton
+                      size="sm"
+                      disabled={!canSaveCode}
+                      className="h-6 px-2 text-[11px] bg-blue-600 text-white hover:bg-blue-500"
+                      onClick={() => handleUpdateCode(locale.id)}
+                      loadingText="Saving…"
+                    >
+                      Save
+                    </LoadingButton>
+                    <button
+                      onClick={() => setEditingCodeId(null)}
+                      className="rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground"
+                    >
+                      Cancel
+                    </button>
                   </div>
                 ) : isPending ? (
                   <div className="flex flex-shrink-0 items-center gap-1.5">
@@ -313,6 +389,15 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
                   </div>
                 ) : (
                   <div className="flex flex-shrink-0 items-center gap-1">
+                    <button
+                      onClick={() => { setPendingAction(null); setCodeDraft(locale.code); setEditingCodeId(locale.id) }}
+                      disabled={!!busy}
+                      title="Change language code"
+                      aria-label={`Change the code for ${locale.name}`}
+                      className="p-1 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
                     {!locale.is_base && (
                       <button
                         onClick={() => setPendingAction({ id: locale.id, kind: 'setBase' })}
