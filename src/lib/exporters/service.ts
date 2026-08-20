@@ -9,6 +9,7 @@ import { exportIOSStrings } from './ios'
 import { exportJSON } from './json'
 import { exportYAML } from './yaml'
 import { exportZIP } from './zip'
+import { localeToAndroidQualifier } from '@/lib/locale-code'
 
 export type ExportFormat = 'json' | 'arb' | 'csv' | 'yaml' | 'android' | 'ios'
 
@@ -102,7 +103,9 @@ export async function executeExport(
       files.push(...splitKeysByNamespace(localeKeys).map((group) => ({ name: `${safeLocaleCode}/${group.filename}`, content: exportJSON(group.keys, true) })))
     } else if (format === 'json') files.push({ name: `${safeLocaleCode}.json`, content: exportJSON(localeKeys, nested) })
     else if (format === 'arb') files.push({ name: `${safeLocaleCode}.arb`, content: exportARB(localeKeys, locale.code, descriptions) })
-    else if (format === 'android') files.push({ name: `values-${safeLocaleCode}/strings.xml`, content: exportAndroidXML(localeKeys) })
+    // Android writes a region as -r; values-en-US is not a qualifier it
+    // recognises, and the strings in such a folder never load on device.
+    else if (format === 'android') files.push({ name: `values-${safeFilenameSegment(localeToAndroidQualifier(locale.code))}/strings.xml`, content: exportAndroidXML(localeKeys) })
     else if (format === 'ios') files.push({ name: `${safeLocaleCode}.lproj/Localizable.strings`, content: exportIOSStrings(localeKeys) })
     else files.push({ name: `${safeLocaleCode}.yaml`, content: exportYAML(localeKeys) })
   }
