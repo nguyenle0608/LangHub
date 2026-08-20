@@ -39,6 +39,8 @@ export function parseImportContent(input: {
   filename: string
   format: ImportFormat
   localeCode?: string
+  /** Which locale column of a CSV/TSV to import. Falls back to localeCode. */
+  column?: string
   namespace?: string | null
   importStructure?: JsonImportStructure
 }): ParsedImport {
@@ -52,8 +54,16 @@ export function parseImportContent(input: {
   else if (format === 'ios') result = parseIOSStrings(content)
   else {
     const results = format === 'tsv' ? parseTSV(content) : parseCSV(content)
-    result = results.find((candidate) => candidate.locale === input.localeCode) ?? results[0]
-    if (!result) throw new ImportValidationError('No matching locale found in the file')
+    if (input.column) {
+      // A named column is a decision the caller already made — importing a
+      // different one instead would quietly fill a language with the wrong
+      // text, so a missing column is an error rather than a fallback.
+      result = results.find((candidate) => candidate.locale === input.column)
+      if (!result) throw new ImportValidationError(`Column "${input.column}" not found in the file`)
+    } else {
+      result = results.find((candidate) => candidate.locale === input.localeCode) ?? results[0]
+      if (!result) throw new ImportValidationError('No matching locale found in the file')
+    }
   }
   if (result.errors.length) throw new ImportValidationError(result.errors[0] ?? 'Invalid import file', 'format')
 

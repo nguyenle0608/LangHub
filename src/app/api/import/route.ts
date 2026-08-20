@@ -63,9 +63,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const namespace = formData.get('namespace')
+    const column = formData.get('column')
     const parsed = parseImportContent({
       content: await file.text(), filename: file.name,
       format: format as typeof IMPORT_FORMATS[number], localeCode,
+      column: typeof column === 'string' && column ? column : undefined,
       namespace: typeof namespace === 'string' ? namespace : null,
       importStructure: (formData.get('importStructure') as JsonImportStructure | null) ?? 'monolithic',
     })
