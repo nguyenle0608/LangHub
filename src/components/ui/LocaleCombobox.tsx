@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Check, ChevronsUpDown, Search, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -24,12 +24,26 @@ interface Props {
   placeholder?: string
   disabled?: boolean
   excludeCodes?: Set<string>
+  /**
+   * Multi-select: the list stays open and each row toggles, so a project can be
+   * set up in one pass instead of reopening the picker for every language.
+   */
+  multiple?: boolean
+  selectedCodes?: Set<string>
 }
 
-export function LocaleCombobox({ value, onChange, placeholder = 'Select language…', disabled, excludeCodes }: Props) {
+export function LocaleCombobox({ value, onChange, placeholder = 'Select language…', disabled, excludeCodes, multiple, selectedCodes }: Props) {
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
   const [locales, setLocales] = useState<LocaleOption[]>([])
   const [loading, setLoading] = useState(true)
+  const listRef = useRef<HTMLDivElement>(null)
+
+  // cmdk drops non-matching items from the list but leaves its scroll position
+  // alone, so a search typed after scrolling opens somewhere in the middle of
+  // its own results — with 570 languages, searching "en" left the best match
+  // a hundred rows above the fold. Every new query starts at the top.
+  useEffect(() => { listRef.current?.scrollTo({ top: 0 }) }, [query])
 
   useEffect(() => {
     fetch('/api/locales-list')
@@ -42,7 +56,10 @@ export function LocaleCombobox({ value, onChange, placeholder = 'Select language
   const selected = locales.find((l) => l.code === value)
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    // modal: the content is portalled to the body, which puts it outside the
+    // Dialog's scroll lock — that lock preventDefault()s wheel events, so the
+    // list could only be scrolled by keyboard. modal gives the popover its own.
+    <Popover open={open} onOpenChange={(next) => { setOpen(next); if (!next) setQuery('') }} modal>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -56,11 +73,19 @@ export function LocaleCombobox({ value, onChange, placeholder = 'Select language
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Loading languages…
             </span>
+          ) : multiple && selectedCodes && selectedCodes.size > 0 ? (
+            <span className="truncate">
+              {selectedCodes.size} language{selectedCodes.size === 1 ? '' : 's'} selected
+            </span>
           ) : selected ? (
-            <span className="flex items-center gap-2">
-              <span className="text-base leading-none">{selected.flag}</span>
-              <span>{selected.name}</span>
-              <span className="text-muted-foreground text-xs">({selected.country})</span>
+            <span className="flex min-w-0 flex-1 items-center gap-2">
+              <span className="text-base leading-none flex-shrink-0">{selected.flag}</span>
+              <span className="truncate">{selected.name}</span>
+              {/* A regional entry is already named "English (Canada)"; appending
+                  the country again produced "English (Canada) (Canada)". */}
+              {!selected.regional && (
+                <span className="truncate text-xs text-muted-foreground">({selected.country})</span>
+              )}
             </span>
           ) : (
             <span className="text-muted-foreground">{placeholder}</span>
@@ -73,11 +98,13 @@ export function LocaleCombobox({ value, onChange, placeholder = 'Select language
           <div className="flex items-center border-b border-border px-3">
             <Search className="h-3.5 w-3.5 text-muted-foreground mr-2 flex-shrink-0" />
             <CommandInput
+              value={query}
+              onValueChange={setQuery}
               placeholder="Search language or country…"
               className="text-sm text-foreground placeholder:text-muted-foreground border-0 bg-transparent focus:ring-0 h-9 px-0"
             />
           </div>
-          <CommandList className="max-h-64">
+          <CommandList ref={listRef} className="max-h-64">
             <CommandEmpty className="py-6 text-center text-sm text-muted-foreground">
               No language found.
             </CommandEmpty>
@@ -88,18 +115,20 @@ export function LocaleCombobox({ value, onChange, placeholder = 'Select language
                   value={`${locale.name} ${locale.country} ${locale.code}`}
                   onSelect={() => {
                     onChange(locale.code, locale)
-                    setOpen(false)
+                    if (!multiple) setOpen(false)
                   }}
                   className="flex items-center gap-2.5 px-3 py-2 cursor-pointer text-popover-foreground aria-selected:bg-accent aria-selected:text-accent-foreground data-[selected=true]:bg-accent"
                 >
                   <span className="text-base w-5 text-center leading-none">{locale.flag}</span>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm">{locale.name}</span>
-                    <span className="text-xs text-muted-foreground ml-1.5">{locale.country}</span>
+                  <div className="flex min-w-0 flex-1 items-baseline gap-1.5">
+                    <span className="truncate text-sm">{locale.name}</span>
+                    {!locale.regional && (
+                      <span className="truncate text-xs text-muted-foreground">{locale.country}</span>
+                    )}
                   </div>
-                  <span className="text-[10px] text-zinc-600 font-mono">{locale.code}</span>
-                  {value === locale.code && (
-                    <Check className="h-3.5 w-3.5 text-blue-400 flex-shrink-0" />
+                  <span className="flex-shrink-0 whitespace-nowrap font-mono text-[10px] text-muted-foreground">{locale.code}</span>
+                  {(multiple ? selectedCodes?.has(locale.code) : value === locale.code) && (
+                    <Check className="h-3.5 w-3.5 flex-shrink-0 text-blue-500 dark:text-blue-400" />
                   )}
                 </CommandItem>
               ))}

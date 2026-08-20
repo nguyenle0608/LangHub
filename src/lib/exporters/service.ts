@@ -3,7 +3,7 @@ import type { Database } from '@/types/database'
 import { splitKeysByNamespace, type JsonExportStructure } from '@/lib/localization-namespaces'
 import { exportAndroidXML } from './android'
 import { exportARB } from './arb'
-import { exportCSV } from './csv'
+import { exportCSV, exportTSV } from './csv'
 import { buildExportLookup, fetchExportData, type ExportFilter } from './data'
 import { exportIOSStrings } from './ios'
 import { exportJSON } from './json'
@@ -11,7 +11,7 @@ import { exportYAML } from './yaml'
 import { exportZIP } from './zip'
 import { localeToAndroidQualifier } from '@/lib/locale-code'
 
-export type ExportFormat = 'json' | 'arb' | 'csv' | 'yaml' | 'android' | 'ios'
+export type ExportFormat = 'json' | 'arb' | 'csv' | 'tsv' | 'yaml' | 'android' | 'ios'
 
 export interface ExportCommand {
   projectId: string
@@ -67,16 +67,20 @@ export async function executeExport(
   const byLocale = buildExportLookup(keys, translations, filter, { includeEmpty, localeIds })
   const descriptions = Object.fromEntries(keys.filter((key) => key.description).map((key) => [key.key, key.description as string]))
 
-  if (format === 'csv') {
+  // Both delimited formats put every locale in one file, so they never produce
+  // a ZIP the way the per-locale formats do.
+  if (format === 'csv' || format === 'tsv') {
     const keyNames = keys.map((key) => key.key)
     const localeCodes = locales.map((locale) => locale.code)
     const values: Record<string, Record<string, string>> = {}
     for (const key of keyNames) {
       values[key] = Object.fromEntries(locales.map((locale) => [locale.code, byLocale.get(locale.id)?.[key] ?? '']))
     }
+    const tab = format === 'tsv'
     return {
-      body: exportCSV(keyNames, localeCodes, values), contentType: 'text/csv',
-      filename: `translations-${localeCodes.map(safeFilenameSegment).join('-')}.csv`,
+      body: tab ? exportTSV(keyNames, localeCodes, values) : exportCSV(keyNames, localeCodes, values),
+      contentType: tab ? 'text/tab-separated-values' : 'text/csv',
+      filename: `translations-${localeCodes.map(safeFilenameSegment).join('-')}.${tab ? 'tsv' : 'csv'}`,
     }
   }
 

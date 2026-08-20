@@ -9,13 +9,14 @@ import type { ProjectWithStats } from '@/types'
 import { localeFlag } from '@/lib/locale-flag'
 import type { JsonExportStructure } from '@/lib/localization-namespaces'
 
-type Format = 'json' | 'arb' | 'csv' | 'yaml' | 'android' | 'ios'
+type Format = 'json' | 'arb' | 'csv' | 'tsv' | 'yaml' | 'android' | 'ios'
 type Filter = 'all' | 'approved' | 'reviewed_approved'
 
 const FORMATS: { value: Format; label: string }[] = [
   { value: 'json', label: 'JSON' },
   { value: 'arb', label: 'ARB' },
   { value: 'csv', label: 'CSV' },
+  { value: 'tsv', label: 'TSV' },
   { value: 'yaml', label: 'YAML' },
   { value: 'android', label: 'Android' },
   { value: 'ios', label: 'iOS' },
@@ -52,13 +53,15 @@ export function ExportSheet({ open, project, branchId, onClose }: Props) {
     })
   }
 
-  const fileCount = format === 'csv' ? 1 : selectedLocales.size
+  // Both delimited formats hold every locale in one file.
+  const isDelimited = format === 'csv' || format === 'tsv'
+  const fileCount = isDelimited ? 1 : selectedLocales.size
   const previewText = fileCount === 1
     ? (format === 'json' && jsonStructure === 'namespaced' ? 'namespace ZIP' : `1 file`)
     : `${fileCount} files in ZIP`
   const selectedLocaleCode = project.locales.find((l) => selectedLocales.has(l.id))?.code
-  const previewFilename = format === 'csv'
-    ? `translations-${Array.from(selectedLocales).map((id) => project.locales.find((l) => l.id === id)?.code).join('-')}.csv`
+  const previewFilename = isDelimited
+    ? `translations-${Array.from(selectedLocales).map((id) => project.locales.find((l) => l.id === id)?.code).join('-')}.${format}`
     : format === 'json' && jsonStructure === 'namespaced'
     ? (fileCount === 1 ? `${selectedLocaleCode}-namespaces.zip` : 'translations.zip')
     : fileCount === 1
@@ -92,7 +95,7 @@ export function ExportSheet({ open, project, branchId, onClose }: Props) {
       const blob = await resp.blob()
       const contentDisposition = resp.headers.get('Content-Disposition') ?? ''
       const filenameMatch = contentDisposition.match(/filename="(.+)"/)
-      const filename = filenameMatch?.[1] ?? `export.${format === 'csv' ? 'csv' : 'zip'}`
+      const filename = filenameMatch?.[1] ?? `export.${isDelimited ? format : 'zip'}`
 
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -205,7 +208,7 @@ export function ExportSheet({ open, project, branchId, onClose }: Props) {
                 )}
               </div>
             )}
-            {format === 'csv' && (
+            {isDelimited && (
               <p className="text-[11px] text-muted-foreground">All locales combined in one file with columns per locale</p>
             )}
           </div>
