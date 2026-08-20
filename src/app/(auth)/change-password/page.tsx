@@ -4,7 +4,7 @@ import { Suspense, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
+import { LoadingButton } from '@/components/ui/loading-button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
@@ -117,13 +117,14 @@ function ChangePasswordContent() {
             </p>
           )}
 
-          <Button
+          <LoadingButton
             type="submit"
             className="w-full bg-blue-600 hover:bg-blue-500 text-white"
-            disabled={loading}
+            loading={loading}
+            loadingText="Updating..."
           >
-            {loading ? 'Updating...' : 'Change password'}
-          </Button>
+            Change password
+          </LoadingButton>
         </form>
       </CardContent>
       <CardFooter>

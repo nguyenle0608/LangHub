@@ -12,8 +12,19 @@ describe('shared import parsing and bounds', () => {
     ])
   })
 
+  it('accepts the key shapes real catalogs use', () => {
+    expect(() => validateImportEntries([
+      { key: 'about.aboutSection.aboutUsDetailsLabel', value: 'x' },
+      { key: 'some-kebab-case.key_name', value: 'x' },
+      { key: 'valid.key', value: 'x' },
+    ])).not.toThrow()
+  })
+
   it('rejects invalid keys and excessive values before mutation', () => {
-    expect(() => validateImportEntries([{ key: 'Invalid-Key', value: 'x' }])).toThrow(ImportValidationError)
+    expect(() => validateImportEntries([{ key: 'has space', value: 'x' }])).toThrow(ImportValidationError)
+    expect(() => validateImportEntries([{ key: 'has$symbol', value: 'x' }])).toThrow(ImportValidationError)
+    expect(() => validateImportEntries([{ key: '', value: 'x' }])).toThrow(ImportValidationError)
+    expect(() => validateImportEntries([{ key: 'x'.repeat(201), value: 'x' }])).toThrow(ImportValidationError)
     expect(() => validateImportEntries([{ key: 'valid.key', value: 'x'.repeat(100_001) }])).toThrow(/exceeds/)
   })
 

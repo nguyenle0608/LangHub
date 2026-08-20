@@ -8,23 +8,32 @@ Web-based localization management for mobile and web developers. Import, transla
 - **Status Workflow** — `empty` → `pending` → `reviewed` → `approved` per locale per key; bulk Review all / Approve all
 - **Key Management** — add, rename, tag keys; duplicate detection with merge/link; comment threads; full edit history
 - **Version Snapshots** — point-in-time snapshots with diff viewer; auto-snapshot before every destructive operation
-- **Import** — JSON, ARB, CSV, YAML with 5-step wizard, preview, and namespace prefixing
-- **Export** — JSON (nested or flat), ARB, CSV, YAML; single locale → direct download, multi-locale → ZIP
+- **Branches** — per-project translation branches with merge back into the base branch
+- **QA Checks** — automated checks for placeholder mismatches, empty values, and length issues
+- **Glossary & Translation Memory** — org-level glossary (CSV import/export) plus TM suggestions in the editor, behind `TRANSLATION_ASSISTANCE_ENABLED`
+- **Import** — JSON, ARB, CSV, YAML, Android XML, iOS `.strings` with 5-step wizard, preview, and namespace prefixing
+- **Export** — JSON (nested or flat), ARB, CSV, YAML, Android XML, iOS `.strings`; single locale → direct download, multi-locale → ZIP
 - **Organizations** — multi-org support with member roles (owner / admin / translator / viewer)
+- **Public API** — token-authenticated `/api/v1/*` routes with rate limiting and idempotency, behind `PUBLIC_API_ENABLED`
+- **Theming** — light / dark / system modes
 - **Keyboard shortcuts** — `⌘K` / `Ctrl+K` to add key, `Esc` to close panels
 
 ## Tech Stack
 
-- Next.js 14 (App Router, TypeScript strict)
-- Supabase (PostgreSQL, Auth, Realtime)
-- Tailwind CSS + shadcn/ui (dark theme, zinc base)
-- Deployed on Vercel
+- **Framework** — Next.js 14.2 (App Router), React 18, TypeScript strict
+- **Database & Auth** — Supabase (PostgreSQL, Auth, Realtime) via `@supabase/ssr`
+- **UI** — Tailwind CSS 3.4 + shadcn/ui on Radix UI and Base UI, `lucide-react` icons, `sonner` toasts, `cmdk` command palette, TanStack Virtual for the editor grid
+- **Validation** — Zod for all forms and API input
+- **Parsing / export** — `papaparse` (CSV), `js-yaml` (YAML), `jszip` (multi-locale ZIP)
+- **Testing** — Vitest + Testing Library + jsdom
+- **Tooling** — pnpm, ESLint (`eslint-config-next`)
+- **Deploy** — Netlify (`@netlify/plugin-nextjs`), Node 20
 
 ## Local Development
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20 (matches the Netlify build)
 - pnpm
 - Supabase account (or local Supabase CLI)
 

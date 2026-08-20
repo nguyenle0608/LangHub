@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, Plus, Trash2, RotateCcw, GitBranch, Zap, Search, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { LoadingButton } from '@/components/ui/loading-button'
 import dynamic from 'next/dynamic'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -93,9 +94,9 @@ function CreateVersionDialog({
             <Button type="button" variant="outline" size="sm" className="border-border" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" size="sm" disabled={loading || !name.trim()}>
-              {loading ? 'Creating…' : 'Create Snapshot'}
-            </Button>
+            <LoadingButton type="submit" size="sm" loading={loading} disabled={!name.trim()} loadingText="Creating…">
+              Create Snapshot
+            </LoadingButton>
           </div>
         </form>
       </div>

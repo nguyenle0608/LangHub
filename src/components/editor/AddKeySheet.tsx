@@ -5,9 +5,11 @@ import { X, Plus, Minus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { LoadingButton } from '@/components/ui/loading-button'
 import { Input } from '@/components/ui/input'
 import { Slider } from '@/components/ui/slider'
-import { Badge } from '@/components/ui/badge'
+import { TRANSLATION_KEY_FORMAT_HINT, TRANSLATION_KEY_PATTERN } from '@/lib/translation-keys'
+import { TagInput } from './TagInput'
 import type { KeyWithTranslations } from '@/lib/supabase/queries/translations'
 import type { LocaleWithStats } from '@/types'
 
@@ -35,16 +37,16 @@ interface Props {
   branchId: string
   locales: LocaleWithStats[]
   existingKeys: string[]
+  allTags: string[]
   onClose: () => void
   onCreated: (key: KeyWithTranslations) => void
 }
 
-export function AddKeySheet({ open, projectId, branchId, locales, existingKeys, onClose, onCreated }: Props) {
+export function AddKeySheet({ open, projectId, branchId, locales, existingKeys, allTags, onClose, onCreated }: Props) {
   const [keyName, setKeyName] = useState('')
   const [description, setDescription] = useState('')
   const [baseValue, setBaseValue] = useState('')
   const [tags, setTags] = useState<string[]>([])
-  const [tagInput, setTagInput] = useState('')
   const [platforms, setPlatforms] = useState<string[]>([])
   const [charLimit, setCharLimit] = useState<number | null>(null)
   const [charLimitEnabled, setCharLimitEnabled] = useState(false)
@@ -56,7 +58,7 @@ export function AddKeySheet({ open, projectId, branchId, locales, existingKeys, 
 
   const keyError = (() => {
     if (!keyName) return ''
-    if (!/^[a-z0-9_.]+$/.test(keyName)) return 'Lowercase letters, numbers, dots, underscores only'
+    if (!TRANSLATION_KEY_PATTERN.test(keyName)) return TRANSLATION_KEY_FORMAT_HINT
     if (existingKeys.includes(keyName)) return 'Key already exists in this project'
     return ''
   })()
@@ -65,15 +67,9 @@ export function AddKeySheet({ open, projectId, branchId, locales, existingKeys, 
     setPlatforms((prev) => prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p])
   }, [])
 
-  const addTag = useCallback(() => {
-    const t = tagInput.trim().toLowerCase()
-    if (t && !tags.includes(t)) setTags((prev) => [...prev, t])
-    setTagInput('')
-  }, [tagInput, tags])
-
   const reset = () => {
     setKeyName(''); setDescription(''); setBaseValue('')
-    setTags([]); setTagInput(''); setPlatforms([])
+    setTags([]); setPlatforms([])
     setCharLimit(null); setCharLimitEnabled(false); setError('')
   }
 
@@ -223,30 +219,7 @@ export function AddKeySheet({ open, projectId, branchId, locales, existingKeys, 
             {/* Tags */}
             <div className="space-y-2">
               <label className="text-xs font-medium text-muted-foreground">Tags</label>
-              <div className="flex gap-2">
-                <Input
-                  value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag() } }}
-                  placeholder="Add tag…"
-                  className="text-sm bg-card border-border h-8"
-                />
-                <Button type="button" size="sm" variant="outline" className="border-border h-8 px-2" onClick={addTag}>
-                  <Plus className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-              {tags.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {tags.map((tag) => (
-                    <Badge key={tag} variant="secondary" className="text-[11px] pr-1 gap-1">
-                      {tag}
-                      <button type="button" onClick={() => setTags((prev) => prev.filter((t) => t !== tag))}>
-                        <X className="h-2.5 w-2.5" />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              )}
+              <TagInput value={tags} onChange={setTags} suggestions={allTags} />
             </div>
 
             {/* Platforms */}
@@ -337,9 +310,9 @@ export function AddKeySheet({ open, projectId, branchId, locales, existingKeys, 
               <Button type="button" variant="outline" size="sm" onClick={handleClose} className="border-border">
                 Cancel
               </Button>
-              <Button type="submit" size="sm" disabled={loading || !keyName.trim() || !!keyError}>
-                {loading ? 'Creating…' : 'Create Key'}
-              </Button>
+              <LoadingButton type="submit" size="sm" loading={loading} disabled={!keyName.trim() || !!keyError} loadingText="Creating…">
+                Create Key
+              </LoadingButton>
             </div>
           </form>
 

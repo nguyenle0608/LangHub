@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { BookOpen, Download, Loader2, Pencil, Plus, Trash2, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { LoadingButton } from '@/components/ui/loading-button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { Database } from '@/types/database'
@@ -29,7 +30,6 @@ export function GlossaryPanel({ orgId, canManage }: { orgId: string; canManage: 
   const [filterTarget, setFilterTarget] = useState('')
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
-  const [exporting, setExporting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -71,7 +71,6 @@ export function GlossaryPanel({ orgId, canManage }: { orgId: string; canManage: 
   }
 
   async function exportCSV() {
-    setExporting(true)
     try {
       const filters = new URLSearchParams()
       if (filterSource.trim()) filters.set('sourceLocale', filterSource.trim())
@@ -87,7 +86,6 @@ export function GlossaryPanel({ orgId, canManage }: { orgId: string; canManage: 
       a.click()
       URL.revokeObjectURL(url)
     } catch { toast.error('Failed to export glossary terms') }
-    finally { setExporting(false) }
   }
 
   async function importCSV(file: File) {
@@ -167,7 +165,7 @@ export function GlossaryPanel({ orgId, canManage }: { orgId: string; canManage: 
             <label className="flex h-10 items-center gap-2 text-xs"><input type="checkbox" checked={caseSensitive} onChange={(event) => setCaseSensitive(event.target.checked)} /> Case sensitive</label>
             <label className="flex h-10 items-center gap-2 text-xs"><input type="checkbox" checked={wholeWord} onChange={(event) => setWholeWord(event.target.checked)} /> Whole word</label>
             {editingId && <Button type="button" variant="ghost" onClick={cancelEdit} className="ml-auto gap-1"><X className="h-4 w-4" />Cancel</Button>}
-            <Button type="submit" disabled={saving || !sourceTerm.trim() || !targetTerm.trim()} className={editingId ? 'gap-1.5 bg-blue-600 text-white hover:bg-blue-500' : 'ml-auto gap-1.5 bg-blue-600 text-white hover:bg-blue-500'}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editingId ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />} {editingId ? 'Save changes' : 'Add term'}</Button>
+            <LoadingButton type="submit" loading={saving} disabled={!sourceTerm.trim() || !targetTerm.trim()} className={editingId ? 'gap-1.5 bg-blue-600 text-white hover:bg-blue-500' : 'ml-auto gap-1.5 bg-blue-600 text-white hover:bg-blue-500'} loadingText={editingId ? 'Save changes' : 'Add term'}>{editingId ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />} {editingId ? 'Save changes' : 'Add term'}</LoadingButton>
           </div>
         </form>
       )}
@@ -192,17 +190,18 @@ export function GlossaryPanel({ orgId, canManage }: { orgId: string; canManage: 
               }}
               className="hidden"
             />
-            <Button
+            <LoadingButton
               type="button"
               variant="outline"
               size="sm"
-              disabled={importing}
+              loading={importing}
               onClick={() => fileInputRef.current?.click()}
               className="gap-1.5"
+              loadingText="Importing…"
             >
-              {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-              {importing ? 'Importing…' : 'Choose CSV file'}
-            </Button>
+              <Upload className="h-4 w-4" />
+              Choose CSV file
+            </LoadingButton>
           </div>
           {importResult && (
             <div className="rounded-lg border border-border bg-background px-3 py-2 text-xs">
@@ -221,10 +220,10 @@ export function GlossaryPanel({ orgId, canManage }: { orgId: string; canManage: 
         <div className="space-y-1"><Label htmlFor="glossary-filter-source" className="text-xs">Source locale</Label><Input id="glossary-filter-source" value={filterSource} onChange={(event) => setFilterSource(event.target.value)} placeholder="All" className="h-8 w-24" /></div>
         <div className="space-y-1"><Label htmlFor="glossary-filter-target" className="text-xs">Target locale</Label><Input id="glossary-filter-target" value={filterTarget} onChange={(event) => setFilterTarget(event.target.value)} placeholder="All" className="h-8 w-24" /></div>
         <Button type="button" variant="outline" size="sm" onClick={() => void applyFilters()}>Filter</Button>
-        <Button type="button" variant="outline" size="sm" disabled={exporting} onClick={() => void exportCSV()} className="ml-auto gap-1.5">
-          {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+        <LoadingButton type="button" variant="outline" size="sm" onClick={exportCSV} className="ml-auto gap-1.5" loadingText="Export CSV">
+          <Download className="h-4 w-4" />
           Export CSV
-        </Button>
+        </LoadingButton>
       </div>
       <div className="divide-y divide-border">
         {loading ? <div className="flex justify-center px-6 py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
@@ -238,7 +237,7 @@ export function GlossaryPanel({ orgId, canManage }: { orgId: string; canManage: 
             </div>
           ))}
       </div>
-      {nextOffset != null && <div className="border-t border-border px-6 py-3 text-center"><Button type="button" variant="ghost" size="sm" disabled={loading} onClick={() => void loadMore()}>Load more</Button></div>}
+      {nextOffset != null && <div className="border-t border-border px-6 py-3 text-center"><LoadingButton type="button" variant="ghost" size="sm" disabled={loading} onClick={loadMore}>Load more</LoadingButton></div>}
     </section>
   )
 }

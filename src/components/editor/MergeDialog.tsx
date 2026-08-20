@@ -5,6 +5,7 @@ import { GitMerge, Loader2, AlertTriangle, Check, ArrowRight } from 'lucide-reac
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { LoadingButton } from '@/components/ui/loading-button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import type { Branch } from '@/lib/branches/queries'
 
@@ -225,10 +226,17 @@ export function MergeDialog({ projectId, sourceBranch, targetBranch, onClose, on
           ) : <span />}
           <div className="flex gap-2">
             <Button variant="ghost" size="sm" onClick={onClose} disabled={merging}>Cancel</Button>
-            <Button size="sm" className="gap-1.5" disabled={loading || merging || nothingToDo} onClick={handleMerge}>
-              {merging ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <GitMerge className="h-3.5 w-3.5" />}
+            <LoadingButton
+              size="sm"
+              className="gap-1.5"
+              loading={merging}
+              disabled={loading || nothingToDo}
+              onClick={handleMerge}
+              loadingText={conflicts.length > 0 ? 'Resolve & merge' : 'Merge'}
+            >
+              <GitMerge className="h-3.5 w-3.5" />
               {conflicts.length > 0 ? 'Resolve & merge' : 'Merge'}
-            </Button>
+            </LoadingButton>
           </div>
         </div>
       </DialogContent>

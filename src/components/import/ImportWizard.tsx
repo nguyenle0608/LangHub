@@ -2,9 +2,11 @@
 
 import { useState, useRef, useCallback } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Upload, Check, ChevronRight, FileText, Info, X, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { ArrowLeft, Upload, Check, ChevronRight, FileText, Info, X, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { LoadingButton } from '@/components/ui/loading-button'
 import { Input } from '@/components/ui/input'
 import {
   deriveNamespaceFromFilename,
@@ -12,6 +14,8 @@ import {
   sanitizeNamespaceSegment,
   type JsonImportStructure,
 } from '@/lib/localization-namespaces'
+import { allKeysOf, applyGroupSelection, computeSkipKeys, countSelected } from '@/lib/importers/selection'
+import { SelectableKeyList } from './SelectableKeyList'
 import type { ProjectWithStats } from '@/types'
 
 type Format = 'json' | 'arb' | 'csv' | 'yaml' | 'android' | 'ios'
@@ -49,7 +53,6 @@ interface Props {
 
 const FORMAT_LABELS: Record<Format, string> = { json: 'JSON', arb: 'ARB', csv: 'CSV', yaml: 'YAML', android: 'Android XML', ios: 'iOS .strings' }
 const STEP_LABELS = ['Upload', 'Configure', 'Preview', 'Import', 'Done']
-const MAX_PREVIEW_ROWS = 300
 
 function detectFormat(filename: string): Format | null {
   const ext = filename.split('.').pop()?.toLowerCase()
@@ -104,59 +107,8 @@ function StepIndicator({ step }: { step: number }) {
   )
 }
 
-function PreviewKeyList({
-  title,
-  keys,
-  tone,
-  parsedKeys,
-  expanded,
-  onToggle,
-}: {
-  title: string
-  keys: string[]
-  tone: 'new' | 'fill'
-  parsedKeys?: Record<string, string>
-  expanded: boolean
-  onToggle: () => void
-}) {
-  if (keys.length === 0) return null
-  const toneClass = tone === 'new'
-    ? 'bg-emerald-500/5 border-emerald-200 dark:border-emerald-900/40 text-emerald-700 dark:text-emerald-400'
-    : 'bg-blue-500/5 border-blue-200 dark:border-blue-900/40 text-blue-600 dark:text-blue-400'
-
-  return (
-    <div className="border-t border-border">
-      <button
-        type="button"
-        onClick={onToggle}
-        className={`w-full flex items-center justify-between px-3 py-2 text-xs border-b hover:bg-card/30 ${toneClass}`}
-      >
-        <span>
-          <span className="font-medium">{title}</span>
-          <span className="ml-1 text-muted-foreground">({keys.length})</span>
-        </span>
-        {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-      </button>
-      {expanded && (
-        <div className="max-h-48 overflow-y-auto divide-y divide-border/50">
-          {keys.slice(0, MAX_PREVIEW_ROWS).map((dotKey) => (
-            <div key={dotKey} className="grid grid-cols-[1fr,1fr] gap-3 px-3 py-2 hover:bg-card/30">
-              <span className="text-[11px] font-mono text-foreground min-w-0 truncate">{dotKey}</span>
-              <span className="text-[11px] text-muted-foreground min-w-0 truncate">{parsedKeys?.[dotKey] ?? ''}</span>
-            </div>
-          ))}
-          {keys.length > MAX_PREVIEW_ROWS && (
-            <div className="px-3 py-2 text-xs text-muted-foreground">
-              … and {keys.length - MAX_PREVIEW_ROWS} more
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
 export function ImportWizard({ project, branchId }: Props) {
+  const router = useRouter()
   const [step, setStep] = useState(0)
   const [files, setFiles] = useState<FileEntry[]>([])
   const [namespace, setNamespace] = useState('')
@@ -168,10 +120,11 @@ export function ImportWizard({ project, branchId }: Props) {
   const [results, setResults] = useState<FileResult[]>([])
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0, filename: '' })
 
-  // Per-file overwrite selection: fileKey → Set of duplicate dot-keys to overwrite
-  const [overwriteMap, setOverwriteMap] = useState<Record<string, Set<string>>>({})
+  // Per-file import selection: fileKey → Set of dot-keys to import. Spans all
+  // three preview groups (new / fill-empty / duplicate), so nothing in the file
+  // is imported unless it is in this set.
+  const [selectionMap, setSelectionMap] = useState<Record<string, Set<string>>>({})
   // Which files have their duplicates section expanded
-  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set())
   const [expandedPreviewGroups, setExpandedPreviewGroups] = useState<Set<string>>(new Set())
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -215,8 +168,8 @@ export function ImportWizard({ project, branchId }: Props) {
   const computeKeyCounts = useCallback(async (
     existingKeySet: Set<string>,
     filledKeysByLocale: Map<string, Set<string>>
-  ): Promise<{ entries: FileEntry[]; owMap: Record<string, Set<string>> }> => {
-    const owMap: Record<string, Set<string>> = {}
+  ): Promise<{ entries: FileEntry[]; selMap: Record<string, Set<string>> }> => {
+    const selMap: Record<string, Set<string>> = {}
 
     const entries = await Promise.all(files.map(async (entry) => {
       const { file, format } = entry
@@ -261,21 +214,33 @@ export function ImportWizard({ project, branchId }: Props) {
       const newCount = newKeys.length
       const fillCount = fillKeys.length
 
-      // Init overwrite set based on global strategy
-      owMap[entry.key] = conflictStrategy === 'overwrite'
-        ? new Set(duplicateKeys)
-        : new Set()
+      // New and fill-empty keys start selected; duplicates follow the global
+      // conflict strategy. Every group is de-selectable from the preview.
+      selMap[entry.key] = new Set([
+        ...newKeys,
+        ...fillKeys,
+        ...(conflictStrategy === 'overwrite' ? duplicateKeys : []),
+      ])
 
       return { ...entry, keyCount: allKeys.length, newCount, fillCount, parsedKeys: keys, newKeys, fillKeys, duplicateKeys }
     }))
 
-    return { entries, owMap }
+    return { entries, selMap }
   }, [files, namespace, jsonImportStructure, project.locales, conflictStrategy])
 
   async function handleGoToPreview() {
+    try {
+      await loadPreview()
+    } catch {
+      toast.error('Could not read the selected files — check the format and try again')
+    }
+  }
+
+  async function loadPreview() {
     const params = new URLSearchParams({ projectId: project.id })
     if (branchId) params.set('branch', branchId)
     const resp = await fetch(`/api/keys?${params}`)
+    if (!resp.ok) throw new Error('Failed to load existing keys')
     const json = await resp.json() as {
       data?: Array<{
         key: string
@@ -292,31 +257,34 @@ export function ImportWizard({ project, branchId }: Props) {
       }
     }
 
-    const { entries, owMap } = await computeKeyCounts(existingKeySet, filledKeysByLocale)
+    const { entries, selMap } = await computeKeyCounts(existingKeySet, filledKeysByLocale)
     setFiles(entries)
-    setOverwriteMap(owMap)
-    // Auto-expand files that have duplicates
-    const withDupes = new Set(entries.filter((e) => (e.duplicateKeys?.length ?? 0) > 0).map((e) => e.key))
-    setExpandedFiles(withDupes)
+    setSelectionMap(selMap)
+    // Expand every non-empty group, duplicates included, so nothing that will
+    // be written is hidden behind a collapsed section.
     setExpandedPreviewGroups(new Set(entries.flatMap((e) => [
       ...(e.newKeys?.length ? [`${e.key}:new`] : []),
       ...(e.fillKeys?.length ? [`${e.key}:fill`] : []),
+      ...(e.duplicateKeys?.length ? [`${e.key}:dupe`] : []),
     ])))
     setStep(2)
   }
 
-  function toggleOverwrite(fileKey: string, dotKey: string) {
-    setOverwriteMap((prev) => {
+  const selectedCountFor = (entry: FileEntry) =>
+    countSelected(allKeysOf(entry), selectionMap[entry.key])
+
+  function toggleKey(fileKey: string, dotKey: string) {
+    setSelectionMap((prev) => {
       const set = new Set(prev[fileKey] ?? [])
       if (set.has(dotKey)) set.delete(dotKey); else set.add(dotKey)
       return { ...prev, [fileKey]: set }
     })
   }
 
-  function setAllOverwrites(fileKey: string, duplicateKeys: string[], checked: boolean) {
-    setOverwriteMap((prev) => ({
+  function setGroupSelection(fileKey: string, groupKeys: string[], checked: boolean) {
+    setSelectionMap((prev) => ({
       ...prev,
-      [fileKey]: checked ? new Set(duplicateKeys) : new Set(),
+      [fileKey]: applyGroupSelection(prev[fileKey], groupKeys, checked),
     }))
   }
 
@@ -333,21 +301,21 @@ export function ImportWizard({ project, branchId }: Props) {
     setStep(3)
     const allResults: FileResult[] = []
     // Only send API requests for files that will actually write something
-    const filesToProcess = files.filter((e) => (e.newCount ?? 0) + (e.fillCount ?? 0) + (overwriteMap[e.key]?.size ?? 0) > 0)
+    const filesToProcess = files.filter((e) => selectedCountFor(e) > 0)
     setImportProgress({ current: 0, total: filesToProcess.length, filename: '' })
 
     for (let i = 0; i < filesToProcess.length; i++) {
       const entry = filesToProcess[i]!
-      const { file, format, localeId, duplicateKeys } = entry
+      const { file, format, localeId } = entry
       if (!format || !localeId) {
         allResults.push({ filename: file.name, created: 0, updated: 0, skipped: 0, total: 0, error: 'Missing format or locale' })
         continue
       }
       setImportProgress({ current: i + 1, total: filesToProcess.length, filename: file.name })
 
-      // Compute skip list: duplicates the user did NOT select for overwrite
-      const selectedOverwrites = overwriteMap[entry.key] ?? new Set<string>()
-      const skipKeys = (duplicateKeys ?? []).filter((k) => !selectedOverwrites.has(k))
+      // Skip anything the user de-selected in the preview, across all three
+      // groups — new keys included, so they are never force-imported.
+      const skipKeys = computeSkipKeys(entry, selectionMap[entry.key])
 
       try {
         const fd = new FormData()
@@ -393,6 +361,11 @@ export function ImportWizard({ project, branchId }: Props) {
 
     setResults(allResults)
     setStep(4)
+    // The editor is a Server Component, so its rendered output sits in the
+    // client router cache from before the import. Without invalidating it,
+    // "View in Editor" replays the pre-import payload — a project that started
+    // empty still shows "No keys yet".
+    if (allResults.some((result) => !result.error)) router.refresh()
   }
 
   // Locales that appear more than once across the file list. Multiple files for
@@ -425,9 +398,11 @@ export function ImportWizard({ project, branchId }: Props) {
     && uploadDuplicatedLocales.size === 0
 
   const totalDuplicates = files.reduce((sum, e) => sum + (e.duplicateKeys?.length ?? 0), 0)
-  const totalOverwrites = Object.values(overwriteMap).reduce((sum, s) => sum + s.size, 0)
-  // Files that will actually write something (new keys OR selected overwrites > 0)
-  const activeFiles = files.filter((e) => (e.newCount ?? 0) + (e.fillCount ?? 0) + (overwriteMap[e.key]?.size ?? 0) > 0)
+  const totalOverwrites = files.reduce((sum, e) => sum + countSelected(e.duplicateKeys, selectionMap[e.key]), 0)
+  // Files that will actually write something (at least one key still selected)
+  const activeFiles = files.filter((e) => selectedCountFor(e) > 0)
+  const totalSelectedKeys = files.reduce((sum, e) => sum + selectedCountFor(e), 0)
+  const totalPreviewKeys = files.reduce((sum, e) => sum + allKeysOf(e).length, 0)
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
@@ -688,9 +663,9 @@ export function ImportWizard({ project, branchId }: Props) {
 
               <div className="flex justify-between">
                 <Button variant="outline" size="sm" className="border-border" onClick={() => setStep(0)}>Back</Button>
-                <Button size="sm" onClick={handleGoToPreview} disabled={!canContinue}>
+                <LoadingButton size="sm" onClick={handleGoToPreview} disabled={!canContinue}>
                   Preview <ChevronRight className="h-3.5 w-3.5 ml-1" />
-                </Button>
+                </LoadingButton>
               </div>
             </div>
           )}
@@ -705,10 +680,11 @@ export function ImportWizard({ project, branchId }: Props) {
                   const newKeys = entry.newKeys ?? []
                   const fillKeys = entry.fillKeys ?? []
                   const dupes = entry.duplicateKeys ?? []
-                  const selected = overwriteMap[entry.key] ?? new Set<string>()
-                  const isExpanded = expandedFiles.has(entry.key)
-                  const effectiveCount = (entry.newCount ?? 0) + (entry.fillCount ?? 0) + selected.size
-                  const isEmpty = effectiveCount === 0
+                  const selected = selectionMap[entry.key] ?? new Set<string>()
+                                  const selectedNew = countSelected(newKeys, selected)
+                  const selectedFill = countSelected(fillKeys, selected)
+                  const selectedDupes = countSelected(dupes, selected)
+                  const isEmpty = selectedCountFor(entry) === 0
 
                   return (
                     <div key={entry.key} className={['border rounded-xl overflow-hidden', isEmpty ? 'border-border opacity-60' : 'border-border'].join(' ')}>
@@ -727,125 +703,64 @@ export function ImportWizard({ project, branchId }: Props) {
                             <span className="text-muted-foreground italic">nothing to import</span>
                           ) : (
                             <>
-                              {newKeys.length > 0 && (
-                                <span className="text-emerald-700 dark:text-emerald-400">{newKeys.length} new</span>
+                              {selectedNew > 0 && (
+                                <span className="text-emerald-700 dark:text-emerald-400">{selectedNew} new</span>
                               )}
-                              {fillKeys.length > 0 && (
+                              {selectedFill > 0 && (
                                 <>
-                                  {newKeys.length > 0 && (
+                                  {selectedNew > 0 && (
                                     <span className="text-border"> · </span>
                                   )}
-                                  <span className="text-blue-600 dark:text-blue-400">{fillKeys.length} fill empty</span>
+                                  <span className="text-blue-600 dark:text-blue-400">{selectedFill} fill empty</span>
                                 </>
                               )}
-                              {(newKeys.length > 0 || fillKeys.length > 0) && dupes.length > 0 && (
+                              {(selectedNew > 0 || selectedFill > 0) && selectedDupes > 0 && (
                                 <span className="text-border"> · </span>
                               )}
-                              {dupes.length > 0 && (
-                                <span className="text-amber-700 dark:text-amber-400">{dupes.length} duplicate{dupes.length !== 1 ? 's' : ''}</span>
+                              {selectedDupes > 0 && (
+                                <span className="text-amber-700 dark:text-amber-400">{selectedDupes} overwrite{selectedDupes !== 1 ? 's' : ''}</span>
                               )}
                             </>
                           )}
                         </span>
                       </div>
 
-                      <PreviewKeyList
+                      <SelectableKeyList
                         title="New keys"
                         keys={newKeys}
                         tone="new"
                         parsedKeys={entry.parsedKeys}
                         expanded={expandedPreviewGroups.has(`${entry.key}:new`)}
                         onToggle={() => togglePreviewGroup(`${entry.key}:new`)}
+                        selected={selected}
+                        onToggleKey={(dotKey) => toggleKey(entry.key, dotKey)}
+                        onSetAll={(groupKeys, checked) => setGroupSelection(entry.key, groupKeys, checked)}
                       />
 
-                      <PreviewKeyList
+                      <SelectableKeyList
                         title="Fill empty translations"
                         keys={fillKeys}
                         tone="fill"
                         parsedKeys={entry.parsedKeys}
                         expanded={expandedPreviewGroups.has(`${entry.key}:fill`)}
                         onToggle={() => togglePreviewGroup(`${entry.key}:fill`)}
+                        selected={selected}
+                        onToggleKey={(dotKey) => toggleKey(entry.key, dotKey)}
+                        onSetAll={(groupKeys, checked) => setGroupSelection(entry.key, groupKeys, checked)}
                       />
 
-                      {dupes.length > 0 && (
-                        <>
-                          <button
-                            className="w-full flex items-center justify-between px-3 py-2 bg-amber-500/5 border-t border-border text-xs text-amber-700 dark:text-amber-400/80 hover:bg-amber-500/10 transition-colors"
-                            onClick={() => setExpandedFiles((prev) => {
-                              const next = new Set(prev)
-                              if (next.has(entry.key)) next.delete(entry.key); else next.add(entry.key)
-                              return next
-                            })}
-                          >
-                            <span>
-                              {selected.size} of {dupes.length} duplicate{dupes.length !== 1 ? 's' : ''} will be overwritten
-                            </span>
-                            {isExpanded
-                              ? <ChevronUp className="h-3.5 w-3.5" />
-                              : <ChevronDown className="h-3.5 w-3.5" />}
-                          </button>
+                      <SelectableKeyList
+                        title="Overwrite existing values"
+                        keys={dupes}
+                        tone="dupe"
+                        parsedKeys={entry.parsedKeys}
+                        expanded={expandedPreviewGroups.has(`${entry.key}:dupe`)}
+                        onToggle={() => togglePreviewGroup(`${entry.key}:dupe`)}
+                        selected={selected}
+                        onToggleKey={(dotKey) => toggleKey(entry.key, dotKey)}
+                        onSetAll={(groupKeys, checked) => setGroupSelection(entry.key, groupKeys, checked)}
+                      />
 
-                          {isExpanded && (
-                            <div className="border-t border-border">
-                              {/* Select all / none */}
-                              <div className="flex items-center gap-3 px-3 py-2 bg-card/60 border-b border-border/60">
-                                <span className="text-[10px] font-medium text-amber-700 dark:text-amber-400">Overwrite existing values</span>
-                                <span className="text-[10px] text-muted-foreground flex-1">Key</span>
-                                <span className="text-[10px] text-muted-foreground flex-1">New value</span>
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    className="text-[10px] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:text-blue-300"
-                                    onClick={() => setAllOverwrites(entry.key, dupes, true)}
-                                  >
-                                    All
-                                  </button>
-                                  <span className="text-border">·</span>
-                                  <button
-                                    className="text-[10px] text-muted-foreground hover:text-foreground"
-                                    onClick={() => setAllOverwrites(entry.key, dupes, false)}
-                                  >
-                                    None
-                                  </button>
-                                </div>
-                              </div>
-
-                              <div className="max-h-72 overflow-y-auto divide-y divide-border/50">
-                                {dupes.slice(0, MAX_PREVIEW_ROWS).map((dotKey) => {
-                                  const newVal = entry.parsedKeys?.[dotKey] ?? ''
-                                  const willOverwrite = selected.has(dotKey)
-                                  return (
-                                    <label
-                                      key={dotKey}
-                                      className="flex items-start gap-3 px-3 py-2 hover:bg-card/40 cursor-pointer"
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        checked={willOverwrite}
-                                        onChange={() => toggleOverwrite(entry.key, dotKey)}
-                                        className="mt-0.5 rounded border-border flex-shrink-0"
-                                      />
-                                      <span className="text-[11px] font-mono text-foreground flex-1 min-w-0 truncate">
-                                        {dotKey}
-                                      </span>
-                                      <span className={[
-                                        'text-[11px] flex-1 min-w-0 truncate',
-                                        willOverwrite ? 'text-muted-foreground' : 'text-muted-foreground line-through',
-                                      ].join(' ')}>
-                                        {newVal}
-                                      </span>
-                                    </label>
-                                  )
-                                })}
-                                {dupes.length > MAX_PREVIEW_ROWS && (
-                                  <div className="px-3 py-2 text-xs text-muted-foreground">
-                                    … and {dupes.length - MAX_PREVIEW_ROWS} more
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      )}
                     </div>
                   )
                 })}
@@ -854,6 +769,11 @@ export function ImportWizard({ project, branchId }: Props) {
               {/* Summary */}
               <div className="text-xs text-muted-foreground text-center space-x-2">
                 <span>{activeFiles.length} of {files.length} file{files.length !== 1 ? 's' : ''} will import</span>
+                <span className="text-border">·</span>
+                <span>
+                  <span className="text-foreground">{totalSelectedKeys}</span>
+                  <span> of {totalPreviewKeys} keys selected</span>
+                </span>
                 {totalDuplicates > 0 && (
                   <>
                     <span className="text-border">·</span>
@@ -942,7 +862,7 @@ export function ImportWizard({ project, branchId }: Props) {
                   variant="outline"
                   size="sm"
                   className="border-border"
-                  onClick={() => { setStep(0); setFiles([]); setResults([]); setOverwriteMap({}); setExpandedPreviewGroups(new Set()) }}
+                  onClick={() => { setStep(0); setFiles([]); setResults([]); setSelectionMap({}); setExpandedPreviewGroups(new Set()) }}
                 >
                   Import More
                 </Button>

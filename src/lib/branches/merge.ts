@@ -1,6 +1,8 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createSnapshot } from '@/lib/versions/snapshot'
 import { fetchBranchTranslations } from '@/lib/branches/fetch'
+import { loadAllPages } from '@/lib/supabase/paginate'
+import type { Json } from '@/types/database'
 
 // A cell identity that survives rename/delete: "key_name::locale_code"
 export type CellKey = string
@@ -48,11 +50,13 @@ async function fetchBranchCells(
   projectId: string,
   branchId: string
 ): Promise<Map<CellKey, Cell>> {
-  const [{ data: keys }, { data: locales }] = await Promise.all([
-    admin.from('translation_keys').select('id, key').eq('project_id', projectId),
+  const [keys, { data: locales }] = await Promise.all([
+    loadAllPages<{ id: string; key: string }>('merge keys', (from, to) =>
+      admin.from('translation_keys').select('id, key').eq('project_id', projectId)
+        .order('id', { ascending: true }).range(from, to)),
     admin.from('locales').select('id, code').eq('project_id', projectId),
   ])
-  const keyName = Object.fromEntries((keys ?? []).map((k) => [k.id, k.key]))
+  const keyName = Object.fromEntries(keys.map((k) => [k.id, k.key]))
   const localeCode = Object.fromEntries((locales ?? []).map((l) => [l.id, l.code]))
 
   const map = new Map<CellKey, Cell>()
@@ -170,15 +174,28 @@ export async function applyMerge(args: {
 
   // 2. Resolve names → ids. Keys are per-branch (M2): use the TARGET branch's
   //    keys, and pull source keys for metadata of any that must be created.
-  const [{ data: targetKeys }, { data: sourceKeys }, { data: locales }] = await Promise.all([
-    admin.from('translation_keys').select('id, key').eq('branch_id', targetBranchId),
-    admin.from('translation_keys')
-      .select('key, description, tags, platforms, char_limit, is_plural, plural_forms')
-      .eq('branch_id', sourceBranchId),
+  type SourceKeyMeta = {
+    key: string
+    description: string | null
+    tags: string[] | null
+    platforms: string[] | null
+    char_limit: number | null
+    is_plural: boolean | null
+    plural_forms: Json | null
+  }
+  const [targetKeys, sourceKeys, { data: locales }] = await Promise.all([
+    loadAllPages<{ id: string; key: string }>('target branch keys', (from, to) =>
+      admin.from('translation_keys').select('id, key').eq('branch_id', targetBranchId)
+        .order('id', { ascending: true }).range(from, to)),
+    loadAllPages<SourceKeyMeta>('source branch keys', (from, to) =>
+      admin.from('translation_keys')
+        .select('key, description, tags, platforms, char_limit, is_plural, plural_forms')
+        .eq('branch_id', sourceBranchId)
+        .order('key', { ascending: true }).range(from, to)),
     admin.from('locales').select('id, code').eq('project_id', projectId),
   ])
-  const keyIdByName: Record<string, string> = Object.fromEntries((targetKeys ?? []).map((k) => [k.key, k.id]))
-  const sourceKeyByName = Object.fromEntries((sourceKeys ?? []).map((k) => [k.key, k]))
+  const keyIdByName: Record<string, string> = Object.fromEntries(targetKeys.map((k) => [k.key, k.id]))
+  const sourceKeyByName = Object.fromEntries(sourceKeys.map((k) => [k.key, k]))
   const localeIdByCode = Object.fromEntries((locales ?? []).map((l) => [l.code, l.id]))
 
   const all = [...auto, ...resolutions]

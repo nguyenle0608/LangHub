@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
+import { LoadingButton } from '@/components/ui/loading-button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
@@ -143,13 +143,15 @@ function LoginPageContent() {
             </p>
           )}
 
-          <Button
+          <LoadingButton
             type="submit"
             className="w-full bg-blue-600 hover:bg-blue-500 text-white"
-            disabled={loading || googleLoading}
+            loading={loading}
+            disabled={googleLoading}
+            loadingText="Signing in..."
           >
-            {loading ? 'Signing in...' : 'Sign in'}
-          </Button>
+            Sign in
+          </LoadingButton>
         </form>
 
         <div className="relative">
@@ -161,23 +163,16 @@ function LoginPageContent() {
           </div>
         </div>
 
-        <Button
+        <LoadingButton
           variant="outline"
           className="w-full bg-background border-input text-foreground hover:bg-accent hover:text-accent-foreground"
           onClick={handleGoogleSignIn}
-          disabled={googleLoading || loading}
+          loading={googleLoading}
+          disabled={loading}
           type="button"
+          loadingText="Connecting..."
         >
-          {googleLoading ? (
-            <span className="flex items-center gap-2">
-              <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              Connecting...
-            </span>
-          ) : (
-            <span className="flex items-center gap-2">
+          <span className="flex items-center gap-2">
               <svg viewBox="0 0 24 24" className="w-4 h-4" aria-hidden="true">
                 <path
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -196,10 +191,9 @@ function LoginPageContent() {
                   fill="#EA4335"
                 />
               </svg>
-              Continue with Google
-            </span>
-          )}
-        </Button>
+            Continue with Google
+          </span>
+        </LoadingButton>
       </CardContent>
       <CardFooter>
         <p className="text-sm text-muted-foreground text-center w-full">

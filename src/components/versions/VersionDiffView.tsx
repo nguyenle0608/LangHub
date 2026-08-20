@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { ArrowLeftRight, ChevronDown, ChevronRight, RotateCcw, Search, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { LoadingButton } from '@/components/ui/loading-button'
 import { Input } from '@/components/ui/input'
 import type { VersionWithStats } from '@/lib/versions/snapshot'
 import type { DiffEntry, DiffType } from '@/lib/versions/diff'
@@ -68,10 +69,8 @@ function RestoreDialog({
   const [scope, setScope] = useState<'all' | 'locale'>('all')
   const [localeCode, setLocaleCode] = useState(locales[0] ?? '')
   const [createBackup, setCreateBackup] = useState(true)
-  const [restoring, setRestoring] = useState(false)
 
   const handleRestore = async () => {
-    setRestoring(true)
     try {
       const resp = await fetch(`/api/versions/${version.id}/restore`, {
         method: 'POST',
@@ -91,8 +90,6 @@ function RestoreDialog({
       onClose()
     } catch {
       toast.error('Network error')
-    } finally {
-      setRestoring(false)
     }
   }
 
@@ -158,9 +155,9 @@ function RestoreDialog({
           <Button type="button" variant="outline" size="sm" className="border-border flex-1" onClick={onClose}>
             Cancel
           </Button>
-          <Button size="sm" className="flex-1" onClick={handleRestore} disabled={restoring}>
-            {restoring ? 'Restoring…' : 'Restore'}
-          </Button>
+          <LoadingButton size="sm" className="flex-1" onClick={handleRestore} loadingText="Restoring…">
+            Restore
+          </LoadingButton>
         </div>
       </div>
     </div>

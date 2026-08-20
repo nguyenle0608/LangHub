@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ArrowLeft, Trash2, UserMinus, UsersRound, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { LoadingButton } from '@/components/ui/loading-button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { OrgMember, OrgWithStats, MemberRole } from '@/types'
@@ -317,15 +318,17 @@ export function OrgSettingsClient({ org, members: initialMembers, currentUserId 
                     onChange={(e) => setDeleteConfirm(e.target.value)}
                     className="bg-muted border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-red-600 max-w-xs"
                   />
-                  <Button
+                  <LoadingButton
                     type="button"
                     onClick={handleDeleteOrg}
-                    disabled={isDeleting || deleteConfirm !== org.name}
+                    loading={isDeleting}
+                    disabled={deleteConfirm !== org.name}
                     className="bg-red-700 hover:bg-red-600 text-white disabled:opacity-40 flex gap-1.5"
+                    loadingText="Deleting…"
                   >
                     <Trash2 className="h-4 w-4" />
-                    {isDeleting ? 'Deleting…' : 'Delete workspace'}
-                  </Button>
+                    Delete workspace
+                  </LoadingButton>
                 </div>
               </div>
             </div>

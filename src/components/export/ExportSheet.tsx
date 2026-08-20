@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Download, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+import { LoadingButton } from '@/components/ui/loading-button'
 import type { ProjectWithStats } from '@/types'
 import { localeFlag } from '@/lib/locale-flag'
 import type { JsonExportStructure } from '@/lib/localization-namespaces'
@@ -42,7 +42,6 @@ export function ExportSheet({ open, project, branchId, onClose }: Props) {
   const [nested, setNested] = useState(true)
   const [jsonStructure, setJsonStructure] = useState<JsonExportStructure>('monolithic')
   const [includeEmpty, setIncludeEmpty] = useState(false)
-  const [exporting, setExporting] = useState(false)
 
   const toggleLocale = (id: string) => {
     setSelectedLocales((prev) => {
@@ -67,7 +66,6 @@ export function ExportSheet({ open, project, branchId, onClose }: Props) {
     : 'translations.zip'
 
   const handleExport = async () => {
-    setExporting(true)
     try {
       const resp = await fetch('/api/export', {
         method: 'POST',
@@ -107,8 +105,6 @@ export function ExportSheet({ open, project, branchId, onClose }: Props) {
       onClose()
     } catch {
       toast.error('Network error')
-    } finally {
-      setExporting(false)
     }
   }
 
@@ -268,14 +264,15 @@ export function ExportSheet({ open, project, branchId, onClose }: Props) {
         </div>
 
         <div className="px-6 py-4 border-t border-border flex-shrink-0">
-          <Button
+          <LoadingButton
             className="w-full gap-2"
             onClick={handleExport}
-            disabled={exporting || selectedLocales.size === 0}
+            disabled={selectedLocales.size === 0}
+            loadingText="Exporting…"
           >
             <Download className="h-4 w-4" />
-            {exporting ? 'Exporting…' : `Export ${previewText}`}
-          </Button>
+            {`Export ${previewText}`}
+          </LoadingButton>
         </div>
       </DialogContent>
     </Dialog>

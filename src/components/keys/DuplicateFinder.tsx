@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, ArrowLeft, GitMerge, Link2, Trash2, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
+import { LoadingButton } from '@/components/ui/loading-button'
 import { Badge } from '@/components/ui/badge'
 import type { DuplicateGroup } from '@/lib/supabase/queries/keys'
 import type { ProjectWithStats } from '@/types'
@@ -37,10 +37,8 @@ export function DuplicateFinder({ project, initialGroups }: Props) {
   )
   const [expanded, setExpanded] = useState<Set<number>>(new Set(initialGroups.map((_, i) => i)))
   const [loading, setLoading] = useState<Record<number, boolean>>({})
-  const [refreshing, setRefreshing] = useState(false)
 
   const refresh = async () => {
-    setRefreshing(true)
     try {
       const resp = await fetch(`/api/duplicates?projectId=${project.id}`)
       const data = await resp.json() as { data?: DuplicateGroup[] }
@@ -62,8 +60,6 @@ export function DuplicateFinder({ project, initialGroups }: Props) {
       setExpanded(new Set(newGroups.map((_, i) => i)))
     } catch {
       toast.error('Failed to refresh')
-    } finally {
-      setRefreshing(false)
     }
   }
 
@@ -129,16 +125,16 @@ export function DuplicateFinder({ project, initialGroups }: Props) {
         <span className="text-border text-sm">/</span>
         <span className="text-sm font-medium text-foreground">Duplicate Keys</span>
         <div className="ml-auto flex items-center gap-2">
-          <Button
+          <LoadingButton
             size="sm"
             variant="outline"
             className="border-border h-7 text-xs gap-1.5"
             onClick={refresh}
-            disabled={refreshing}
+            loadingText="Refresh"
           >
-            <RefreshCw className={['h-3 w-3', refreshing ? 'animate-spin' : ''].join(' ')} />
+            <RefreshCw className="h-3 w-3" />
             Refresh
-          </Button>
+          </LoadingButton>
         </div>
       </div>
 
@@ -292,14 +288,15 @@ export function DuplicateFinder({ project, initialGroups }: Props) {
                     })}
 
                     <div className="flex justify-end pt-1">
-                      <Button
+                      <LoadingButton
                         size="sm"
                         onClick={() => handleMergeGroup(i)}
-                        disabled={loading[i] ?? false}
+                        loading={loading[i] ?? false}
                         className="text-xs h-7"
+                        loadingText="Processing…"
                       >
-                        {loading[i] ? 'Processing…' : 'Resolve Group'}
-                      </Button>
+                        Resolve Group
+                      </LoadingButton>
                     </div>
                   </div>
                 )}

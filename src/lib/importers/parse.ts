@@ -5,12 +5,13 @@ import { parseCSV } from '@/lib/parsers/csv'
 import { parseIOSStrings } from '@/lib/parsers/ios'
 import { parseJSON } from '@/lib/parsers/json'
 import { parseYAML } from '@/lib/parsers/yaml'
+import { isValidTranslationKey, TRANSLATION_KEY_MAX_LENGTH } from '@/lib/translation-keys'
 
 export const IMPORT_FORMATS = ['json', 'arb', 'csv', 'yaml', 'yml', 'android', 'ios'] as const
 export type ImportFormat = typeof IMPORT_FORMATS[number]
 export const MAX_PUBLIC_IMPORT_BYTES = 5 * 1024 * 1024
 export const MAX_IMPORT_KEYS = 5000
-export const MAX_IMPORT_KEY_LENGTH = 200
+export const MAX_IMPORT_KEY_LENGTH = TRANSLATION_KEY_MAX_LENGTH
 export const MAX_IMPORT_VALUE_LENGTH = 100_000
 
 export class ImportValidationError extends Error {
@@ -77,7 +78,7 @@ export function validateImportEntries(entries: Array<{ key: string; value: strin
   if (entries.length === 0) throw new ImportValidationError('No keys found in file')
   if (entries.length > MAX_IMPORT_KEYS) throw new ImportValidationError(`Import exceeds the ${MAX_IMPORT_KEYS} key limit`, 'bounds')
   for (const entry of entries) {
-    if (!entry.key || entry.key.length > MAX_IMPORT_KEY_LENGTH || !/^[a-z0-9_.]+$/.test(entry.key)) {
+    if (!isValidTranslationKey(entry.key)) {
       throw new ImportValidationError(`Invalid translation key: ${entry.key.slice(0, 50)}`, 'bounds')
     }
     if (entry.value.length > MAX_IMPORT_VALUE_LENGTH) {

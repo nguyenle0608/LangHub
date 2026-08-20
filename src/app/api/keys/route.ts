@@ -5,12 +5,13 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createTranslationKey, getTranslationKeys, getTranslationKeysPage } from '@/lib/supabase/queries/translations'
 import { resolveBranchId } from '@/lib/branches/queries'
 import { assertBranchAccess, assertKeysAccess, assertLocalesAccess, assertProjectAccess } from '@/lib/auth/access'
+import { TRANSLATION_KEY_FORMAT_HINT, TRANSLATION_KEY_MAX_LENGTH, TRANSLATION_KEY_PATTERN } from '@/lib/translation-keys'
 
 const PostSchema = z.object({
   projectId: z.string().uuid(),
   branchId: z.string().uuid().optional(),
-  key: z.string().min(1).max(200).regex(/^[a-z0-9_.]+$/, {
-    message: 'Key must be lowercase letters, numbers, dots, and underscores only',
+  key: z.string().min(1).max(TRANSLATION_KEY_MAX_LENGTH).regex(TRANSLATION_KEY_PATTERN, {
+    message: `Key must contain ${TRANSLATION_KEY_FORMAT_HINT.toLowerCase()}`,
   }),
   description: z.string().max(500).optional(),
   tags: z.array(z.string()).optional(),

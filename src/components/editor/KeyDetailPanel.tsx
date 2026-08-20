@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, Info, Tag, Clock, Send, Trash2, Pencil, Check, Monitor, Smartphone, ChevronDown, AlertTriangle, Sparkles, BookPlus } from 'lucide-react'
+import { X, Info, Tag, Clock, Send, Trash2, Pencil, Check, Monitor, Smartphone, ChevronDown, AlertTriangle, Sparkles, BookPlus, Loader2} from 'lucide-react'
 import { toast } from 'sonner'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { LoadingButton } from '@/components/ui/loading-button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { StatusBadge } from './StatusBadge'
@@ -15,12 +15,19 @@ import type { TranslationAssistance } from '@/lib/translation-assistance/types'
 import type { KeyWithTranslations } from '@/lib/supabase/queries/translations'
 import type { LocaleWithStats } from '@/types'
 import { localeFlag } from '@/lib/locale-flag'
+import { TRANSLATION_KEY_FORMAT_HINT, TRANSLATION_KEY_PATTERN } from '@/lib/translation-keys'
 import type { Database } from '@/types/database'
+import { useAsyncAction } from '@/hooks/useAsyncAction'
+import { TagInput } from './TagInput'
+import { displayNameFromEmail } from '@/lib/display-name'
 
 type HistoryRow = Database['public']['Tables']['translation_history']['Row'] & {
   locale: { code: string; name: string }
+  changed_by_email?: string | null
 }
-type CommentRow = Database['public']['Tables']['comments']['Row']
+type CommentRow = Database['public']['Tables']['comments']['Row'] & {
+  user_email?: string | null
+}
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
@@ -526,21 +533,20 @@ function DetailsPane({
   onUpdated,
   onDeleted,
   canEditKeys,
+  allTags,
 }: {
   keyItem: KeyWithTranslations
   userId: string
   onUpdated: (patch: Partial<KeyWithTranslations>) => void
   onDeleted: () => void
   canEditKeys: boolean
+  allTags: string[]
 }) {
   // key meta state
   const [editingKey, setEditingKey] = useState(false)
   const [keyDraft, setKeyDraft] = useState(keyItem.key)
   const [editingDesc, setEditingDesc] = useState(false)
   const [descDraft, setDescDraft] = useState(keyItem.description ?? '')
-  const [tagInput, setTagInput] = useState('')
-  const [savingKey, setSavingKey] = useState(false)
-  const [savingDesc, setSavingDesc] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
@@ -554,7 +560,13 @@ function DetailsPane({
   // history state
   const [history, setHistory] = useState<HistoryRow[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
-  const [historyOpen, setHistoryOpen] = useState(false)
+  const [tab, setTab] = useState<'details' | 'comments' | 'history'>('details')
+  const [deletingComments, setDeletingComments] = useState<Set<string>>(new Set())
+
+  // Held in a ref so the refetch effects don't depend on it: calling it updates
+  // the parent, which hands back a new function, which would re-run the effect.
+  const onUpdatedRef = useRef(onUpdated)
+  onUpdatedRef.current = onUpdated
 
   const loadComments = useCallback(async () => {
     const r = await fetch(`/api/keys/${keyItem.id}/comments`)
@@ -562,20 +574,46 @@ function DetailsPane({
     setComments(d.data ?? [])
   }, [keyItem.id])
 
+  const loadHistory = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/keys/${keyItem.id}/history`)
+      const d = await r.json() as { data?: HistoryRow[] }
+      setHistory(d.data ?? [])
+    } catch {
+      setHistory([])
+    }
+  }, [keyItem.id])
+
+  // Key metadata is not covered by the editor's realtime channel, which carries
+  // translation rows only, so re-read it rather than trusting the parent's copy.
+  const loadKeyMeta = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/keys/${keyItem.id}`)
+      if (!r.ok) return
+      const d = await r.json() as { data?: Partial<KeyWithTranslations> }
+      if (d.data) onUpdatedRef.current(d.data)
+    } catch { /* leave the current copy in place */ }
+  }, [keyItem.id])
+
+  // Comments load up front so the tab badge can show a real count; history and
+  // metadata wait for their tab.
   useEffect(() => {
     setCommentsLoading(true)
     loadComments().finally(() => setCommentsLoading(false))
   }, [loadComments])
 
+  // Re-read whichever tab is open. A dialog can sit open for a long time while
+  // someone else comments, edits the key, or changes a translation.
   useEffect(() => {
-    if (!historyOpen || history.length > 0) return
+    if (tab === 'details') { void loadKeyMeta(); return }
+    if (tab === 'comments') {
+      setCommentsLoading(true)
+      loadComments().finally(() => setCommentsLoading(false))
+      return
+    }
     setHistoryLoading(true)
-    fetch(`/api/keys/${keyItem.id}/history`)
-      .then((r) => r.json())
-      .then((d: { data?: HistoryRow[] }) => setHistory(d.data ?? []))
-      .catch(() => setHistory([]))
-      .finally(() => setHistoryLoading(false))
-  }, [historyOpen, keyItem.id, history.length])
+    loadHistory().finally(() => setHistoryLoading(false))
+  }, [tab, loadComments, loadHistory, loadKeyMeta])
 
   const patchMeta = async (data: object) => {
     const resp = await fetch(`/api/keys/${keyItem.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
@@ -586,20 +624,19 @@ function DetailsPane({
 
   const saveKey = async () => {
     if (!keyDraft.trim() || keyDraft === keyItem.key) { setEditingKey(false); return }
-    if (!/^[a-z0-9_.]+$/.test(keyDraft)) { toast.error('Invalid key format'); return }
-    setSavingKey(true)
+    if (!TRANSLATION_KEY_PATTERN.test(keyDraft)) { toast.error(TRANSLATION_KEY_FORMAT_HINT); return }
     const resp = await fetch(`/api/keys/${keyItem.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: keyDraft }) })
-    setSavingKey(false)
     if (!resp.ok) { toast.error('Failed to rename'); return }
     onUpdated({ key: keyDraft }); setEditingKey(false); toast.success('Key renamed')
   }
 
   const saveDesc = async () => {
-    setSavingDesc(true)
     const ok = await patchMeta({ description: descDraft || '' })
-    setSavingDesc(false)
     if (ok) setEditingDesc(false)
   }
+
+  const renameKey = useAsyncAction(saveKey)
+  const saveDescription = useAsyncAction(saveDesc)
 
   const submitComment = async () => {
     if (!message.trim()) return
@@ -612,6 +649,20 @@ function DetailsPane({
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
     } catch { toast.error('Network error') }
     finally { setSubmitting(false) }
+  }
+
+  const deleteComment = async (commentId: string) => {
+    if (deletingComments.has(commentId)) return
+    setDeletingComments((prev) => new Set(prev).add(commentId))
+    try {
+      const resp = await fetch(`/api/keys/${keyItem.id}/comments?commentId=${commentId}`, { method: 'DELETE' })
+      if (!resp.ok) { toast.error('Failed to delete comment'); return }
+      setComments((prev) => prev.filter((c) => c.id !== commentId))
+    } catch {
+      toast.error('Network error')
+    } finally {
+      setDeletingComments((prev) => { const next = new Set(prev); next.delete(commentId); return next })
+    }
   }
 
   const handleDelete = async () => {
@@ -627,163 +678,212 @@ function DetailsPane({
   }
 
   return (
-    <div className="divide-y divide-border/60">
-      {/* Key metadata */}
-      <Section title="Key" icon={Info}>
-        <div className="space-y-3 text-xs">
-          {/* Key name */}
-          <div>
-            <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
-              <span>Name</span>
-              {canEditKeys && <button onClick={() => { setEditingKey(true); setKeyDraft(keyItem.key) }} className="hover:text-foreground"><Pencil className="h-2.5 w-2.5" /></button>}
-            </div>
-            {editingKey ? (
-              <div className="flex gap-1">
-                <Input value={keyDraft} onChange={(e) => setKeyDraft(e.target.value)} className="font-mono text-xs bg-background border-border h-6 flex-1 px-2" autoFocus onKeyDown={(e) => { if (e.key === 'Enter') void saveKey(); if (e.key === 'Escape') setEditingKey(false) }} />
-                <button onClick={saveKey} disabled={savingKey} className="text-green-400"><Check className="h-3.5 w-3.5" /></button>
-                <button onClick={() => setEditingKey(false)} className="text-muted-foreground"><X className="h-3.5 w-3.5" /></button>
-              </div>
-            ) : (
-              <p className="font-mono text-foreground break-all leading-relaxed">{keyItem.key}</p>
+    <div className="flex h-full min-h-0 flex-col">
+      {/* One scroll region per tab. Everything used to share the panel's single
+          scroll, so a long comment thread pushed the metadata out of reach and
+          History needed its own max-height — a scroll inside a scroll. */}
+      <div role="tablist" aria-label="Key details" className="flex flex-shrink-0 border-b border-border">
+        {([
+          { id: 'details', label: 'Details', count: null },
+          { id: 'comments', label: 'Comments', count: comments.length },
+          { id: 'history', label: 'History', count: null },
+        ] as const).map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.id}
+            onClick={() => setTab(t.id)}
+            className={cn(
+              'flex flex-1 items-center justify-center gap-1 border-b-2 px-2 py-2 text-[11px] font-medium uppercase tracking-wider transition-colors',
+              tab === t.id
+                ? 'border-blue-500 text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
             )}
-          </div>
-
-          {/* Description */}
-          <div>
-            <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
-              <span>Description</span>
-              {canEditKeys && !editingDesc && <button onClick={() => setEditingDesc(true)} className="hover:text-foreground"><Pencil className="h-2.5 w-2.5" /></button>}
-            </div>
-            {editingDesc ? (
-              <div className="space-y-1.5">
-                <textarea value={descDraft} onChange={(e) => setDescDraft(e.target.value)} rows={2} autoFocus className="w-full bg-background border border-border rounded px-2 py-1.5 text-foreground focus:outline-none focus:border-blue-500 resize-none text-xs" />
-                <div className="flex gap-2 justify-end text-[10px]">
-                  <button onClick={() => setEditingDesc(false)} className="text-muted-foreground hover:text-foreground">Cancel</button>
-                  <button onClick={saveDesc} disabled={savingDesc} className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:text-blue-300">Save</button>
-                </div>
-              </div>
-            ) : (
-              <p className="text-muted-foreground leading-relaxed">{keyItem.description || <span className="text-muted-foreground italic">—</span>}</p>
-            )}
-          </div>
-
-          {/* Tags */}
-          <div>
-            <div className="flex items-center gap-1 text-[10px] text-muted-foreground mb-1.5"><Tag className="h-2.5 w-2.5" /> Tags</div>
-            <div className="flex flex-wrap gap-1 mb-1.5">
-              {(keyItem.tags ?? []).map((tag) => (
-                <Badge key={tag} variant="secondary" className="text-[10px] pr-1 gap-1">
-                  {tag}
-                  {canEditKeys && <button onClick={() => void patchMeta({ tags: (keyItem.tags ?? []).filter((t) => t !== tag) })}><X className="h-2 w-2" /></button>}
-                </Badge>
-              ))}
-            </div>
-            {canEditKeys && <Input value={tagInput} onChange={(e) => setTagInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const t = tagInput.trim().toLowerCase(); if (t && !(keyItem.tags ?? []).includes(t)) { void patchMeta({ tags: [...(keyItem.tags ?? []), t] }); setTagInput('') } } }} placeholder="Add tag…" className="text-[11px] h-6 bg-background border-border px-2" />}
-          </div>
-
-          {/* Misc */}
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
-            {keyItem.char_limit && <span>Char limit: <span className="text-muted-foreground">{keyItem.char_limit}</span></span>}
-            {(keyItem.platforms ?? []).length > 0 && (
-              <span className="flex items-center gap-1">
-                {(keyItem.platforms ?? []).map((p) => (
-                  <span key={p} className="flex items-center gap-0.5">
-                    {p === 'iOS' || p === 'Android' ? <Smartphone className="h-2.5 w-2.5" /> : <Monitor className="h-2.5 w-2.5" />}
-                    {p}
-                  </span>
-                ))}
-              </span>
-            )}
-            {keyItem.created_at && (
-              <span className="flex items-center gap-1"><Clock className="h-2.5 w-2.5" />{new Date(keyItem.created_at).toLocaleDateString()}</span>
-            )}
-          </div>
-        </div>
-      </Section>
-
-      {/* Comments */}
-      <Section title="Comments" icon={Send}>
-        {commentsLoading ? (
-          <div className="h-8 rounded bg-muted/50 animate-pulse" />
-        ) : (
-          <div className="space-y-2">
-            {comments.length === 0 && <p className="text-[11px] text-muted-foreground text-center py-2">No comments yet</p>}
-            {comments.map((c) => (
-              <div key={c.id} className="rounded border border-border bg-card/50 px-2.5 py-2 group">
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-[10px] text-muted-foreground">{c.created_at ? timeAgo(c.created_at) : ''}</span>
-                  {c.user_id === userId && (
-                    <button onClick={async () => { const r = await fetch(`/api/keys/${keyItem.id}/comments?commentId=${c.id}`, { method: 'DELETE' }); if (r.ok) setComments((p) => p.filter((x) => x.id !== c.id)) }} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive">
-                      <Trash2 className="h-2.5 w-2.5" />
-                    </button>
-                  )}
-                </div>
-                <p className="text-xs text-foreground leading-relaxed break-words">{c.message}</p>
-              </div>
-            ))}
-            <div ref={bottomRef} />
-            <div className="flex gap-1.5 pt-1">
-              <Input value={message} onChange={(e) => setMessage(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void submitComment() } }} placeholder="Add a comment…" className="text-xs bg-background border-border h-7 flex-1" />
-              <Button size="sm" onClick={submitComment} disabled={submitting || !message.trim()} className="h-7 px-2">
-                <Send className="h-3 w-3" />
-              </Button>
-            </div>
-          </div>
-        )}
-      </Section>
-
-      {/* History */}
-      <div className="border-b border-border/60 last:border-0">
-        <button
-          type="button"
-          className="w-full flex items-center gap-1.5 px-4 py-2.5 hover:bg-muted/30 transition-colors text-left"
-          onClick={() => setHistoryOpen((v) => !v)}
-        >
-          <Clock className="h-3 w-3 text-muted-foreground" />
-          <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground flex-1">History</span>
-          <ChevronDown className={cn('h-3 w-3 text-muted-foreground transition-transform', !historyOpen && '-rotate-90')} />
-        </button>
-        {historyOpen && (
-          <div className="px-4 pb-4 space-y-2 max-h-72 overflow-y-auto">
-            {historyLoading
-              ? [1, 2].map((i) => <div key={i} className="h-12 rounded bg-muted/50 animate-pulse" />)
-              : history.length === 0
-              ? <p className="text-[11px] text-muted-foreground text-center py-2">No history</p>
-              : history.map((h) => (
-                <div key={h.id} className="rounded border border-border bg-card/50 px-2.5 py-2 space-y-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm leading-none">{localeFlag(h.locale.code)}</span>
-                    <span className="text-[10px] font-medium text-muted-foreground uppercase">{h.locale.code}</span>
-                    {h.new_status && <StatusBadge status={h.new_status as 'empty' | 'pending' | 'reviewed' | 'approved'} size="xs" />}
-                    <span className="ml-auto text-[10px] text-muted-foreground">{h.changed_at ? timeAgo(h.changed_at) : ''}</span>
-                  </div>
-                  {h.old_value !== null && (
-                    <p className="text-[10px] text-muted-foreground line-through break-words">{h.old_value || <span className="italic">empty</span>}</p>
-                  )}
-                  <p className="text-[11px] text-foreground break-words whitespace-pre-wrap">{h.new_value || <span className="text-muted-foreground italic">empty</span>}</p>
-                </div>
-              ))
-            }
-          </div>
-        )}
+          >
+            {t.label}
+            {t.count ? <span className="text-[10px] text-muted-foreground">{t.count}</span> : null}
+          </button>
+        ))}
       </div>
 
-      {/* Delete — owner only */}
-      {canEditKeys && (
-        <div className="px-4 py-3">
-          {confirmDelete ? (
-            <div className="space-y-2">
-              <p className="text-xs text-destructive">Delete this key and all its translations?</p>
-              <div className="flex gap-2">
-                <Button size="sm" variant="destructive" className="h-7 text-xs flex-1" onClick={handleDelete} disabled={deleting}>{deleting ? 'Deleting…' : 'Confirm Delete'}</Button>
-                <Button size="sm" variant="outline" className="h-7 text-xs border-border" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+      {tab === 'details' && (
+        <div className="min-h-0 flex-1 overflow-y-auto divide-y divide-border/60">
+        <Section title="Key" icon={Info}>
+          <div className="space-y-3 text-xs">
+            {/* Key name */}
+            <div>
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+                <span>Name</span>
+                {canEditKeys && <button onClick={() => { setEditingKey(true); setKeyDraft(keyItem.key) }} className="hover:text-foreground"><Pencil className="h-2.5 w-2.5" /></button>}
               </div>
+              {editingKey ? (
+                <div className="flex gap-1">
+                  <Input value={keyDraft} onChange={(e) => setKeyDraft(e.target.value)} className="font-mono text-xs bg-background border-border h-6 flex-1 px-2" autoFocus onKeyDown={(e) => { if (e.key === 'Enter') void saveKey(); if (e.key === 'Escape') setEditingKey(false) }} />
+                  <button onClick={renameKey.run} disabled={renameKey.pending} className="text-green-400"><Check className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => setEditingKey(false)} className="text-muted-foreground"><X className="h-3.5 w-3.5" /></button>
+                </div>
+              ) : (
+                <p className="font-mono text-foreground break-all leading-relaxed">{keyItem.key}</p>
+              )}
             </div>
-          ) : (
-            <Button size="sm" className="h-7 text-xs bg-red-600 hover:bg-red-500 text-white w-full" onClick={handleDelete}>
-              <Trash2 className="h-3 w-3 mr-1.5" />Delete Key
-            </Button>
-          )}
+
+            {/* Description */}
+            <div>
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+                <span>Description</span>
+                {canEditKeys && !editingDesc && <button onClick={() => setEditingDesc(true)} className="hover:text-foreground"><Pencil className="h-2.5 w-2.5" /></button>}
+              </div>
+              {editingDesc ? (
+                <div className="space-y-1.5">
+                  <textarea value={descDraft} onChange={(e) => setDescDraft(e.target.value)} rows={2} autoFocus className="w-full bg-background border border-border rounded px-2 py-1.5 text-foreground focus:outline-none focus:border-blue-500 resize-none text-xs" />
+                  <div className="flex gap-2 justify-end text-[10px]">
+                    <button onClick={() => setEditingDesc(false)} className="text-muted-foreground hover:text-foreground">Cancel</button>
+                    <button onClick={saveDescription.run} disabled={saveDescription.pending} className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:text-blue-300">Save</button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-muted-foreground leading-relaxed">{keyItem.description || <span className="text-muted-foreground italic">—</span>}</p>
+              )}
+            </div>
+
+            {/* Tags */}
+            <div>
+              <div className="flex items-center gap-1 text-[10px] text-muted-foreground mb-1.5"><Tag className="h-2.5 w-2.5" /> Tags</div>
+              <TagInput
+                value={keyItem.tags ?? []}
+                suggestions={allTags}
+                disabled={!canEditKeys}
+                // Returned, not voided: TagInput needs the promise to show per-tag pending state.
+                onChange={(next) => patchMeta({ tags: next })}
+              />
+            </div>
+
+            {/* Misc */}
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
+              {keyItem.char_limit && <span>Char limit: <span className="text-muted-foreground">{keyItem.char_limit}</span></span>}
+              {(keyItem.platforms ?? []).length > 0 && (
+                <span className="flex items-center gap-1">
+                  {(keyItem.platforms ?? []).map((p) => (
+                    <span key={p} className="flex items-center gap-0.5">
+                      {p === 'iOS' || p === 'Android' ? <Smartphone className="h-2.5 w-2.5" /> : <Monitor className="h-2.5 w-2.5" />}
+                      {p}
+                    </span>
+                  ))}
+                </span>
+              )}
+              {keyItem.created_at && (
+                <span className="flex items-center gap-1"><Clock className="h-2.5 w-2.5" />{new Date(keyItem.created_at).toLocaleDateString()}</span>
+              )}
+            </div>
+          </div>
+        </Section>
+
+        {/* Comments */}
+        {/* Delete — owner only */}
+        {canEditKeys && (
+          <div className="px-4 py-3">
+            {confirmDelete ? (
+              <div className="space-y-2">
+                <p className="text-xs text-destructive">Delete this key and all its translations?</p>
+                <div className="flex gap-2">
+                  <LoadingButton size="sm" variant="destructive" className="h-7 text-xs flex-1" onClick={handleDelete} loading={deleting} loadingText="Deleting…">Confirm Delete</LoadingButton>
+                  <Button size="sm" variant="outline" className="h-7 text-xs border-border" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+                </div>
+              </div>
+            ) : (
+              <Button size="sm" className="h-7 text-xs bg-red-600 hover:bg-red-500 text-white w-full" onClick={handleDelete}>
+                <Trash2 className="h-3 w-3 mr-1.5" />Delete Key
+              </Button>
+            )}
+          </div>
+        )}
+        </div>
+      )}
+
+      {tab === 'comments' && (
+        <>
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
+            {commentsLoading ? (
+              <div className="h-8 rounded bg-muted/50 animate-pulse" />
+            ) : comments.length === 0 ? (
+              <p className="py-4 text-center text-[11px] text-muted-foreground">No comments yet</p>
+            ) : (
+              comments.map((c) => (
+                <div key={c.id} className="group rounded border border-border bg-card/50 px-2.5 py-2">
+                  <div className="mb-1 flex items-center gap-1.5">
+                    <span className="truncate text-[10px] font-medium text-foreground">
+                      {displayNameFromEmail(c.user_email)}
+                      {c.user_id === userId && <span className="text-muted-foreground"> (you)</span>}
+                    </span>
+                    <span className="ml-auto flex-shrink-0 text-[10px] text-muted-foreground">{c.created_at ? timeAgo(c.created_at) : ''}</span>
+                    {c.user_id === userId && (
+                      <button
+                        onClick={() => void deleteComment(c.id)}
+                        disabled={deletingComments.has(c.id)}
+                        className={cn(
+                          'flex-shrink-0 text-muted-foreground transition-opacity hover:text-destructive',
+                          // Stay visible while deleting: the row only reveals this
+                          // on hover, and the pointer often leaves mid-request.
+                          deletingComments.has(c.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                        )}
+                        aria-label={deletingComments.has(c.id) ? 'Deleting comment' : 'Delete comment'}
+                      >
+                        {deletingComments.has(c.id)
+                          ? <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                          : <Trash2 className="h-2.5 w-2.5" />}
+                      </button>
+                    )}
+                  </div>
+                  <p className="break-words text-xs leading-relaxed text-foreground">{c.message}</p>
+                </div>
+              ))
+            )}
+            <div ref={bottomRef} />
+          </div>
+          {/* Pinned: the composer used to sit below the thread, so posting a
+              comment meant scrolling past every existing one to reach it. */}
+          <div className="flex flex-shrink-0 gap-1.5 border-t border-border p-3">
+            <Input
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void submitComment() } }}
+              placeholder="Add a comment…"
+              className="h-7 flex-1 bg-background text-xs border-border"
+            />
+            <LoadingButton size="sm" onClick={submitComment} loading={submitting} disabled={!message.trim()} className="h-7 px-2" loadingText={null}>
+              <Send className="h-3 w-3" />
+            </LoadingButton>
+          </div>
+        </>
+      )}
+
+      {tab === 'history' && (
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
+          {historyLoading
+            ? [1, 2].map((i) => <div key={i} className="h-12 rounded bg-muted/50 animate-pulse" />)
+            : history.length === 0
+            ? <p className="py-4 text-center text-[11px] text-muted-foreground">No history</p>
+            : history.map((h) => (
+              <div key={h.id} className="space-y-1.5 rounded border border-border bg-card/50 px-2.5 py-2">
+                {/* Who and when on their own line: at 288px these used to share
+                    a row with the locale and status and were unreadable. */}
+                <div className="flex items-center gap-1.5">
+                  <span className="truncate text-[10px] font-medium text-foreground">{displayNameFromEmail(h.changed_by_email)}</span>
+                  <span className="ml-auto flex-shrink-0 text-[10px] text-muted-foreground">{h.changed_at ? timeAgo(h.changed_at) : ''}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm leading-none">{localeFlag(h.locale.code)}</span>
+                  <span className="text-[10px] font-medium uppercase text-muted-foreground">{h.locale.code}</span>
+                  {h.new_status && <StatusBadge status={h.new_status as 'empty' | 'pending' | 'reviewed' | 'approved'} size="xs" />}
+                </div>
+                {h.old_value !== null && (
+                  <p className="break-words text-[10px] text-muted-foreground line-through">{h.old_value || <span className="italic">empty</span>}</p>
+                )}
+                <p className="whitespace-pre-wrap break-words text-[11px] text-foreground">{h.new_value || <span className="italic text-muted-foreground">empty</span>}</p>
+              </div>
+            ))
+          }
         </div>
       )}
     </div>
@@ -800,12 +900,13 @@ interface Props {
   orgId?: string
   canEdit: boolean
   canEditKeys: boolean
+  allTags: string[]
   onClose: () => void
   onKeyUpdated: (patch: Partial<KeyWithTranslations>) => void
   onKeyDeleted: (keyId: string) => void
 }
 
-export function KeyDetailPanel({ keyItem, locales, userId, branchId, orgId, canEdit, canEditKeys, onClose, onKeyUpdated, onKeyDeleted }: Props) {
+export function KeyDetailPanel({ keyItem, locales, userId, branchId, orgId, canEdit, canEditKeys, allTags, onClose, onKeyUpdated, onKeyDeleted }: Props) {
   return (
     <Dialog open={!!keyItem} onOpenChange={(v) => { if (!v) onClose() }}>
       <DialogContent className="max-w-4xl p-0 bg-background border-border flex flex-col max-h-[88vh] [&>button]:hidden">
@@ -838,13 +939,15 @@ export function KeyDetailPanel({ keyItem, locales, userId, branchId, orgId, canE
               </div>
             </div>
 
-            {/* Right: details */}
-            <div className="w-72 flex-shrink-0 overflow-y-auto">
+            {/* Right: details. overflow-hidden, not auto — each tab panel owns
+                its own scroll now, and an outer scroll would nest inside it. */}
+            <div className="flex w-72 flex-shrink-0 flex-col overflow-hidden">
               <DetailsPane
                 key={keyItem.id}
                 keyItem={keyItem}
                 userId={userId}
                 canEditKeys={canEditKeys}
+                allTags={allTags}
                 onUpdated={onKeyUpdated}
                 onDeleted={() => { onClose(); onKeyDeleted(keyItem.id) }}
               />

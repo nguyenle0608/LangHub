@@ -6,6 +6,7 @@ import { GitBranch, Plus, Check, Trash2, Loader2, GitMerge, Settings2 } from 'lu
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { LoadingButton } from '@/components/ui/loading-button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { Branch } from '@/lib/branches/queries'
@@ -37,6 +38,7 @@ export function BranchSwitcher({
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const [busy, setBusy] = useState(false)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   const active = branches.find((b) => b.id === activeBranchId)
 
@@ -72,7 +74,9 @@ export function BranchSwitcher({
 
   async function handleDelete(branch: Branch, e: React.MouseEvent) {
     e.stopPropagation()
-    if (!confirm(`Delete branch "${branch.name}"? This removes its translations and cannot be undone.`)) return
+    // Arm first, delete second — window.confirm() is suppressed by some
+    // browsers, where it returns false and the delete never ran.
+    if (confirmDeleteId !== branch.id) { setConfirmDeleteId(branch.id); return }
     setBusy(true)
     try {
       const res = await fetch('/api/branches', {
@@ -83,6 +87,7 @@ export function BranchSwitcher({
       const json = await res.json() as { error?: string }
       if (!res.ok) { toast.error(json.error ?? 'Failed to delete'); return }
       toast.success(`Deleted "${branch.name}"`)
+      setConfirmDeleteId(null)
       onBranchDeleted(branch.id)
     } catch {
       toast.error('Network error')
@@ -142,10 +147,15 @@ export function BranchSwitcher({
                   <button
                     onClick={(e) => handleDelete(b, e)}
                     disabled={busy}
-                    className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-colors"
-                    title="Delete branch"
+                    className={cn(
+                      'transition-colors',
+                      confirmDeleteId === b.id
+                        ? 'text-destructive font-medium text-[10px]'
+                        : 'opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive'
+                    )}
+                    title={confirmDeleteId === b.id ? `Confirm deleting ${b.name}` : 'Delete branch'}
                   >
-                    <Trash2 className="h-3 w-3" />
+                    {confirmDeleteId === b.id ? 'Confirm?' : <Trash2 className="h-3 w-3" />}
                   </button>
                 )}
               </div>
@@ -169,9 +179,9 @@ export function BranchSwitcher({
                   Forks from <span className="text-muted-foreground">{active?.name ?? 'main'}</span>
                 </p>
                 <div className="flex gap-1.5">
-                  <Button type="submit" size="sm" disabled={busy || !newName.trim()} className="h-6 text-xs flex-1">
-                    {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Create'}
-                  </Button>
+                  <LoadingButton type="submit" size="sm" loading={busy} disabled={!newName.trim()} className="h-6 text-xs flex-1" loadingText={null}>
+                    Create
+                  </LoadingButton>
                   <Button type="button" variant="ghost" size="sm" className="h-6 text-xs" onClick={() => { setCreating(false); setNewName('') }}>
                     Cancel
                   </Button>

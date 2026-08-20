@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
+import { loadAllPages as loadAllPagesShared, type PaginatedQueryError } from '@/lib/supabase/paginate'
 
 type KeyRow = Database['public']['Tables']['translation_keys']['Row']
 type TranslationRow = Database['public']['Tables']['translations']['Row']
@@ -8,8 +9,7 @@ export type ExportKey = Pick<KeyRow, 'id' | 'key' | 'description'>
 export type ExportTranslation = Pick<TranslationRow, 'key_id' | 'locale_id' | 'value' | 'status'>
 export type ExportFilter = 'all' | 'approved' | 'reviewed_approved'
 
-type QueryError = { message: string }
-type PageResult<T> = { data: T[] | null; error: QueryError | null }
+type PageResult<T> = { data: T[] | null; error: PaginatedQueryError | null }
 
 const EXPORT_PAGE_SIZE = 500
 
@@ -25,20 +25,10 @@ export async function loadAllPages<T>(
   loadPage: (from: number, to: number) => PromiseLike<PageResult<T>>,
   pageSize = EXPORT_PAGE_SIZE
 ): Promise<T[]> {
-  const rows: T[] = []
-  let from = 0
-
-  while (true) {
-    const { data, error } = await loadPage(from, from + pageSize - 1)
-    if (error) throw new ExportDataQueryError(resource, error.message)
-
-    const page = data ?? []
-    rows.push(...page)
-    if (page.length < pageSize) break
-    from += pageSize
-  }
-
-  return rows
+  return loadAllPagesShared(resource, loadPage, {
+    pageSize,
+    wrapError: (r, message) => new ExportDataQueryError(r, message),
+  })
 }
 
 export async function fetchExportData(
