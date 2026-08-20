@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, Info, Tag, Clock, Send, Trash2, Pencil, Check, Monitor, Smartphone, ChevronDown, AlertTriangle, Sparkles, BookPlus } from 'lucide-react'
+import { X, Info, Tag, Clock, Send, Trash2, Pencil, Check, Monitor, Smartphone, ChevronDown, AlertTriangle, Sparkles, BookPlus, Loader2} from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { LoadingButton } from '@/components/ui/loading-button'
@@ -561,6 +561,7 @@ function DetailsPane({
   const [history, setHistory] = useState<HistoryRow[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [tab, setTab] = useState<'details' | 'comments' | 'history'>('details')
+  const [deletingComments, setDeletingComments] = useState<Set<string>>(new Set())
 
   const loadComments = useCallback(async () => {
     const r = await fetch(`/api/keys/${keyItem.id}/comments`)
@@ -618,6 +619,20 @@ function DetailsPane({
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
     } catch { toast.error('Network error') }
     finally { setSubmitting(false) }
+  }
+
+  const deleteComment = async (commentId: string) => {
+    if (deletingComments.has(commentId)) return
+    setDeletingComments((prev) => new Set(prev).add(commentId))
+    try {
+      const resp = await fetch(`/api/keys/${keyItem.id}/comments?commentId=${commentId}`, { method: 'DELETE' })
+      if (!resp.ok) { toast.error('Failed to delete comment'); return }
+      setComments((prev) => prev.filter((c) => c.id !== commentId))
+    } catch {
+      toast.error('Network error')
+    } finally {
+      setDeletingComments((prev) => { const next = new Set(prev); next.delete(commentId); return next })
+    }
   }
 
   const handleDelete = async () => {
@@ -774,11 +789,19 @@ function DetailsPane({
                     <span className="ml-auto flex-shrink-0 text-[10px] text-muted-foreground">{c.created_at ? timeAgo(c.created_at) : ''}</span>
                     {c.user_id === userId && (
                       <button
-                        onClick={async () => { const r = await fetch(`/api/keys/${keyItem.id}/comments?commentId=${c.id}`, { method: 'DELETE' }); if (r.ok) setComments((p) => p.filter((x) => x.id !== c.id)) }}
-                        className="flex-shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive"
-                        aria-label="Delete comment"
+                        onClick={() => void deleteComment(c.id)}
+                        disabled={deletingComments.has(c.id)}
+                        className={cn(
+                          'flex-shrink-0 text-muted-foreground transition-opacity hover:text-destructive',
+                          // Stay visible while deleting: the row only reveals this
+                          // on hover, and the pointer often leaves mid-request.
+                          deletingComments.has(c.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                        )}
+                        aria-label={deletingComments.has(c.id) ? 'Deleting comment' : 'Delete comment'}
                       >
-                        <Trash2 className="h-2.5 w-2.5" />
+                        {deletingComments.has(c.id)
+                          ? <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                          : <Trash2 className="h-2.5 w-2.5" />}
                       </button>
                     )}
                   </div>
