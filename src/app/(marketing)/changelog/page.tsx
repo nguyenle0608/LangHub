@@ -22,6 +22,19 @@ const typeStyles: Record<ChangeType, string> = {
 
 const releases: Release[] = [
   {
+    date: 'August 2026',
+    title: 'Import control & the key detail panel',
+    changes: [
+      { type: 'New', text: 'Pick exactly which keys an import brings in — every group in the preview is selectable per key, filterable, and handles catalogs of any size.' },
+      { type: 'New', text: 'Filter the editor by tag, with completion over the tags a project already uses.' },
+      { type: 'New', text: 'Comments and history show who wrote each entry.' },
+      { type: 'Improved', text: 'Key details split into Details, Comments and History tabs, each scrolling on its own, and re-read when you open them.' },
+      { type: 'Fixed', text: 'Imports accept camelCase and kebab-case keys, as i18next and ARB catalogs use.' },
+      { type: 'Fixed', text: 'Projects with more than 1000 keys now branch, snapshot, restore and diff in full.' },
+      { type: 'Fixed', text: 'The logo, the closing call to action, and several editor controls follow the light theme correctly.' },
+    ],
+  },
+  {
     date: 'July 2026',
     title: 'Public site & account management',
     changes: [
