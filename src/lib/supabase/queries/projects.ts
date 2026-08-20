@@ -426,6 +426,34 @@ export async function addLocale(
   return error ? { error: error.message } : { locale: data ? { ...data, is_base: data.is_base ?? false } : undefined }
 }
 
+/**
+ * Change a language's code — `en` to `en-US` once a project starts tracking a
+ * second English, or a code that was simply picked wrong. The name travels with
+ * it, since "English" is the wrong label for a row now reading en-CA.
+ *
+ * Nothing else has to move: translations hang off the locale's id, and every
+ * export filename, flag and Android qualifier is derived from the code at read
+ * time. The one hazard is the unique(project_id, code) constraint, whose raw
+ * message names the constraint rather than the problem.
+ */
+export async function updateLocaleCode(
+  projectId: string, localeId: string, code: string, name?: string
+): Promise<{ locale?: { id: string; code: string; name: string; is_base: boolean }; error?: string }> {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('locales')
+    .update(name ? { code, name } : { code })
+    .eq('id', localeId)
+    .eq('project_id', projectId)
+    .select('id, code, name, is_base')
+    .single()
+
+  if (error) {
+    return { error: error.code === '23505' ? `This project already has ${code}` : error.message }
+  }
+  return { locale: data ? { ...data, is_base: data.is_base ?? false } : undefined }
+}
+
 export async function removeLocale(localeId: string): Promise<{ error?: string }> {
   const admin = createAdminClient()
   const { error } = await admin.from('locales').delete().eq('id', localeId)

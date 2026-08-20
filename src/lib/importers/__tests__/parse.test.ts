@@ -34,3 +34,28 @@ describe('shared import parsing and bounds', () => {
   })
 })
 
+describe('choosing a column of a multi-language sheet', () => {
+  const tsv = 'Key\ten-US\ten-CA\nhome.cta\tColor\tColour\n'
+
+  it('imports the named column, not the one whose code matches the locale', () => {
+    // The locale is en-US but the caller asked for en-CA; guessing from the
+    // code here is exactly how a language gets filled with the wrong text.
+    const parsed = parseImportContent({
+      content: tsv, filename: 'sheet.tsv', format: 'tsv', localeCode: 'en-US', column: 'en-CA',
+    })
+    expect(parsed.entries).toEqual([{ key: 'home.cta', value: 'Colour' }])
+  })
+
+  it('refuses a column the file does not have rather than importing another', () => {
+    expect(() => parseImportContent({
+      content: tsv, filename: 'sheet.tsv', format: 'tsv', column: 'fr-FR',
+    })).toThrow(/fr-FR/)
+  })
+
+  it('still falls back to the locale code when no column is named', () => {
+    const parsed = parseImportContent({
+      content: tsv, filename: 'sheet.tsv', format: 'tsv', localeCode: 'en-CA',
+    })
+    expect(parsed.entries).toEqual([{ key: 'home.cta', value: 'Colour' }])
+  })
+})

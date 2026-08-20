@@ -15,16 +15,25 @@ import {
   type JsonImportStructure,
 } from '@/lib/localization-namespaces'
 import { allKeysOf, applyGroupSelection, computeSkipKeys, countSelected } from '@/lib/importers/selection'
+import { autoMapColumns, suggestedLocaleCode } from '@/lib/importers/delimited-columns'
 import { SelectableKeyList } from './SelectableKeyList'
-import type { ProjectWithStats } from '@/types'
+import type { LocaleWithStats, ProjectWithStats } from '@/types'
 
-type Format = 'json' | 'arb' | 'csv' | 'yaml' | 'android' | 'ios'
+type Format = 'json' | 'arb' | 'csv' | 'tsv' | 'yaml' | 'android' | 'ios'
 
 interface FileEntry {
   key: string
   file: File
   format: Format | null
   localeId: string
+  /**
+   * For CSV/TSV only: which locale column of the sheet this job imports. One
+   * multi-language sheet becomes one entry per column, so everything after
+   * this point — preview, selection, import — works a column at a time and
+   * needs no notion of a file holding several languages.
+   */
+  column?: string
+  columnKeyCount?: number
   keyCount?: number
   newCount?: number
   fillCount?: number
@@ -39,10 +48,19 @@ interface FileEntry {
 
 interface FileResult {
   filename: string
-  created: number
-  updated: number
+  /** Keys that did not exist anywhere in the branch until this job. */
+  keysAdded: number
+  /** Cells that were empty for this language and now hold text. */
+  filled: number
+  /** Cells that already held different text and were replaced. */
+  overwritten: number
   skipped: number
-  total: number
+  /**
+   * What the server counted as written (created + updated). It counts keys, not
+   * translations, so it cannot be broken down — but its total must match ours,
+   * and saying so when it does not beats quietly showing wrong numbers.
+   */
+  serverWritten?: number
   error?: string
 }
 
@@ -51,7 +69,7 @@ interface Props {
   branchId?: string
 }
 
-const FORMAT_LABELS: Record<Format, string> = { json: 'JSON', arb: 'ARB', csv: 'CSV', yaml: 'YAML', android: 'Android XML', ios: 'iOS .strings' }
+const FORMAT_LABELS: Record<Format, string> = { json: 'JSON', arb: 'ARB', csv: 'CSV', tsv: 'TSV', yaml: 'YAML', android: 'Android XML', ios: 'iOS .strings' }
 const STEP_LABELS = ['Upload', 'Configure', 'Preview', 'Import', 'Done']
 
 function detectFormat(filename: string): Format | null {
@@ -59,6 +77,7 @@ function detectFormat(filename: string): Format | null {
   if (ext === 'json') return 'json'
   if (ext === 'arb') return 'arb'
   if (ext === 'csv') return 'csv'
+  if (ext === 'tsv') return 'tsv'
   if (ext === 'yaml' || ext === 'yml') return 'yaml'
   if (ext === 'xml') return 'android'
   if (ext === 'strings') return 'ios'
@@ -79,6 +98,14 @@ function autoDetectLocale(filename: string, locales: ProjectWithStats['locales']
 
 let _counter = 0
 function uid() { return `fe-${++_counter}` }
+
+/**
+ * What to call one import job. A multi-language sheet produces several jobs
+ * from one file, so the filename alone would name them all the same.
+ */
+function entryLabel(entry: { file: File; column?: string }): string {
+  return entry.column ? `${entry.file.name} › ${entry.column}` : entry.file.name
+}
 
 function StepIndicator({ step }: { step: number }) {
   return (
@@ -110,6 +137,9 @@ function StepIndicator({ step }: { step: number }) {
 export function ImportWizard({ project, branchId }: Props) {
   const router = useRouter()
   const [step, setStep] = useState(0)
+  // Starts from the server-rendered project and grows when a language is
+  // created from an unmatched column, without waiting for a page refresh.
+  const [locales, setLocales] = useState(project.locales)
   const [files, setFiles] = useState<FileEntry[]>([])
   const [namespace, setNamespace] = useState('')
   const [jsonImportStructure, setJsonImportStructure] = useState<JsonImportStructure>('monolithic')
@@ -129,18 +159,56 @@ export function ImportWizard({ project, branchId }: Props) {
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  function addFiles(incoming: File[]) {
+  /**
+   * One upload becomes one import job — except a CSV/TSV, which becomes one
+   * job per locale column it actually contains. Expanding here means the rest
+   * of the wizard never has to know that a file can hold several languages.
+   */
+  async function entriesForFile(f: File): Promise<FileEntry[]> {
+    const format = detectFormat(f.name)
+    const base: FileEntry = {
+      key: uid(),
+      file: f,
+      format,
+      localeId: autoDetectLocale(f.name, locales),
+      namespace: deriveNamespaceFromFilename(f.name),
+    }
+    if (format !== 'csv' && format !== 'tsv') return [base]
+
+    const { parseCSV, parseTSV } = await import('@/lib/parsers/csv')
+    const columns = (format === 'tsv' ? parseTSV : parseCSV)(await f.text())
+    // A sheet that would not parse keeps its single row, so the reason shows
+    // up in the preview instead of being swallowed here.
+    if (columns[0]?.errors.length) return [base]
+
+    const filled = columns.filter((c) => c.locale && Object.keys(c.keys).length > 0)
+    if (filled.length === 0) return [base]
+
+    const skipped = columns.length - filled.length
+    if (skipped > 0) {
+      toast.info(`${f.name}: ignored ${skipped} empty column${skipped === 1 ? '' : 's'}`)
+    }
+
+    const mapping = autoMapColumns(filled.map((c) => c.locale ?? ''), locales)
+    return filled.map((column) => ({
+      key: uid(),
+      file: f,
+      format,
+      localeId: mapping[column.locale ?? ''] ?? '',
+      column: column.locale ?? '',
+      columnKeyCount: Object.keys(column.keys).length,
+      namespace: deriveNamespaceFromFilename(f.name),
+    }))
+  }
+
+  async function addFiles(incoming: File[]) {
+    const groups = await Promise.all(incoming.map(entriesForFile))
     setFiles((prev) => {
       const next = [...prev]
-      for (const f of incoming) {
-        if (next.some((e) => e.file.name === f.name)) continue
-        next.push({
-          key: uid(),
-          file: f,
-          format: detectFormat(f.name),
-          localeId: autoDetectLocale(f.name, project.locales),
-          namespace: deriveNamespaceFromFilename(f.name),
-        })
+      for (const group of groups) {
+        const name = group[0]?.file.name
+        if (!name || next.some((e) => e.file.name === name)) continue
+        next.push(...group)
       }
       return next
     })
@@ -149,7 +217,7 @@ export function ImportWizard({ project, branchId }: Props) {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(false)
-    addFiles(Array.from(e.dataTransfer.files))
+    void addFiles(Array.from(e.dataTransfer.files))
   }
 
   function removeFile(key: string) {
@@ -163,6 +231,49 @@ export function ImportWizard({ project, branchId }: Props) {
   function updateAllLocales(localeId: string) {
     if (!localeId) return
     setFiles((prev) => prev.map((entry) => ({ ...entry, localeId })))
+  }
+
+  /**
+   * A sheet column the project has no language for. Creating it here keeps the
+   * upload alive — the alternative is leaving the wizard for project settings
+   * and starting over — and immediately assigns it to the column that asked
+   * for it.
+   */
+  const createLocaleFromColumn = async (entryKey: string, code: string) => {
+    try {
+      // The name has to come from the language list — there is nothing else to
+      // derive "Arabic (United Arab Emirates)" from. When the list cannot be
+      // read the old code fell back to the locale code itself, which is stored
+      // and then shown forever as the language's name; the list serves a
+      // 17-entry offline fallback when its upstream is unreachable, so every
+      // regional code missed and got named after itself.
+      const options = await fetch('/api/locales-list')
+        .then((r) => r.ok ? r.json() as Promise<{ code?: string; name?: string }[]> : [])
+        .catch(() => [] as { code?: string; name?: string }[])
+      const match = Array.isArray(options)
+        ? options.find((o) => o.code?.toLowerCase() === code.toLowerCase())
+        : undefined
+      if (!match?.name) {
+        throw new Error(`Could not look up the name for ${code} — try again, or add it from Manage Languages`)
+      }
+
+      const resp = await fetch(`/api/projects/${project.id}/locales`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, name: match.name }),
+      })
+      const data = await resp.json() as { locale?: LocaleWithStats; error?: unknown }
+      if (!resp.ok || !data.locale) {
+        throw new Error(typeof data.error === 'string' ? data.error : 'Could not add the language')
+      }
+      const added = { ...data.locale, total: 0, approved: 0, percent: 0 }
+      setLocales((prev) => [...prev, added])
+      updateEntry(entryKey, { localeId: added.id })
+      toast.success(`Added ${added.code} — ${added.name}`)
+      router.refresh()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not add the language')
+    }
   }
 
   const computeKeyCounts = useCallback(async (
@@ -186,11 +297,13 @@ export function ImportWizard({ project, branchId }: Props) {
       } else if (format === 'yaml') {
         const { parseYAML } = await import('@/lib/parsers/yaml')
         keys = parseYAML(content).keys
-      } else if (format === 'csv') {
-        const [{ parseCSV }] = await Promise.all([import('@/lib/parsers/csv')])
-        const locale = project.locales.find((l) => l.id === entry.localeId)
-        const csvResults = parseCSV(content)
-        const matching = csvResults.find((r) => r.locale === locale?.code) ?? csvResults[0]
+      } else if (format === 'csv' || format === 'tsv') {
+        const { parseCSV, parseTSV } = await import('@/lib/parsers/csv')
+        const columns = format === 'tsv' ? parseTSV(content) : parseCSV(content)
+        const locale = locales.find((l) => l.id === entry.localeId)
+        const matching = entry.column
+          ? columns.find((r) => r.locale === entry.column)
+          : columns.find((r) => r.locale === locale?.code) ?? columns[0]
         keys = matching?.keys ?? {}
       } else if (format === 'android') {
         const { parseAndroidXML } = await import('@/lib/parsers/android')
@@ -226,7 +339,7 @@ export function ImportWizard({ project, branchId }: Props) {
     }))
 
     return { entries, selMap }
-  }, [files, namespace, jsonImportStructure, project.locales, conflictStrategy])
+  }, [files, namespace, jsonImportStructure, locales, conflictStrategy])
 
   async function handleGoToPreview() {
     try {
@@ -303,19 +416,34 @@ export function ImportWizard({ project, branchId }: Props) {
     // Only send API requests for files that will actually write something
     const filesToProcess = files.filter((e) => selectedCountFor(e) > 0)
     setImportProgress({ current: 0, total: filesToProcess.length, filename: '' })
+    // Keys this run has already created. The preview classified every column
+    // against the state before the import, so for a multi-language sheet every
+    // column believes it is creating the same keys — only the first one does.
+    // Each later column finds them there and fills its own empty cell instead.
+    const keysCreatedThisRun = new Set<string>()
 
     for (let i = 0; i < filesToProcess.length; i++) {
       const entry = filesToProcess[i]!
       const { file, format, localeId } = entry
       if (!format || !localeId) {
-        allResults.push({ filename: file.name, created: 0, updated: 0, skipped: 0, total: 0, error: 'Missing format or locale' })
+        allResults.push({ filename: entryLabel(entry), keysAdded: 0, filled: 0, overwritten: 0, skipped: 0, error: 'Missing format or locale' })
         continue
       }
-      setImportProgress({ current: i + 1, total: filesToProcess.length, filename: file.name })
+      setImportProgress({ current: i + 1, total: filesToProcess.length, filename: entryLabel(entry) })
 
       // Skip anything the user de-selected in the preview, across all three
       // groups — new keys included, so they are never force-imported.
       const skipKeys = computeSkipKeys(entry, selectionMap[entry.key])
+
+      // What this job will do, counted per translation. A column cannot touch
+      // another language's cells, so a key created earlier in this run is an
+      // existing key with an empty cell — a fill, not a creation.
+      const selected = selectionMap[entry.key] ?? new Set<string>()
+      const newHere = (entry.newKeys ?? []).filter((k) => selected.has(k) && !keysCreatedThisRun.has(k))
+      const filled = (entry.fillKeys ?? []).filter((k) => selected.has(k)).length
+        + (entry.newKeys ?? []).filter((k) => selected.has(k) && keysCreatedThisRun.has(k)).length
+      const overwritten = (entry.duplicateKeys ?? []).filter((k) => selected.has(k)).length
+      newHere.forEach((k) => keysCreatedThisRun.add(k))
 
       try {
         const fd = new FormData()
@@ -323,6 +451,7 @@ export function ImportWizard({ project, branchId }: Props) {
         fd.append('projectId', project.id)
         fd.append('localeId', localeId)
         fd.append('format', format)
+        if (entry.column) fd.append('column', entry.column)
         if (branchId) fd.append('branchId', branchId)
         if (format === 'json') fd.append('importStructure', jsonImportStructure)
         if (format === 'json' && jsonImportStructure === 'namespaced') {
@@ -341,21 +470,22 @@ export function ImportWizard({ project, branchId }: Props) {
         }
 
         if (!resp.ok) {
-          allResults.push({ filename: file.name, created: 0, updated: 0, skipped: 0, total: 0, error: data.error ?? 'Import failed' })
-          toast.error(`${file.name}: ${data.error ?? 'Import failed'}`)
+          allResults.push({ filename: entryLabel(entry), keysAdded: 0, filled: 0, overwritten: 0, skipped: 0, error: data.error ?? 'Import failed' })
+          toast.error(`${entryLabel(entry)}: ${data.error ?? 'Import failed'}`)
         } else {
           const d = data.data
           allResults.push({
-            filename: file.name,
-            created: d?.created ?? 0,
-            updated: d?.updated ?? 0,
+            filename: entryLabel(entry),
+            keysAdded: newHere.length,
+            filled,
+            overwritten,
             skipped: d?.skipped ?? 0,
-            total: d?.total ?? 0,
+            serverWritten: (d?.created ?? 0) + (d?.updated ?? 0),
           })
         }
       } catch {
-        allResults.push({ filename: file.name, created: 0, updated: 0, skipped: 0, total: 0, error: 'Network error' })
-        toast.error(`${file.name}: Network error`)
+        allResults.push({ filename: entryLabel(entry), keysAdded: 0, filled: 0, overwritten: 0, skipped: 0, error: 'Network error' })
+        toast.error(`${entryLabel(entry)}: Network error`)
       }
     }
 
@@ -433,19 +563,20 @@ export function ImportWizard({ project, branchId }: Props) {
               >
                 <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-3" />
                 <p className="text-sm text-foreground mb-1">Drop files here or click to browse</p>
-                <p className="text-xs text-muted-foreground">JSON · ARB · CSV · YAML · Android XML · iOS .strings — multiple files supported</p>
+                <p className="text-xs text-muted-foreground">JSON · ARB · CSV · TSV · YAML · Android XML · iOS .strings — multiple files supported</p>
                 <input
                   ref={fileInputRef}
                   type="file"
                   multiple
-                  accept=".json,.arb,.csv,.yaml,.yml,.xml,.strings"
+                  accept=".json,.arb,.csv,.tsv,.yaml,.yml,.xml,.strings"
                   className="hidden"
-                  onChange={(e) => { addFiles(Array.from(e.target.files ?? [])); e.target.value = '' }}
+                  onChange={(e) => { void addFiles(Array.from(e.target.files ?? [])); e.target.value = '' }}
                 />
               </div>
 
               {files.length > 0 && (
                 <>
+                  {!files.some((e) => e.column) && (
                   <div className="flex items-center justify-between gap-3 bg-card/60 border border-border rounded-lg px-3 py-2">
                     <div>
                       <p className="text-xs font-medium text-foreground">Target language for all files</p>
@@ -460,15 +591,26 @@ export function ImportWizard({ project, branchId }: Props) {
                       className="h-7 text-xs bg-muted border border-border rounded px-2 text-foreground min-w-[150px]"
                     >
                       <option value="" disabled>Set all…</option>
-                      {project.locales.map((l) => (
+                      {locales.map((l) => (
                         <option key={l.id} value={l.id}>{l.code} — {l.name}</option>
                       ))}
                     </select>
                   </div>
+                  )}
+
+                  {files.some((e) => e.column) && (
+                    <p className="text-[11px] text-muted-foreground px-1">
+                      This sheet holds several languages. Each column below is imported on its own —
+                      change a language, add a missing one, or remove a column you do not want.
+                    </p>
+                  )}
 
                   <div className="space-y-2">
                     {files.map((entry) => {
                       const localeConflict = uploadDuplicatedLocales.has(entry.localeId)
+                      // A column headed with a real locale code the project
+                      // lacks is worth offering to create; "Notes" is not.
+                      const suggestion = entry.column ? suggestedLocaleCode(entry.column) : null
                       return (
                         <div
                           key={entry.key}
@@ -481,34 +623,60 @@ export function ImportWizard({ project, branchId }: Props) {
                         >
                           <FileText className={['h-4 w-4 flex-shrink-0', localeConflict ? 'text-destructive' : 'text-blue-600 dark:text-blue-400'].join(' ')} />
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs text-foreground font-mono truncate">{entry.file.name}</p>
+                            <p className="text-xs text-foreground font-mono truncate">
+                              {entry.column
+                                ? <>{entry.file.name} <span className="text-muted-foreground">›</span> <span className="font-semibold">{entry.column}</span></>
+                                : entry.file.name}
+                            </p>
                             {localeConflict
-                              ? <p className="text-[10px] text-destructive">Locale already used by another file</p>
-                              : <p className="text-[10px] text-muted-foreground">{(entry.file.size / 1024).toFixed(1)} KB</p>
+                              ? <p className="text-[10px] text-destructive">Locale already used by another column</p>
+                              : entry.column
+                                ? <p className="text-[10px] text-muted-foreground">{entry.columnKeyCount} key{entry.columnKeyCount === 1 ? '' : 's'} in this column</p>
+                                : <p className="text-[10px] text-muted-foreground">{(entry.file.size / 1024).toFixed(1)} KB</p>
                             }
                           </div>
-                          <select
-                            value={entry.format ?? ''}
-                            onChange={(e) => updateEntry(entry.key, { format: (e.target.value as Format) || null })}
-                            className="h-6 text-xs bg-muted border border-border rounded px-1.5 text-foreground"
-                          >
-                            <option value="">Format…</option>
-                            {(['json', 'arb', 'csv', 'yaml', 'android', 'ios'] as const).map((f) => (
-                              <option key={f} value={f}>{FORMAT_LABELS[f]}</option>
-                            ))}
-                          </select>
+                          {entry.column ? (
+                            <span className="h-6 flex items-center text-[10px] text-muted-foreground border border-border rounded px-1.5">
+                              {FORMAT_LABELS[entry.format ?? 'csv']}
+                            </span>
+                          ) : (
+                            <select
+                              value={entry.format ?? ''}
+                              onChange={(e) => updateEntry(entry.key, { format: (e.target.value as Format) || null })}
+                              className="h-6 text-xs bg-muted border border-border rounded px-1.5 text-foreground"
+                            >
+                              <option value="">Format…</option>
+                              {(['json', 'arb', 'csv', 'tsv', 'yaml', 'android', 'ios'] as const).map((f) => (
+                                <option key={f} value={f}>{FORMAT_LABELS[f]}</option>
+                              ))}
+                            </select>
+                          )}
                           <select
                             value={entry.localeId}
                             onChange={(e) => updateEntry(entry.key, { localeId: e.target.value })}
                             className={[
                               'h-6 text-xs bg-muted border rounded px-1.5 max-w-[110px]',
                               localeConflict ? 'border-red-700 text-red-700 dark:text-red-300' : 'border-border text-foreground',
+                              entry.localeId ? '' : 'text-muted-foreground',
                             ].join(' ')}
                           >
-                            {project.locales.map((l) => (
+                            {/* Only offered while nothing is chosen: a column
+                                has to name a language before it can import. */}
+                            {!entry.localeId && <option value="">Choose…</option>}
+                            {locales.map((l) => (
                               <option key={l.id} value={l.id}>{l.code}</option>
                             ))}
                           </select>
+                          {!entry.localeId && suggestion && (
+                            <LoadingButton
+                              size="sm"
+                              variant="outline"
+                              className="h-6 px-2 text-[10px] whitespace-nowrap"
+                              onClick={() => createLocaleFromColumn(entry.key, suggestion)}
+                            >
+                              Add {suggestion}
+                            </LoadingButton>
+                          )}
                           <button
                             onClick={() => removeFile(entry.key)}
                             className="text-muted-foreground hover:text-destructive transition-colors ml-0.5"
@@ -523,7 +691,7 @@ export function ImportWizard({ project, branchId }: Props) {
 
                   {uploadDuplicatedLocales.size > 0 && (
                     <p className="text-xs text-destructive text-center">
-                      Each locale can only be assigned to one file unless JSON namespaced import is selected.
+                      Each language can only be assigned to one file or column unless JSON namespaced import is selected.
                     </p>
                   )}
 
@@ -573,7 +741,7 @@ export function ImportWizard({ project, branchId }: Props) {
                   <div className="space-y-2">
                     {files.filter((e) => e.format === 'json').map((entry) => (
                       <div key={entry.key} className="grid grid-cols-[1fr,160px] gap-2 items-center">
-                        <span className="text-xs font-mono text-muted-foreground truncate">{entry.file.name}</span>
+                        <span className="text-xs font-mono text-muted-foreground truncate">{entryLabel(entry)}</span>
                         <Input
                           value={entry.namespace ?? ''}
                           onChange={(e) => updateEntry(entry.key, { namespace: sanitizeNamespaceSegment(e.target.value) })}
@@ -676,7 +844,7 @@ export function ImportWizard({ project, branchId }: Props) {
               {/* File summary rows */}
               <div className="space-y-3">
                 {files.map((entry) => {
-                  const locale = project.locales.find((l) => l.id === entry.localeId)
+                  const locale = locales.find((l) => l.id === entry.localeId)
                   const newKeys = entry.newKeys ?? []
                   const fillKeys = entry.fillKeys ?? []
                   const dupes = entry.duplicateKeys ?? []
@@ -694,7 +862,7 @@ export function ImportWizard({ project, branchId }: Props) {
                           ? <X className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                           : <Check className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400 flex-shrink-0" />}
                         <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                        <span className="text-xs font-mono text-foreground flex-1 truncate">{entry.file.name}</span>
+                        <span className="text-xs font-mono text-foreground flex-1 truncate">{entryLabel(entry)}</span>
                         <span className="text-[10px] text-muted-foreground border border-border rounded px-1.5 py-0.5">
                           {locale?.code ?? '?'}
                         </span>
@@ -809,7 +977,7 @@ export function ImportWizard({ project, branchId }: Props) {
                   Importing <span className="font-mono text-foreground">{importProgress.filename}</span>
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  File {importProgress.current} of {importProgress.total}
+                  {files.some((e) => e.column) ? 'Column' : 'File'} {importProgress.current} of {importProgress.total}
                 </p>
               </div>
               <div className="max-w-xs mx-auto bg-muted rounded-full h-1.5 overflow-hidden">
@@ -848,9 +1016,19 @@ export function ImportWizard({ project, branchId }: Props) {
                       <span className="text-xs text-destructive">{r.error}</span>
                     ) : (
                       <span className="text-xs text-muted-foreground flex items-center gap-1.5">
-                        {r.created > 0 && <span className="text-emerald-700 dark:text-emerald-400">{r.created} new</span>}
-                        {r.updated > 0 && <span className="text-amber-700 dark:text-amber-400">{r.updated} updated</span>}
+                        {r.keysAdded > 0 && <span className="text-emerald-700 dark:text-emerald-400">{r.keysAdded} keys added</span>}
+                        {r.filled > 0 && <span className="text-emerald-700 dark:text-emerald-400">{r.filled} filled</span>}
+                        {/* The only number here that means something was replaced. */}
+                        {r.overwritten > 0 && <span className="text-amber-700 dark:text-amber-400">{r.overwritten} overwritten</span>}
+                        {r.overwritten === 0 && (r.keysAdded > 0 || r.filled > 0) && (
+                          <span className="text-muted-foreground">nothing overwritten</span>
+                        )}
                         {r.skipped > 0 && <span className="text-muted-foreground">{r.skipped} skipped</span>}
+                        {r.serverWritten !== undefined && r.serverWritten !== r.keysAdded + r.filled + r.overwritten && (
+                          <span className="text-amber-700 dark:text-amber-400" title="These counts were taken before the import ran; the branch changed in between">
+                            server wrote {r.serverWritten}
+                          </span>
+                        )}
                       </span>
                     )}
                   </div>

@@ -3,14 +3,15 @@ import type { Database } from '@/types/database'
 import { splitKeysByNamespace, type JsonExportStructure } from '@/lib/localization-namespaces'
 import { exportAndroidXML } from './android'
 import { exportARB } from './arb'
-import { exportCSV } from './csv'
+import { exportCSV, exportTSV } from './csv'
 import { buildExportLookup, fetchExportData, type ExportFilter } from './data'
 import { exportIOSStrings } from './ios'
 import { exportJSON } from './json'
 import { exportYAML } from './yaml'
 import { exportZIP } from './zip'
+import { localeToAndroidQualifier } from '@/lib/locale-code'
 
-export type ExportFormat = 'json' | 'arb' | 'csv' | 'yaml' | 'android' | 'ios'
+export type ExportFormat = 'json' | 'arb' | 'csv' | 'tsv' | 'yaml' | 'android' | 'ios'
 
 export interface ExportCommand {
   projectId: string
@@ -66,16 +67,20 @@ export async function executeExport(
   const byLocale = buildExportLookup(keys, translations, filter, { includeEmpty, localeIds })
   const descriptions = Object.fromEntries(keys.filter((key) => key.description).map((key) => [key.key, key.description as string]))
 
-  if (format === 'csv') {
+  // Both delimited formats put every locale in one file, so they never produce
+  // a ZIP the way the per-locale formats do.
+  if (format === 'csv' || format === 'tsv') {
     const keyNames = keys.map((key) => key.key)
     const localeCodes = locales.map((locale) => locale.code)
     const values: Record<string, Record<string, string>> = {}
     for (const key of keyNames) {
       values[key] = Object.fromEntries(locales.map((locale) => [locale.code, byLocale.get(locale.id)?.[key] ?? '']))
     }
+    const tab = format === 'tsv'
     return {
-      body: exportCSV(keyNames, localeCodes, values), contentType: 'text/csv',
-      filename: `translations-${localeCodes.map(safeFilenameSegment).join('-')}.csv`,
+      body: tab ? exportTSV(keyNames, localeCodes, values) : exportCSV(keyNames, localeCodes, values),
+      contentType: tab ? 'text/tab-separated-values' : 'text/csv',
+      filename: `translations-${localeCodes.map(safeFilenameSegment).join('-')}.${tab ? 'tsv' : 'csv'}`,
     }
   }
 
@@ -102,7 +107,9 @@ export async function executeExport(
       files.push(...splitKeysByNamespace(localeKeys).map((group) => ({ name: `${safeLocaleCode}/${group.filename}`, content: exportJSON(group.keys, true) })))
     } else if (format === 'json') files.push({ name: `${safeLocaleCode}.json`, content: exportJSON(localeKeys, nested) })
     else if (format === 'arb') files.push({ name: `${safeLocaleCode}.arb`, content: exportARB(localeKeys, locale.code, descriptions) })
-    else if (format === 'android') files.push({ name: `values-${safeLocaleCode}/strings.xml`, content: exportAndroidXML(localeKeys) })
+    // Android writes a region as -r; values-en-US is not a qualifier it
+    // recognises, and the strings in such a folder never load on device.
+    else if (format === 'android') files.push({ name: `values-${safeFilenameSegment(localeToAndroidQualifier(locale.code))}/strings.xml`, content: exportAndroidXML(localeKeys) })
     else if (format === 'ios') files.push({ name: `${safeLocaleCode}.lproj/Localizable.strings`, content: exportIOSStrings(localeKeys) })
     else files.push({ name: `${safeLocaleCode}.yaml`, content: exportYAML(localeKeys) })
   }

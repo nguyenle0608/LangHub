@@ -1,25 +1,16 @@
 import { NextResponse } from 'next/server'
+import { PREFERRED_COUNTRY, formatLocaleLabel } from '@/lib/locale-code'
 
 export interface LocaleOption {
-  code: string        // ISO 639-1 (e.g. "vi") or BCP47 (e.g. "ca")
-  name: string        // English language name
+  code: string        // "vi" (language) or "en-US" (language-region)
+  name: string        // English language name, "English (Canada)" when regional
   nativeName: string  // Native language name
   flag: string        // Flag emoji from country cca2
   country: string     // Representative country name
+  /** True for language-region entries, so the picker can group them. */
+  regional?: boolean
 }
 
-// Preferred country (alpha_2) to use as the "canonical" flag for each language code
-const PREFERRED_COUNTRY: Record<string, string> = {
-  en:'US', fr:'FR', de:'DE', es:'ES', zh:'CN', ja:'JP', ko:'KR', vi:'VN',
-  pt:'BR', ar:'SA', ru:'RU', hi:'IN', it:'IT', nl:'NL', pl:'PL', tr:'TR',
-  sv:'SE', da:'DK', nb:'NO', fi:'FI', cs:'CZ', sk:'SK', ro:'RO', hu:'HU',
-  uk:'UA', el:'GR', th:'TH', id:'ID', ms:'MY', fa:'IR', he:'IL', sw:'TZ',
-  bn:'BD', ta:'LK', te:'IN', ml:'IN', mr:'IN', ur:'PK', pa:'IN', gu:'IN',
-  kn:'IN', am:'ET', ha:'NG', yo:'NG', zu:'ZA', af:'ZA', ka:'GE', hy:'AM',
-  az:'AZ', kk:'KZ', uz:'UZ', mn:'MN', my:'MM', km:'KH', lo:'LA', ne:'NP',
-  si:'LK', ca:'AD', eu:'ES', gl:'ES', cy:'GB', is:'IS', sq:'AL', bs:'BA',
-  sr:'RS', hr:'HR', sl:'SI', bg:'BG', mk:'MK', lv:'LV', lt:'LT', et:'EE',
-}
 
 // Sort order for display: most common languages first
 const PRIORITY = ['en','zh','hi','es','fr','ar','bn','ru','pt','ur','id','de','ja','ko','vi','tr','it','nl','pl','fa','uk','ro','sv','cs','th','ms','da','fi','hu','el','he','nb']
@@ -75,8 +66,11 @@ export async function GET() {
   try {
     const countries = await fetchAllCountries()
 
-    // Deduplicate: iso639_1 → best LocaleOption
+    // One entry per language, plus one per language-region pair. The pairs were
+    // previously computed and thrown away by the dedupe, which is why en-US and
+    // en-CA could not be told apart — or even chosen.
     const localeMap = new Map<string, LocaleOption>()
+    const regionalMap = new Map<string, LocaleOption>()
 
     for (const country of countries) {
       const alpha2 = country.codes.alpha_2
@@ -85,6 +79,18 @@ export async function GET() {
       for (const lang of country.languages ?? []) {
         const code = lang.iso639_1 || lang.bcp47
         if (!code) continue
+
+        const regionalCode = `${code.toLowerCase()}-${alpha2.toUpperCase()}`
+        if (!regionalMap.has(regionalCode)) {
+          regionalMap.set(regionalCode, {
+            code: regionalCode,
+            name: formatLocaleLabel(lang.name, alpha2.toUpperCase(), country.names.common),
+            nativeName: lang.native_name || lang.name,
+            flag: cca2ToFlag(alpha2),
+            country: country.names.common,
+            regional: true,
+          })
+        }
 
         const existing = localeMap.get(code)
         const isPreferred = country.codes.alpha_2 === PREFERRED_COUNTRY[code]
@@ -101,15 +107,22 @@ export async function GET() {
       }
     }
 
-    const all = Array.from(localeMap.values())
-    all.sort((a, b) => {
+    const byPriorityThenName = (a: LocaleOption, b: LocaleOption) => {
       const pa = PRIORITY.indexOf(a.code)
       const pb = PRIORITY.indexOf(b.code)
       if (pa !== -1 && pb !== -1) return pa - pb
       if (pa !== -1) return -1
       if (pb !== -1) return 1
       return a.name.localeCompare(b.name)
-    })
+    }
+
+    // Plain languages stay at the top so the common case is unchanged; the
+    // regional variants follow and are reached by searching.
+    const languages = Array.from(localeMap.values()).sort(byPriorityThenName)
+    const regional = Array.from(regionalMap.values())
+      .filter((option) => !localeMap.has(option.code))
+      .sort((a, b) => a.name.localeCompare(b.name))
+    const all = [...languages, ...regional]
 
     return NextResponse.json(all, {
       headers: { 'Cache-Control': 'public, max-age=86400, stale-while-revalidate=3600' },

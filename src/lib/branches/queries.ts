@@ -1,8 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { createSnapshot } from '@/lib/versions/snapshot'
-import { fetchBranchTranslations } from '@/lib/branches/fetch'
-import { loadAllPages } from '@/lib/supabase/paginate'
 import type { ProjectWithStats } from '@/types'
 import type { Database, Json } from '@/types/database'
 
@@ -196,25 +194,30 @@ export async function createBranch(args: {
   const trimmed = name.trim()
   if (!trimmed) return { error: 'Branch name is required' }
 
-  // Insert the branch row first
-  const { data: branch, error: insErr } = await admin
-    .from('branches')
-    .insert({
-      project_id: projectId,
-      name: trimmed,
-      parent_branch_id: sourceBranchId,
-      is_default: false,
-      created_by: userId,
-    })
-    .select('*')
-    .single()
+  // The branch row and both copies happen inside fork_branch, as two set-based
+  // inserts in one transaction. Doing it from here meant paging every key and
+  // translation into Node and writing them back in batches — ~12.9s for a
+  // 1191-key branch, nearly all of it round trips, and past the function
+  // timeout on a deploy. It also could not be atomic: a failure partway left a
+  // branch that looked complete but was missing keys.
+  const { data: branch, error } = await admin.rpc('fork_branch', {
+    p_project_id: projectId,
+    p_source_branch_id: sourceBranchId,
+    p_name: trimmed,
+    p_actor_user_id: userId,
+  })
 
-  if (insErr || !branch) {
-    const dup = insErr?.code === '23505'
-    return { error: dup ? `Branch "${trimmed}" already exists` : (insErr?.message ?? 'Failed to create branch') }
+  if (error || !branch) {
+    // The function raises with a message written for the user — a duplicate
+    // name, an unauthorized actor — so pass it through rather than flattening
+    // everything to one string.
+    return { error: error?.message ?? 'Failed to create branch' }
   }
 
-  // Snapshot the source branch as the merge base (fork point)
+  // Snapshot the source branch as the merge base (fork point). Kept outside the
+  // transaction: it reads the source, not the new branch, so it cannot be made
+  // inconsistent by running after, and a snapshot failure should not undo a
+  // fork that is otherwise complete.
   const base = await createSnapshot(projectId, userId, {
     name: `Fork base: ${trimmed}`,
     tag: 'branch_base',
@@ -223,90 +226,6 @@ export async function createBranch(args: {
   if (!('error' in base)) {
     await admin.from('branches').update({ base_snapshot_id: base.id }).eq('id', branch.id)
     branch.base_snapshot_id = base.id
-  }
-
-  // A half-copied fork is worse than none: the branch would look real but be
-  // missing keys, so undo the branch row rather than leave that behind.
-  const abandon = async (message: string): Promise<{ error: string }> => {
-    await admin.from('branches').delete().eq('id', branch.id)
-    return { error: message }
-  }
-
-  // Copy the source branch's KEYS into the new branch (M2: keys are per-branch),
-  // building an old→new key id map so translations can be remapped.
-  // Paginated: an unpaged select stops at 1000 rows, which forked a 1191-key
-  // branch as 1000 keys with no error.
-  type SourceKey = {
-    id: string
-    key: string
-    description: string | null
-    tags: string[] | null
-    platforms: string[] | null
-    char_limit: number | null
-    is_plural: boolean | null
-    plural_forms: Json | null
-  }
-  let srcKeys: SourceKey[]
-  try {
-    srcKeys = await loadAllPages<SourceKey>('source branch keys', (from, to) =>
-      admin
-        .from('translation_keys')
-        .select('id, key, description, tags, platforms, char_limit, is_plural, plural_forms')
-        .eq('branch_id', sourceBranchId)
-        .order('id', { ascending: true })
-        .range(from, to)
-    )
-  } catch (error) {
-    return abandon(error instanceof Error ? error.message : 'Failed to read source branch keys')
-  }
-
-  const newKeyIdByOld = new Map<string, string>()
-  for (let i = 0; i < srcKeys.length; i += 200) {
-    const chunk = srcKeys.slice(i, i + 200)
-    const { data: inserted, error: keyErr } = await admin
-      .from('translation_keys')
-      .insert(chunk.map((k) => ({
-        project_id: projectId,
-        branch_id: branch.id,
-        key: k.key,
-        description: k.description,
-        tags: k.tags,
-        platforms: k.platforms,
-        char_limit: k.char_limit,
-        is_plural: k.is_plural,
-        plural_forms: k.plural_forms,
-        created_by: userId,
-      })))
-      .select('id, key')
-    if (keyErr) return abandon(`Failed to copy branch keys: ${keyErr.message}`)
-    // Map by key name (stable within a branch)
-    const newIdByName = Object.fromEntries((inserted ?? []).map((r) => [r.key, r.id]))
-    for (const k of chunk) {
-      const newId = newIdByName[k.key]
-      if (newId) newKeyIdByOld.set(k.id, newId)
-    }
-  }
-
-  // Copy the source branch's translation rows, remapping key_id to the new keys.
-  // Paginated for the same reason — this table holds one row per key per locale,
-  // so it passes 1000 rows well before the key list does.
-  let srcRows
-  try {
-    srcRows = await fetchBranchTranslations(admin, sourceBranchId, { throwOnError: true })
-  } catch (error) {
-    return abandon(error instanceof Error ? error.message : 'Failed to read source branch translations')
-  }
-
-  const copies = srcRows
-    .map((r) => {
-      const newKeyId = r.key_id ? newKeyIdByOld.get(r.key_id) : undefined
-      if (!newKeyId) return null
-      return { branch_id: branch.id, key_id: newKeyId, locale_id: r.locale_id, value: r.value, status: r.status }
-    })
-    .filter((r): r is NonNullable<typeof r> => r !== null)
-  for (let i = 0; i < copies.length; i += 500) {
-    const { error: rowErr } = await admin.from('translations').insert(copies.slice(i, i + 500))
-    if (rowErr) return abandon(`Failed to copy branch translations: ${rowErr.message}`)
   }
 
   return branch
