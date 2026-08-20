@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.15"
   }
   graphql_public: {
     Tables: {
@@ -991,6 +991,31 @@ export type Database = {
           scope: string
           token_prefix: string
         }[]
+      }
+      fork_branch: {
+        Args: {
+          p_actor_user_id: string
+          p_name: string
+          p_project_id: string
+          p_source_branch_id: string
+        }
+        Returns: {
+          base_snapshot_id: string | null
+          created_at: string | null
+          created_by: string | null
+          id: string
+          is_default: boolean | null
+          is_locked: boolean | null
+          name: string
+          parent_branch_id: string | null
+          project_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "branches"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       get_branches_bootstrap: {
         Args: { p_project_id: string }

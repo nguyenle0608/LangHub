@@ -13,8 +13,8 @@ export type BranchTranslation = {
  *
  * Scoping by `branch_id` (instead of `.in('key_id', [...hundreds])`) avoids
  * PostgREST "Bad Request" from over-long URLs, and `.range()` pagination
- * bypasses the 1000-row default cap. Works with either the user-scoped or
- * admin Supabase client.
+ * bypasses the 1000-row default cap. Ordered by primary key so the pages do
+ * not overlap. Works with either the user-scoped or admin Supabase client.
  */
 export async function fetchBranchTranslations(
   client: SupabaseClient<Database>,
@@ -29,6 +29,11 @@ export async function fetchBranchTranslations(
       .from('translations')
       .select('key_id, locale_id, value, status')
       .eq('branch_id', branchId)
+      // Ordering is what makes the paging deterministic. Without it Postgres is
+      // free to return rows in any order per page, so pages could overlap or
+      // skip — which surfaced as a duplicate (key_id, locale_id) pair crashing
+      // a snapshot insert once a fork had changed the table's layout.
+      .order('id', { ascending: true })
       .range(from, from + PAGE - 1)
     if (error) {
       if (options.throwOnError) throw new Error(`Failed to load branch translations: ${error.message}`)
