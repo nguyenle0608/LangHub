@@ -563,27 +563,57 @@ function DetailsPane({
   const [tab, setTab] = useState<'details' | 'comments' | 'history'>('details')
   const [deletingComments, setDeletingComments] = useState<Set<string>>(new Set())
 
+  // Held in a ref so the refetch effects don't depend on it: calling it updates
+  // the parent, which hands back a new function, which would re-run the effect.
+  const onUpdatedRef = useRef(onUpdated)
+  onUpdatedRef.current = onUpdated
+
   const loadComments = useCallback(async () => {
     const r = await fetch(`/api/keys/${keyItem.id}/comments`)
     const d = await r.json() as { data?: CommentRow[] }
     setComments(d.data ?? [])
   }, [keyItem.id])
 
+  const loadHistory = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/keys/${keyItem.id}/history`)
+      const d = await r.json() as { data?: HistoryRow[] }
+      setHistory(d.data ?? [])
+    } catch {
+      setHistory([])
+    }
+  }, [keyItem.id])
+
+  // Key metadata is not covered by the editor's realtime channel, which carries
+  // translation rows only, so re-read it rather than trusting the parent's copy.
+  const loadKeyMeta = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/keys/${keyItem.id}`)
+      if (!r.ok) return
+      const d = await r.json() as { data?: Partial<KeyWithTranslations> }
+      if (d.data) onUpdatedRef.current(d.data)
+    } catch { /* leave the current copy in place */ }
+  }, [keyItem.id])
+
+  // Comments load up front so the tab badge can show a real count; history and
+  // metadata wait for their tab.
   useEffect(() => {
     setCommentsLoading(true)
     loadComments().finally(() => setCommentsLoading(false))
   }, [loadComments])
 
-  // Still lazy: history can be 100 rows and most visits never open the tab.
+  // Re-read whichever tab is open. A dialog can sit open for a long time while
+  // someone else comments, edits the key, or changes a translation.
   useEffect(() => {
-    if (tab !== 'history' || history.length > 0) return
+    if (tab === 'details') { void loadKeyMeta(); return }
+    if (tab === 'comments') {
+      setCommentsLoading(true)
+      loadComments().finally(() => setCommentsLoading(false))
+      return
+    }
     setHistoryLoading(true)
-    fetch(`/api/keys/${keyItem.id}/history`)
-      .then((r) => r.json())
-      .then((d: { data?: HistoryRow[] }) => setHistory(d.data ?? []))
-      .catch(() => setHistory([]))
-      .finally(() => setHistoryLoading(false))
-  }, [tab, keyItem.id, history.length])
+    loadHistory().finally(() => setHistoryLoading(false))
+  }, [tab, loadComments, loadHistory, loadKeyMeta])
 
   const patchMeta = async (data: object) => {
     const resp = await fetch(`/api/keys/${keyItem.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
