@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { parseCSV } from '../csv'
+import { parseCSV, parseTSV } from '../csv'
 
 const TAB = '\t'
 const tsv = (rows: string[][]) => rows.map((r) => r.join(TAB)).join('\n')
+const csv = (rows: string[][]) => rows.map((r) => r.join(',')).join('\n')
 
-describe('parseCSV — delimited tables', () => {
+// CSV and TSV are separate formats; the caller says which, nothing is sniffed.
+describe.each([
+  { name: 'parseTSV', parse: parseTSV, table: tsv },
+  { name: 'parseCSV', parse: parseCSV, table: csv },
+])('$name', ({ parse, table }) => {
   it('returns one result per locale column', () => {
-    const results = parseCSV(tsv([
+    const results = parse(table([
       ['Key', 'en-US', 'vi-VN', 'ja-JP'],
       ['app.title', 'Title', 'Tiêu đề', 'タイトル'],
     ]))
@@ -17,32 +22,8 @@ describe('parseCSV — delimited tables', () => {
     expect(results[2]!.keys).toEqual({ 'app.title': 'タイトル' })
   })
 
-  // A bare double quote is ordinary copy. Papa's default quoting read it as an
-  // opening quote and desynchronised for the rest of the file.
-  it('treats a double quote in a tab-separated field as text', () => {
-    const results = parseCSV(tsv([
-      ['Key', 'en-US'],
-      ['hint.reason', 'Please enter the reason if you choose "Other"'],
-      ['hint.after', 'This row must survive the one above'],
-    ]))
-
-    expect(results[0]!.keys).toEqual({
-      'hint.reason': 'Please enter the reason if you choose "Other"',
-      'hint.after': 'This row must survive the one above',
-    })
-    expect(results[0]!.errors).toEqual([])
-  })
-
-  it('still honours quoting in comma-separated files, where it is meaningful', () => {
-    const results = parseCSV('Key,en-US\napp.list,"one, two, three"\n')
-    expect(results[0]!.keys).toEqual({ 'app.list': 'one, two, three' })
-  })
-
   it('accepts a first column that is not called Key, and says so', () => {
-    const results = parseCSV(tsv([
-      ['Lang', 'en-US'],
-      ['app.title', 'Title'],
-    ]))
+    const results = parse(table([['Lang', 'en-US'], ['app.title', 'Title']]))
 
     expect(results[0]!.errors).toEqual([])
     expect(results[0]!.keys).toEqual({ 'app.title': 'Title' })
@@ -50,7 +31,7 @@ describe('parseCSV — delimited tables', () => {
   })
 
   it('omits a key from a locale that has no value for it', () => {
-    const results = parseCSV(tsv([
+    const results = parse(table([
       ['Key', 'en-US', 'vi-VN'],
       ['only.english', 'Hello', ''],
     ]))
@@ -60,7 +41,7 @@ describe('parseCSV — delimited tables', () => {
   })
 
   it('reports rows with no key rather than importing them blank', () => {
-    const results = parseCSV(tsv([
+    const results = parse(table([
       ['Key', 'en-US'],
       ['', 'orphan value'],
       ['app.title', 'Title'],
@@ -71,7 +52,39 @@ describe('parseCSV — delimited tables', () => {
   })
 
   it('errors when there is nothing after the key column', () => {
-    const results = parseCSV('Key\napp.title\n')
+    const results = parse(table([['Key'], ['app.title']]))
     expect(results[0]!.errors[0]).toContain('No locale columns')
+  })
+})
+
+describe('format-specific quoting', () => {
+  // A bare quote is ordinary copy in a TSV; Papa's default reading of it as an
+  // opening quote cost 41 of 690 rows on a real export.
+  it('TSV treats a double quote as text', () => {
+    const results = parseTSV(tsv([
+      ['Key', 'en-US'],
+      ['hint.reason', 'Please enter the reason if you choose "Other"'],
+      ['hint.after', 'This row must survive the one above'],
+    ]))
+
+    expect(results[0]!.keys).toEqual({
+      'hint.reason': 'Please enter the reason if you choose "Other"',
+      'hint.after': 'This row must survive the one above',
+    })
+  })
+
+  it('TSV keeps a comma as text — it is not a delimiter here', () => {
+    const results = parseTSV(tsv([['Key', 'en-US'], ['app.list', 'one, two, three']]))
+    expect(results[0]!.keys).toEqual({ 'app.list': 'one, two, three' })
+  })
+
+  it('CSV honours quoting, where a comma inside a value needs it', () => {
+    const results = parseCSV('Key,en-US\napp.list,"one, two, three"\n')
+    expect(results[0]!.keys).toEqual({ 'app.list': 'one, two, three' })
+  })
+
+  it('CSV keeps a tab as text — it is not a delimiter here', () => {
+    const results = parseCSV('Key,en-US\napp.indent,a\tb\n')
+    expect(results[0]!.keys).toEqual({ 'app.indent': 'a\tb' })
   })
 })

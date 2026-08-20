@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
   if (!branchAccess.ok || !localeAccess.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   let localeCode: string | undefined
-  if (format === 'csv') {
+  if (format === 'csv' || format === 'tsv') {
     const admin = createAdminClient()
     const { data: locale } = await admin.from('locales').select('code').eq('id', localeId).single()
     if (!locale) return NextResponse.json({ error: 'Locale not found' }, { status: 400 })

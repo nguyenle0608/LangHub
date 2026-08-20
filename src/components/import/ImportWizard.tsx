@@ -18,7 +18,7 @@ import { allKeysOf, applyGroupSelection, computeSkipKeys, countSelected } from '
 import { SelectableKeyList } from './SelectableKeyList'
 import type { ProjectWithStats } from '@/types'
 
-type Format = 'json' | 'arb' | 'csv' | 'yaml' | 'android' | 'ios'
+type Format = 'json' | 'arb' | 'csv' | 'tsv' | 'yaml' | 'android' | 'ios'
 
 interface FileEntry {
   key: string
@@ -51,7 +51,7 @@ interface Props {
   branchId?: string
 }
 
-const FORMAT_LABELS: Record<Format, string> = { json: 'JSON', arb: 'ARB', csv: 'CSV', yaml: 'YAML', android: 'Android XML', ios: 'iOS .strings' }
+const FORMAT_LABELS: Record<Format, string> = { json: 'JSON', arb: 'ARB', csv: 'CSV', tsv: 'TSV', yaml: 'YAML', android: 'Android XML', ios: 'iOS .strings' }
 const STEP_LABELS = ['Upload', 'Configure', 'Preview', 'Import', 'Done']
 
 function detectFormat(filename: string): Format | null {
@@ -59,6 +59,7 @@ function detectFormat(filename: string): Format | null {
   if (ext === 'json') return 'json'
   if (ext === 'arb') return 'arb'
   if (ext === 'csv') return 'csv'
+  if (ext === 'tsv') return 'tsv'
   if (ext === 'yaml' || ext === 'yml') return 'yaml'
   if (ext === 'xml') return 'android'
   if (ext === 'strings') return 'ios'
@@ -186,11 +187,11 @@ export function ImportWizard({ project, branchId }: Props) {
       } else if (format === 'yaml') {
         const { parseYAML } = await import('@/lib/parsers/yaml')
         keys = parseYAML(content).keys
-      } else if (format === 'csv') {
-        const [{ parseCSV }] = await Promise.all([import('@/lib/parsers/csv')])
+      } else if (format === 'csv' || format === 'tsv') {
+        const { parseCSV, parseTSV } = await import('@/lib/parsers/csv')
         const locale = project.locales.find((l) => l.id === entry.localeId)
-        const csvResults = parseCSV(content)
-        const matching = csvResults.find((r) => r.locale === locale?.code) ?? csvResults[0]
+        const columns = format === 'tsv' ? parseTSV(content) : parseCSV(content)
+        const matching = columns.find((r) => r.locale === locale?.code) ?? columns[0]
         keys = matching?.keys ?? {}
       } else if (format === 'android') {
         const { parseAndroidXML } = await import('@/lib/parsers/android')
@@ -438,7 +439,7 @@ export function ImportWizard({ project, branchId }: Props) {
                   ref={fileInputRef}
                   type="file"
                   multiple
-                  accept=".json,.arb,.csv,.yaml,.yml,.xml,.strings"
+                  accept=".json,.arb,.csv,.tsv,.yaml,.yml,.xml,.strings"
                   className="hidden"
                   onChange={(e) => { addFiles(Array.from(e.target.files ?? [])); e.target.value = '' }}
                 />
@@ -493,7 +494,7 @@ export function ImportWizard({ project, branchId }: Props) {
                             className="h-6 text-xs bg-muted border border-border rounded px-1.5 text-foreground"
                           >
                             <option value="">Format…</option>
-                            {(['json', 'arb', 'csv', 'yaml', 'android', 'ios'] as const).map((f) => (
+                            {(['json', 'arb', 'csv', 'tsv', 'yaml', 'android', 'ios'] as const).map((f) => (
                               <option key={f} value={f}>{FORMAT_LABELS[f]}</option>
                             ))}
                           </select>

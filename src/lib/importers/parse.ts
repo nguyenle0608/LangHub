@@ -1,13 +1,13 @@
 import { deriveNamespaceFromFilename, prefixKeysWithNamespace, sanitizeNamespaceSegment, type JsonImportStructure } from '@/lib/localization-namespaces'
 import { parseAndroidXML } from '@/lib/parsers/android'
 import { parseARB } from '@/lib/parsers/arb'
-import { parseCSV } from '@/lib/parsers/csv'
+import { parseCSV, parseTSV } from '@/lib/parsers/csv'
 import { parseIOSStrings } from '@/lib/parsers/ios'
 import { parseJSON } from '@/lib/parsers/json'
 import { parseYAML } from '@/lib/parsers/yaml'
 import { isValidTranslationKey, TRANSLATION_KEY_MAX_LENGTH } from '@/lib/translation-keys'
 
-export const IMPORT_FORMATS = ['json', 'arb', 'csv', 'yaml', 'yml', 'android', 'ios'] as const
+export const IMPORT_FORMATS = ['json', 'arb', 'csv', 'tsv', 'yaml', 'yml', 'android', 'ios'] as const
 export type ImportFormat = typeof IMPORT_FORMATS[number]
 export const MAX_PUBLIC_IMPORT_BYTES = 5 * 1024 * 1024
 export const MAX_IMPORT_KEYS = 5000
@@ -51,9 +51,9 @@ export function parseImportContent(input: {
   else if (format === 'android') result = parseAndroidXML(content)
   else if (format === 'ios') result = parseIOSStrings(content)
   else {
-    const results = parseCSV(content)
+    const results = format === 'tsv' ? parseTSV(content) : parseCSV(content)
     result = results.find((candidate) => candidate.locale === input.localeCode) ?? results[0]
-    if (!result) throw new ImportValidationError('No matching locale found in CSV')
+    if (!result) throw new ImportValidationError('No matching locale found in the file')
   }
   if (result.errors.length) throw new ImportValidationError(result.errors[0] ?? 'Invalid import file', 'format')
 

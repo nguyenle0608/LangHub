@@ -2,26 +2,75 @@
  * A reader for tab-separated exports.
  *
  * Papa is kept for CSV, where RFC 4180 quoting is what spreadsheets emit. Real
- * TSV exports are not RFC 4180, and this one contains three habits at once:
+ * TSV exports are not RFC 4180, and one real file contained three habits at
+ * once:
  *
  *   choose "Other"                     a quote that is ordinary text
- *   "Şu anda kupon kullanılamıyor.     a quote opening a value that runs on
+ *   "Şu anda kupon kullanılamıyor.     a quote opening a value that never closes
  *   ...soon.<NEWLINE>សូមត្រលប់...      a newline inside a value, not quoted at all
  *
- * Quote-aware parsing handles the second and is defeated by the other two: the
- * bare quote desynchronises it (41 rows lost on this file) and an unterminated
- * opening quote swallows every row after it. Since an unquoted newline is
- * indistinguishable from the end of a row, no quoting rule can be complete
- * here anyway.
+ * Fully quote-aware parsing handles none of them well: the bare quote
+ * desynchronises it (41 of 690 rows lost), and the unterminated quote swallows
+ * every row after it while hunting for a close.
  *
- * So quotes are never structural: a row is a line, a cell is a tab-separated
- * span, and a quote is a character. What recovers the split values instead is
- * the column count, which the header fixes — a row with too few cells can only
- * be a continuation of the one above. Quotes wrapping a whole value are
- * stripped afterwards, once the value is whole again.
+ * Two rules cover all of it without either failure mode:
+ *
+ *  1. A quote is structural only when it opens a cell *and closes on the same
+ *     line*. That is enough to carry a tab inside a value — which is what our
+ *     own export needs — and it cannot run away, because the search never
+ *     leaves the line.
+ *  2. A value broken over several lines is put back by counting columns. The
+ *     header fixes the width, so a row with too few cells can only continue the
+ *     one above. This needs no quoting at all, which is why it also recovers
+ *     values that were never quoted.
  */
 
 const TAB = '\t'
+const QUOTE = '"'
+
+/**
+ * Split one line into cells, honouring a quoted cell that closes on this line.
+ * An unclosed quote is treated as text: fold + unwrap deal with it later.
+ */
+function splitLine(line: string): string[] {
+  if (!line.includes(QUOTE)) return line.split(TAB)
+
+  const cells: string[] = []
+  let cell = ''
+  let index = 0
+
+  while (index < line.length) {
+    if (line[index] === QUOTE && cell === '') {
+      const close = findClosingQuote(line, index)
+      if (close !== -1) {
+        cell = line.slice(index + 1, close).replace(/""/g, QUOTE)
+        index = close + 1
+        // Anything trailing before the delimiter is malformed; keep it.
+        while (index < line.length && line[index] !== TAB) { cell += line[index]; index++ }
+        continue
+      }
+    }
+    if (line[index] === TAB) { cells.push(cell); cell = ''; index++; continue }
+    cell += line[index]
+    index++
+  }
+  cells.push(cell)
+  return cells
+}
+
+/** Index of the quote that ends a cell opened at `start`, or -1 on this line. */
+function findClosingQuote(line: string, start: number): number {
+  let i = start + 1
+  while (i < line.length) {
+    if (line[i] === QUOTE) {
+      if (line[i + 1] === QUOTE) { i += 2; continue } // escaped
+      // A closing quote is followed by a delimiter or the end of the line.
+      if (i + 1 === line.length || line[i + 1] === TAB) return i
+    }
+    i++
+  }
+  return -1
+}
 
 /** Rows of raw cells, one row per line. Handles CRLF and a trailing newline. */
 export function parseTsvRows(input: string): string[][] {
@@ -29,15 +78,25 @@ export function parseTsvRows(input: string): string[][] {
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
     .split('\n')
-    .map((line) => line.split(TAB))
+    .map(splitLine)
 }
 
 /**
- * Rejoin rows that a bare newline split apart.
+ * True when a cell opens a quote it never closes, which means the value
+ * continues on the next line. Doubled quotes are escapes and cancel out, so a
+ * sentence like: choose "Other" reads as closed, which it is.
+ */
+function endsMidQuote(cell: string): boolean {
+  const quotes = cell.replace(/""/g, '').split('"').length - 1
+  return quotes % 2 === 1
+}
+
+/**
+ * Rejoin rows that a newline split apart.
  *
  * The column count is known from the header, so a row with too few cells can
- * only be the continuation of the one before it. The newline goes back where
- * it was, inside the cell it belongs to.
+ * only be the continuation of the one above. The newline goes back where it
+ * was, inside the cell it belongs to.
  */
 export function foldContinuationRows(rows: string[][], width: number): string[][] {
   if (width <= 1) return rows
@@ -45,7 +104,12 @@ export function foldContinuationRows(rows: string[][], width: number): string[][
 
   for (const row of rows) {
     const previous = folded[folded.length - 1]
-    if (previous && previous.length < width) {
+    // Too few cells means the row was cut short. Enough cells but a cell still
+    // inside a quote means the last value was: a multi-line value in the final
+    // column reaches full width before it is actually finished.
+    const incomplete = previous
+      && (previous.length < width || endsMidQuote(previous[previous.length - 1] ?? ''))
+    if (incomplete) {
       previous[previous.length - 1] += '\n' + (row[0] ?? '')
       previous.push(...row.slice(1))
       continue
@@ -57,12 +121,12 @@ export function foldContinuationRows(rows: string[][], width: number): string[][
 }
 
 /**
- * Undo spreadsheet quoting on a value that is wrapped in quotes end to end.
- * A quote anywhere else is left alone: it is text.
+ * Undo quoting on a value wrapped end to end — the state a multi-line value is
+ * in once folding has made it whole again. A quote anywhere else is text.
  */
 export function unwrapQuotedCell(cell: string): string {
-  if (cell.length >= 2 && cell.startsWith('"') && cell.endsWith('"')) {
-    return cell.slice(1, -1).replace(/""/g, '"')
+  if (cell.length >= 2 && cell.startsWith(QUOTE) && cell.endsWith(QUOTE)) {
+    return cell.slice(1, -1).replace(/""/g, QUOTE)
   }
   return cell
 }
