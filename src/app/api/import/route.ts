@@ -8,6 +8,13 @@ import type { JsonImportStructure } from '@/lib/localization-namespaces'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 
+// Forking a 1191-key branch measured ~12.9s and a large import is comparable,
+// both past Netlify's 10s default. Route segment config is the Next-native way
+// to ask for longer and is what Vercel reads; on Netlify the ceiling comes from
+// `timeout` in netlify.toml, since its runtime bundles every route into one
+// function and cannot scope this per route.
+export const maxDuration = 26
+
 const SkipKeysSchema = z.array(z.string().min(1).max(200)).max(5000)
 
 export async function POST(req: NextRequest) {
