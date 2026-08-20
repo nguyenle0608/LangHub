@@ -12,6 +12,9 @@ const UpdateLocaleSchema = z.object({
     .refine(isValidLocaleCode, {
       message: 'Locale code must be a language like "ms", optionally with a region like "en-US"',
     }),
+  // Optional: the caller picked from the language list and knows the name that
+  // belongs to the new code.
+  name: z.string().min(1).max(100).optional(),
 })
 
 export async function PATCH(
@@ -38,7 +41,7 @@ export async function PATCH(
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid locale code' }, { status: 400 })
     }
-    const updated = await updateLocaleCode(params.projectId, params.localeId, parsed.data.code)
+    const updated = await updateLocaleCode(params.projectId, params.localeId, parsed.data.code, parsed.data.name)
     // A code already in use is the caller's mistake, not a server fault.
     if (updated.error) return NextResponse.json({ error: updated.error }, { status: 409 })
     return NextResponse.json({ success: true, locale: updated.locale })
