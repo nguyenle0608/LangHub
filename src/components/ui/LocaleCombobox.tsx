@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Check, ChevronsUpDown, Search, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -34,8 +34,16 @@ interface Props {
 
 export function LocaleCombobox({ value, onChange, placeholder = 'Select language…', disabled, excludeCodes, multiple, selectedCodes }: Props) {
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
   const [locales, setLocales] = useState<LocaleOption[]>([])
   const [loading, setLoading] = useState(true)
+  const listRef = useRef<HTMLDivElement>(null)
+
+  // cmdk drops non-matching items from the list but leaves its scroll position
+  // alone, so a search typed after scrolling opens somewhere in the middle of
+  // its own results — with 570 languages, searching "en" left the best match
+  // a hundred rows above the fold. Every new query starts at the top.
+  useEffect(() => { listRef.current?.scrollTo({ top: 0 }) }, [query])
 
   useEffect(() => {
     fetch('/api/locales-list')
@@ -51,7 +59,7 @@ export function LocaleCombobox({ value, onChange, placeholder = 'Select language
     // modal: the content is portalled to the body, which puts it outside the
     // Dialog's scroll lock — that lock preventDefault()s wheel events, so the
     // list could only be scrolled by keyboard. modal gives the popover its own.
-    <Popover open={open} onOpenChange={setOpen} modal>
+    <Popover open={open} onOpenChange={(next) => { setOpen(next); if (!next) setQuery('') }} modal>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -90,11 +98,13 @@ export function LocaleCombobox({ value, onChange, placeholder = 'Select language
           <div className="flex items-center border-b border-border px-3">
             <Search className="h-3.5 w-3.5 text-muted-foreground mr-2 flex-shrink-0" />
             <CommandInput
+              value={query}
+              onValueChange={setQuery}
               placeholder="Search language or country…"
               className="text-sm text-foreground placeholder:text-muted-foreground border-0 bg-transparent focus:ring-0 h-9 px-0"
             />
           </div>
-          <CommandList className="max-h-64">
+          <CommandList ref={listRef} className="max-h-64">
             <CommandEmpty className="py-6 text-center text-sm text-muted-foreground">
               No language found.
             </CommandEmpty>
