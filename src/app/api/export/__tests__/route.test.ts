@@ -167,6 +167,30 @@ describe('POST /api/export', () => {
     ])
   })
 
+  it('writes an Android region qualifier as -r, not a bare hyphen', async () => {
+    // values-en-US is not a qualifier Android recognises: the strings in such a
+    // folder never load on device, silently. It has to be values-en-rUS.
+    const enCA = { id: 'locale-en-ca', code: 'en-CA', name: 'English (Canada)' }
+    mockLocales([en, enCA])
+    vi.mocked(fetchExportData).mockResolvedValue({
+      keys: [{ id: 'key-title', key: 'app.title', description: null }],
+      translations: [
+        { key_id: 'key-title', locale_id: en.id, value: 'Color', status: 'approved' },
+        { key_id: 'key-title', locale_id: enCA.id, value: 'Colour', status: 'approved' },
+      ],
+    })
+    vi.mocked(exportZIP).mockResolvedValue(Buffer.from([1, 2, 3]))
+
+    const response = await POST(request({ localeIds: [en.id, enCA.id], format: 'android' }))
+
+    expect(response.status).toBe(200)
+    const files = vi.mocked(exportZIP).mock.calls[0]![0] as Array<{ name: string }>
+    expect(files.map((f) => f.name)).toEqual([
+      'values-en/strings.xml',
+      'values-en-rCA/strings.xml',
+    ])
+  })
+
   it('exports one selected locale as namespaced JSON files in a ZIP', async () => {
     vi.mocked(fetchExportData).mockResolvedValue({
       keys: [

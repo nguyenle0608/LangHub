@@ -4,15 +4,25 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { addLocale } from '@/lib/supabase/queries/projects'
 import { assertProjectAccess } from '@/lib/auth/access'
+import { isValidLocaleCode, normalizeLocaleCode } from '@/lib/locale-code'
+
+// Codes are stored canonically — lowercase language, uppercase region — so
+// en-US, en_us and EN-US cannot become three different locales on one project.
+// The region is significant: en-US and en-CA hold different translations.
+const LocaleCodeSchema = z.string()
+  .transform((value) => normalizeLocaleCode(value) ?? value)
+  .refine(isValidLocaleCode, {
+    message: 'Locale code must be a language like "ms", optionally with a region like "en-US"',
+  })
 
 const AddLocaleSchema = z.object({
-  code: z.string().min(2).max(10),
+  code: LocaleCodeSchema,
   name: z.string().min(1).max(100),
 })
 
 const BulkAddLocalesSchema = z.object({
   locales: z.array(z.object({
-    code: z.string().min(2).max(10),
+    code: LocaleCodeSchema,
     name: z.string().min(1).max(100),
   })).min(1).max(100),
 })
