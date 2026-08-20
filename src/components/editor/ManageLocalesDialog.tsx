@@ -44,6 +44,7 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
   // so a slow delete looked instant and a failed one made the row reappear
   // seconds later out of nowhere.
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set())
+  const [bulkRemoving, setBulkRemoving] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
 
@@ -55,6 +56,7 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
     setSelectedForRemoval(new Set())
     setConfirmBulkRemove(false)
     setRemovingIds(new Set())
+    setBulkRemoving(false)
     setOpen(next)
   }
 
@@ -77,6 +79,12 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
       body: JSON.stringify({ locales: staged.map((l) => ({ code: l.code, name: l.name })) }),
     })
     if (res.ok) {
+      // The list is local state, so it has to be told; a router.refresh alone
+      // left the dialog showing the old languages until it was reopened.
+      const json = await res.json().catch(() => ({})) as { locales?: LocaleItem[] }
+      if (json.locales?.length) {
+        setLocales((prev) => [...prev, ...json.locales!])
+      }
       toast.success(staged.length === 1
         ? `Added ${staged[0]!.name}`
         : `Added ${staged.length} languages`)
@@ -91,8 +99,8 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
 
   async function handleRemoveSelected() {
     const targets = locales.filter((l) => selectedForRemoval.has(l.id) && !l.is_base)
-    if (targets.length === 0) return
-    setConfirmBulkRemove(false)
+    if (targets.length === 0 || bulkRemoving) return
+    setBulkRemoving(true)
     setRemovingIds(new Set(targets.map((l) => l.id)))
 
     // No bulk delete endpoint, and each removal drops that locale's
@@ -110,6 +118,8 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
     }
 
     setSelectedForRemoval(new Set())
+    setBulkRemoving(false)
+    setConfirmBulkRemove(false)
     if (failed.length > 0) toast.error(`Failed to remove ${failed.join(', ')}`)
     else {
       toast.success(targets.length === 1
@@ -139,20 +149,23 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
   }
 
   async function handleSetBase(localeId: string, localeName: string) {
+    if (busy) return
     setPendingAction(null)
     setBusy(localeId)
-    // Optimistic update — flip is_base locally
-    setLocales((prev) => prev.map((l) => ({ ...l, is_base: l.id === localeId })))
+    // The flip waits for the server, like removal does. Flipping first meant
+    // the badge moved instantly and then jumped back on failure, and there was
+    // nowhere to show that anything was happening in between.
     const res = await fetch(`/api/projects/${project.id}/locales/${localeId}`, { method: 'PATCH' })
     setBusy(null)
+
     if (res.ok) {
+      setLocales((prev) => prev.map((l) => ({ ...l, is_base: l.id === localeId })))
       toast.success(`${localeName} is now the base language`)
       onLocalesChanged()
       router.refresh() // background sync
     } else {
-      // Revert on failure
-      setLocales(project.locales)
-      toast.error('Failed to change base language')
+      const json = await res.json().catch(() => ({})) as { error?: string }
+      toast.error(json.error ?? 'Failed to change base language')
     }
   }
 
@@ -174,7 +187,12 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
             <span className="flex-1 text-xs text-foreground">
               {selectedForRemoval.size} selected
             </span>
-            {confirmBulkRemove ? (
+            {bulkRemoving ? (
+              <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Removing…
+              </span>
+            ) : confirmBulkRemove ? (
               <>
                 <span className="text-[11px] text-muted-foreground">Delete their translations?</span>
                 <LoadingButton
@@ -222,7 +240,7 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
                 key={locale.id}
                 className={cn(
                   'flex items-center justify-between gap-3 rounded px-1 py-2 hover:bg-muted/50',
-                  removingIds.has(locale.id) && 'opacity-60'
+                  (removingIds.has(locale.id) || busy === locale.id) && 'opacity-60'
                 )}
               >
                 <div className="flex min-w-0 items-center gap-2.5">
@@ -298,12 +316,14 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
                     {!locale.is_base && (
                       <button
                         onClick={() => setPendingAction({ id: locale.id, kind: 'setBase' })}
-                        disabled={busy === locale.id}
+                        disabled={!!busy}
                         title="Set as base language"
-                        aria-label={`Set ${locale.name} as base language`}
-                        className="text-muted-foreground hover:text-blue-500 transition-colors disabled:opacity-40 p-1"
+                        aria-label={busy === locale.id ? `Setting ${locale.name} as base language` : `Set ${locale.name} as base language`}
+                        className="p-1 text-muted-foreground transition-colors hover:text-blue-500 disabled:opacity-40"
                       >
-                        <Star className="h-3.5 w-3.5" />
+                        {busy === locale.id
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          : <Star className="h-3.5 w-3.5" />}
                       </button>
                     )}
                     {!locale.is_base && (
