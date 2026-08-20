@@ -48,10 +48,19 @@ interface FileEntry {
 
 interface FileResult {
   filename: string
-  created: number
-  updated: number
+  /** Keys that did not exist anywhere in the branch until this job. */
+  keysAdded: number
+  /** Cells that were empty for this language and now hold text. */
+  filled: number
+  /** Cells that already held different text and were replaced. */
+  overwritten: number
   skipped: number
-  total: number
+  /**
+   * What the server counted as written (created + updated). It counts keys, not
+   * translations, so it cannot be broken down — but its total must match ours,
+   * and saying so when it does not beats quietly showing wrong numbers.
+   */
+  serverWritten?: number
   error?: string
 }
 
@@ -396,12 +405,17 @@ export function ImportWizard({ project, branchId }: Props) {
     // Only send API requests for files that will actually write something
     const filesToProcess = files.filter((e) => selectedCountFor(e) > 0)
     setImportProgress({ current: 0, total: filesToProcess.length, filename: '' })
+    // Keys this run has already created. The preview classified every column
+    // against the state before the import, so for a multi-language sheet every
+    // column believes it is creating the same keys — only the first one does.
+    // Each later column finds them there and fills its own empty cell instead.
+    const keysCreatedThisRun = new Set<string>()
 
     for (let i = 0; i < filesToProcess.length; i++) {
       const entry = filesToProcess[i]!
       const { file, format, localeId } = entry
       if (!format || !localeId) {
-        allResults.push({ filename: entryLabel(entry), created: 0, updated: 0, skipped: 0, total: 0, error: 'Missing format or locale' })
+        allResults.push({ filename: entryLabel(entry), keysAdded: 0, filled: 0, overwritten: 0, skipped: 0, error: 'Missing format or locale' })
         continue
       }
       setImportProgress({ current: i + 1, total: filesToProcess.length, filename: entryLabel(entry) })
@@ -409,6 +423,16 @@ export function ImportWizard({ project, branchId }: Props) {
       // Skip anything the user de-selected in the preview, across all three
       // groups — new keys included, so they are never force-imported.
       const skipKeys = computeSkipKeys(entry, selectionMap[entry.key])
+
+      // What this job will do, counted per translation. A column cannot touch
+      // another language's cells, so a key created earlier in this run is an
+      // existing key with an empty cell — a fill, not a creation.
+      const selected = selectionMap[entry.key] ?? new Set<string>()
+      const newHere = (entry.newKeys ?? []).filter((k) => selected.has(k) && !keysCreatedThisRun.has(k))
+      const filled = (entry.fillKeys ?? []).filter((k) => selected.has(k)).length
+        + (entry.newKeys ?? []).filter((k) => selected.has(k) && keysCreatedThisRun.has(k)).length
+      const overwritten = (entry.duplicateKeys ?? []).filter((k) => selected.has(k)).length
+      newHere.forEach((k) => keysCreatedThisRun.add(k))
 
       try {
         const fd = new FormData()
@@ -435,20 +459,21 @@ export function ImportWizard({ project, branchId }: Props) {
         }
 
         if (!resp.ok) {
-          allResults.push({ filename: entryLabel(entry), created: 0, updated: 0, skipped: 0, total: 0, error: data.error ?? 'Import failed' })
+          allResults.push({ filename: entryLabel(entry), keysAdded: 0, filled: 0, overwritten: 0, skipped: 0, error: data.error ?? 'Import failed' })
           toast.error(`${entryLabel(entry)}: ${data.error ?? 'Import failed'}`)
         } else {
           const d = data.data
           allResults.push({
             filename: entryLabel(entry),
-            created: d?.created ?? 0,
-            updated: d?.updated ?? 0,
+            keysAdded: newHere.length,
+            filled,
+            overwritten,
             skipped: d?.skipped ?? 0,
-            total: d?.total ?? 0,
+            serverWritten: (d?.created ?? 0) + (d?.updated ?? 0),
           })
         }
       } catch {
-        allResults.push({ filename: entryLabel(entry), created: 0, updated: 0, skipped: 0, total: 0, error: 'Network error' })
+        allResults.push({ filename: entryLabel(entry), keysAdded: 0, filled: 0, overwritten: 0, skipped: 0, error: 'Network error' })
         toast.error(`${entryLabel(entry)}: Network error`)
       }
     }
@@ -980,9 +1005,19 @@ export function ImportWizard({ project, branchId }: Props) {
                       <span className="text-xs text-destructive">{r.error}</span>
                     ) : (
                       <span className="text-xs text-muted-foreground flex items-center gap-1.5">
-                        {r.created > 0 && <span className="text-emerald-700 dark:text-emerald-400">{r.created} new</span>}
-                        {r.updated > 0 && <span className="text-amber-700 dark:text-amber-400">{r.updated} updated</span>}
+                        {r.keysAdded > 0 && <span className="text-emerald-700 dark:text-emerald-400">{r.keysAdded} keys added</span>}
+                        {r.filled > 0 && <span className="text-emerald-700 dark:text-emerald-400">{r.filled} filled</span>}
+                        {/* The only number here that means something was replaced. */}
+                        {r.overwritten > 0 && <span className="text-amber-700 dark:text-amber-400">{r.overwritten} overwritten</span>}
+                        {r.overwritten === 0 && (r.keysAdded > 0 || r.filled > 0) && (
+                          <span className="text-muted-foreground">nothing overwritten</span>
+                        )}
                         {r.skipped > 0 && <span className="text-muted-foreground">{r.skipped} skipped</span>}
+                        {r.serverWritten !== undefined && r.serverWritten !== r.keysAdded + r.filled + r.overwritten && (
+                          <span className="text-amber-700 dark:text-amber-400" title="These counts were taken before the import ran; the branch changed in between">
+                            server wrote {r.serverWritten}
+                          </span>
+                        )}
                       </span>
                     )}
                   </div>
