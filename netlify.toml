@@ -6,5 +6,16 @@
   NODE_VERSION = "20"
   NEXT_TELEMETRY_DISABLED = "1"
 
+# Netlify's synchronous functions time out after 10s by default. Forking a
+# 1191-key branch measured ~12.9s and a large import is comparable, so both
+# exceeded it. 26s is the platform maximum and applies to the whole Next server
+# handler: the runtime bundles every route into one function, so a route's
+# `maxDuration` export — which Vercel reads — cannot be honoured per route here.
+#
+# The higher ceiling also has to be enabled for the site by Netlify support on a
+# paid plan; without that this value has no effect and requests still stop at 10s.
+[functions]
+  timeout = 26
+
 [[plugins]]
   package = "@netlify/plugin-nextjs"
