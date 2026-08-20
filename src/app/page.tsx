@@ -349,8 +349,7 @@ export default async function LandingPage() {
 
       {/* Closing CTA */}
       <section className="mx-auto max-w-6xl px-6 pb-20">
-        <Reveal className="relative overflow-hidden rounded-2xl border border-blue-500/30 bg-gradient-to-br from-blue-600/15 via-card to-card p-8 text-center md:p-12">
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[radial-gradient(circle_at_top,rgba(37,99,235,0.25),transparent_60%)]" />
+        <Reveal className="relative overflow-hidden rounded-2xl border border-blue-500/30 bg-card bg-gradient-to-br from-blue-600/15 to-transparent p-8 text-center md:p-12">
           <div className="relative">
             <div className="mx-auto mb-5 inline-flex rounded-lg bg-blue-500/10 p-2.5 ring-1 ring-inset ring-blue-500/20">
               <Zap className="h-6 w-6 text-blue-600 dark:text-blue-400" />

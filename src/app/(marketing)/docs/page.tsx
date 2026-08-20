@@ -159,7 +159,7 @@ export default function DocsPage() {
         </div>
       </section>
 
-      <section className="mt-14 rounded-2xl border border-blue-500/30 bg-gradient-to-br from-blue-600/15 via-card to-card p-8 text-center">
+      <section className="mt-14 rounded-2xl border border-blue-500/30 bg-card bg-gradient-to-br from-blue-600/15 to-transparent p-8 text-center">
         <h2 className="text-balance text-2xl font-bold tracking-tight">Ready to try it?</h2>
         <p className="mx-auto mt-2 max-w-md text-muted-foreground">Create your first project and see the workflow end to end.</p>
         <Link

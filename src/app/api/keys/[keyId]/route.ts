@@ -13,6 +13,37 @@ const PatchSchema = z.object({
   charLimit: z.number().int().positive().nullable().optional(),
 })
 
+/**
+ * Fetch one key's metadata.
+ *
+ * The editor's realtime channel carries translation rows only, so a key's
+ * name, description, tags and platforms can go stale in an open dialog while
+ * someone else edits them. The detail panel re-reads through here.
+ */
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ keyId: string }> }
+) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { keyId } = await params
+  const access = await assertKeysAccess(user.id, [keyId], 'viewer')
+  if (!access.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const { data, error } = await supabase
+    .from('translation_keys')
+    .select('id, key, description, tags, platforms, char_limit')
+    .eq('id', keyId)
+    .maybeSingle()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!data) return NextResponse.json({ error: 'Key not found' }, { status: 404 })
+
+  return NextResponse.json({ data })
+}
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ keyId: string }> }

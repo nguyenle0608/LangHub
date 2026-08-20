@@ -1,5 +1,6 @@
 import { createClient } from '../server'
 import { createAdminClient } from '../admin'
+import { resolveUserEmails } from './users'
 import type { Database } from '@/types/database'
 
 type KeyRow = Database['public']['Tables']['translation_keys']['Row']
@@ -79,7 +80,10 @@ export async function getComments(keyId: string): Promise<Comment[]> {
     .select('*')
     .eq('key_id', keyId)
     .order('created_at', { ascending: true })
-  return data ?? []
+  if (!data?.length) return []
+
+  const emails = await resolveUserEmails(data.map((row) => row.user_id))
+  return data.map((row) => ({ ...row, user_email: emails[row.user_id] }))
 }
 
 // ── Writes ───────────────────────────────────────────────────────────────────
