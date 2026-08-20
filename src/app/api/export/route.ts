@@ -11,7 +11,7 @@ const ExportSchema = z.object({
   projectId: z.string().min(1),
   branchId: z.string().min(1).optional(),
   localeIds: z.array(z.string().min(1)).min(1).max(100),
-  format: z.enum(['json', 'arb', 'csv', 'yaml', 'android', 'ios']),
+  format: z.enum(['json', 'arb', 'csv', 'tsv', 'yaml', 'android', 'ios']),
   filter: z.enum(['all', 'approved', 'reviewed_approved']),
   nested: z.boolean().optional(),
   jsonStructure: z.enum(['monolithic', 'namespaced']).optional(),

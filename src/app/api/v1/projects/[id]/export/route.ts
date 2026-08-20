@@ -11,7 +11,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 const QuerySchema = z.object({
   locales: z.array(z.string().min(1).max(50)).min(1).max(100),
   branch: z.string().min(1).max(100).optional(),
-  format: z.enum(['json', 'arb', 'csv', 'yaml', 'android', 'ios']).default('json'),
+  format: z.enum(['json', 'arb', 'csv', 'tsv', 'yaml', 'android', 'ios']).default('json'),
   filter: z.enum(['all', 'approved', 'reviewed_approved']).default('all'),
   nested: z.enum(['true', 'false']).default('true'),
   jsonStructure: z.enum(['monolithic', 'namespaced']).default('monolithic'),

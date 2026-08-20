@@ -64,10 +64,15 @@ describe('parseCSV', () => {
     expect(results[1]?.keys['hello']).toBe('Xin chào')
   })
 
-  it('errors if first column is not "key"', () => {
+  // Deliberate change: the first column is the key column by position. Real
+  // exports head it "Lang", "String", "ID"; refusing those rejected a whole
+  // file over a header nobody thought about. It is a warning now, not an error.
+  it('accepts a first column that is not called "key" and warns', () => {
     const csv = 'name,en\nhello,Hello'
     const results = parseCSV(csv)
-    expect(results[0]?.errors.length).toBeGreaterThan(0)
+    expect(results[0]?.errors).toEqual([])
+    expect(results[0]?.keys['hello']).toBe('Hello')
+    expect(results[0]?.warnings.join(' ')).toContain('name')
   })
 
   it('skips rows with empty keys', () => {
