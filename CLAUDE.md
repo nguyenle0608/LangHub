@@ -17,8 +17,8 @@ AI Translation is a FUTURE feature — do NOT implement AI calls in MVP.
 ## Tech Stack
 - Framework: Next.js 14 (App Router, TypeScript strict)
 - Database: Supabase (PostgreSQL + Realtime + Auth)
-- Styling: Tailwind CSS + shadcn/ui (dark theme, zinc base)
-- Deploy: Vercel
+- Styling: Tailwind CSS + shadcn/ui (zinc base, light/dark/system themes)
+- Deploy: Netlify (netlify.toml + @netlify/plugin-nextjs)
 - Package manager: pnpm
 
 ## Key Commands
