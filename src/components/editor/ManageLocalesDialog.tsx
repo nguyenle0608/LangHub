@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, X, Languages, Star, Check } from 'lucide-react'
+import { Plus, X, Languages, Star, Check, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import {
@@ -39,6 +39,11 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
   const [staged, setStaged] = useState<LocaleOption[]>([])
   const [selectedForRemoval, setSelectedForRemoval] = useState<Set<string>>(new Set())
   const [confirmBulkRemove, setConfirmBulkRemove] = useState(false)
+  // Rows mid-delete. They stay on screen with a spinner until the server
+  // agrees: removing them first left nothing to attach the pending state to,
+  // so a slow delete looked instant and a failed one made the row reappear
+  // seconds later out of nowhere.
+  const [removingIds, setRemovingIds] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState<string | null>(null)
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
 
@@ -49,6 +54,7 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
     setStaged([])
     setSelectedForRemoval(new Set())
     setConfirmBulkRemove(false)
+    setRemovingIds(new Set())
     setOpen(next)
   }
 
@@ -87,24 +93,25 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
     const targets = locales.filter((l) => selectedForRemoval.has(l.id) && !l.is_base)
     if (targets.length === 0) return
     setConfirmBulkRemove(false)
-    setBusy('bulk')
-    setLocales((prev) => prev.filter((l) => !selectedForRemoval.has(l.id)))
+    setRemovingIds(new Set(targets.map((l) => l.id)))
 
     // No bulk delete endpoint, and each removal drops that locale's
-    // translations, so they go one at a time and stop at the first failure
-    // rather than pressing on through a broken state.
+    // translations, so they go one at a time. Each row clears as the server
+    // confirms it rather than all of them vanishing up front.
     const failed: string[] = []
     for (const locale of targets) {
       const res = await fetch(`/api/projects/${project.id}/locales/${locale.id}`, { method: 'DELETE' })
-      if (!res.ok) failed.push(locale.name)
+      if (res.ok) {
+        setLocales((prev) => prev.filter((l) => l.id !== locale.id))
+      } else {
+        failed.push(locale.name)
+      }
+      setRemovingIds((prev) => { const next = new Set(prev); next.delete(locale.id); return next })
     }
-    setBusy(null)
-    setSelectedForRemoval(new Set())
 
-    if (failed.length > 0) {
-      setLocales(project.locales)
-      toast.error(`Failed to remove ${failed.join(', ')}`)
-    } else {
+    setSelectedForRemoval(new Set())
+    if (failed.length > 0) toast.error(`Failed to remove ${failed.join(', ')}`)
+    else {
       toast.success(targets.length === 1
         ? `Removed ${targets[0]!.name}`
         : `Removed ${targets.length} languages`)
@@ -115,19 +122,19 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
 
   async function handleRemove(localeId: string, localeName: string) {
     setPendingAction(null)
-    setBusy(localeId)
-    // Optimistic update — remove immediately
-    setLocales((prev) => prev.filter((l) => l.id !== localeId))
+    setRemovingIds((prev) => new Set(prev).add(localeId))
     const res = await fetch(`/api/projects/${project.id}/locales/${localeId}`, { method: 'DELETE' })
-    setBusy(null)
+    setRemovingIds((prev) => { const next = new Set(prev); next.delete(localeId); return next })
+
     if (res.ok) {
+      setLocales((prev) => prev.filter((l) => l.id !== localeId))
       toast.success(`Removed ${localeName}`)
       onLocalesChanged()
       router.refresh() // background sync
     } else {
-      // Revert on failure
-      setLocales(project.locales)
-      toast.error('Failed to remove language')
+      // The row never left, so a failure needs no restore — just say why.
+      const json = await res.json().catch(() => ({})) as { error?: string }
+      toast.error(json.error ?? 'Failed to remove language')
     }
   }
 
@@ -213,7 +220,10 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
             return (
               <div
                 key={locale.id}
-                className="flex items-center justify-between gap-3 rounded px-1 py-2 hover:bg-muted/50"
+                className={cn(
+                  'flex items-center justify-between gap-3 rounded px-1 py-2 hover:bg-muted/50',
+                  removingIds.has(locale.id) && 'opacity-60'
+                )}
               >
                 <div className="flex min-w-0 items-center gap-2.5">
                   {/* The base locale cannot be deleted, so it gets no checkbox
@@ -229,6 +239,7 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
                         if (next.has(locale.id)) next.delete(locale.id); else next.add(locale.id)
                         return next
                       })}
+                      disabled={removingIds.has(locale.id)}
                       aria-label={`Select ${locale.name} for removal`}
                       className="h-3.5 w-3.5 flex-shrink-0 rounded border-border"
                     />
@@ -251,7 +262,11 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
                   </div>
                 </div>
 
-                {isPending ? (
+                {removingIds.has(locale.id) ? (
+                  <div className="flex flex-shrink-0 items-center gap-1 px-1">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" aria-label={`Removing ${locale.name}`} />
+                  </div>
+                ) : isPending ? (
                   <div className="flex flex-shrink-0 items-center gap-1.5">
                     <span className="text-[11px] text-muted-foreground">
                       {pendingAction.kind === 'remove' ? 'Remove?' : 'Set as base?'}
