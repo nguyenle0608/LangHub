@@ -24,6 +24,11 @@ import { DELETE } from '../[tokenId]/route'
 
 const params = { params: { orgId: 'org-a' } }
 
+// The route rejects an expiry less than five minutes out, measured against the
+// real clock. This was written as a literal date that was in the future at the
+// time and silently became a past one, failing the suite from that day on.
+const futureExpiry = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.getUser.mockResolvedValue({ data: { user: { id: 'user-a' } } })
@@ -60,7 +65,7 @@ describe('organization API token routes', () => {
     const response = await POST(new Request('https://langhub.dev', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'CI', scope: 'read', expiresAt: '2026-08-18T10:00:00.000Z' }),
+      body: JSON.stringify({ name: 'CI', scope: 'read', expiresAt: futureExpiry }),
     }), params)
     expect(response.status).toBe(201)
     expect(response.headers.get('cache-control')).toBe('no-store')
