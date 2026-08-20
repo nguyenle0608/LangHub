@@ -15,16 +15,26 @@ const LocaleCodeSchema = z.string()
     message: 'Locale code must be a language like "ms", optionally with a region like "en-US"',
   })
 
-const AddLocaleSchema = z.object({
+// No language is named after its own code. A name equal to the code means the
+// caller could not look one up and sent the code instead — that name is then
+// stored and shown as the language's name for good, which is how a project
+// ended up listing "ar-AE" and "vi-VN" where names belong.
+const NAME_IS_A_CODE = 'Language name is missing — it cannot just repeat the code'
+
+const LocaleEntrySchema = z.object({
   code: LocaleCodeSchema,
   name: z.string().min(1).max(100),
+  // Compared after normalising the name, not as raw text: "AR_ae" is the same
+  // code as "ar-AE" and just as useless as a name.
+}).refine((locale) => normalizeLocaleCode(locale.name) !== locale.code, {
+  message: NAME_IS_A_CODE,
+  path: ['name'],
 })
 
+const AddLocaleSchema = LocaleEntrySchema
+
 const BulkAddLocalesSchema = z.object({
-  locales: z.array(z.object({
-    code: LocaleCodeSchema,
-    name: z.string().min(1).max(100),
-  })).min(1).max(100),
+  locales: z.array(LocaleEntrySchema).min(1).max(100),
 })
 
 // Single locale

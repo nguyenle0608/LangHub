@@ -15,6 +15,10 @@ const UpdateLocaleSchema = z.object({
   // Optional: the caller picked from the language list and knows the name that
   // belongs to the new code.
   name: z.string().min(1).max(100).optional(),
+}).refine((body) => !body.name || normalizeLocaleCode(body.name) !== body.code, {
+  // Same rule as creating one: a name that repeats the code is a failed lookup.
+  message: 'Language name is missing — it cannot just repeat the code',
+  path: ['name'],
 })
 
 export async function PATCH(
