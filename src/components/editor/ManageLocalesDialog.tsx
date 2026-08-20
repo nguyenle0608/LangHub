@@ -237,7 +237,7 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
                       <span className="text-sm text-foreground truncate">{locale.name}</span>
-                      <span className="text-[11px] text-muted-foreground font-mono">{locale.code}</span>
+                      <span className="flex-shrink-0 whitespace-nowrap font-mono text-[11px] text-muted-foreground">{locale.code}</span>
                       {locale.is_base && (
                         <span className="text-[10px] text-muted-foreground border border-border rounded px-1 flex-shrink-0">base</span>
                       )}

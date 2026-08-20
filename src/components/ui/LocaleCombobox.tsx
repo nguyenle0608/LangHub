@@ -116,7 +116,7 @@ export function LocaleCombobox({ value, onChange, placeholder = 'Select language
                       <span className="truncate text-xs text-muted-foreground">{locale.country}</span>
                     )}
                   </div>
-                  <span className="flex-shrink-0 font-mono text-[10px] text-muted-foreground">{locale.code}</span>
+                  <span className="flex-shrink-0 whitespace-nowrap font-mono text-[10px] text-muted-foreground">{locale.code}</span>
                   {(multiple ? selectedCodes?.has(locale.code) : value === locale.code) && (
                     <Check className="h-3.5 w-3.5 flex-shrink-0 text-blue-500 dark:text-blue-400" />
                   )}
