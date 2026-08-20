@@ -157,7 +157,7 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
           <span className="hidden md:inline">Languages</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="bg-card border-border text-foreground sm:max-w-sm">
+      <DialogContent className="bg-card border-border text-foreground sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="text-foreground text-base">Manage Languages</DialogTitle>
         </DialogHeader>
@@ -213,7 +213,7 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
             return (
               <div
                 key={locale.id}
-                className="flex items-center justify-between py-2 px-1 rounded hover:bg-muted/50"
+                className="flex items-center justify-between gap-3 rounded px-1 py-2 hover:bg-muted/50"
               >
                 <div className="flex min-w-0 items-center gap-2.5">
                   {/* The base locale cannot be deleted, so it gets no checkbox
@@ -236,7 +236,7 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
                   <span className="text-base w-6 text-center flex-shrink-0">{localeFlag(locale.code)}</span>
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-sm text-foreground truncate">{locale.name}</span>
+                      <span className="truncate text-sm text-foreground">{locale.name}</span>
                       <span className="flex-shrink-0 whitespace-nowrap font-mono text-[11px] text-muted-foreground">{locale.code}</span>
                       {locale.is_base && (
                         <span className="text-[10px] text-muted-foreground border border-border rounded px-1 flex-shrink-0">base</span>
