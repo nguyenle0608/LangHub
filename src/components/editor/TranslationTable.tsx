@@ -9,6 +9,7 @@ import {
   Columns3, Eye, EyeOff, Pin, PinOff, Lock, Unlock, GripVertical, Undo2, Redo2,
   MoreHorizontal, Copy, History, GitBranch as GitBranchIcon, Loader2, ArrowUp, ArrowLeft,
   Info, X, Folder, FolderOpen, FileKey2, PanelLeftClose, PanelLeftOpen, ShieldCheck,
+  Tag as TagIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -325,6 +326,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     window.history.replaceState(null, '', `${url.pathname}${url.search}`)
   }, [search])
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
+  const [filterTags, setFilterTags] = useState<Set<string>>(new Set())
   const [editingCell, setEditingCell] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
   const [savingCell, setSavingCell] = useState<string | null>(null)
@@ -356,7 +358,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   const [resizingSidebar, setResizingSidebar] = useState(false)
   const sidebarResizeRef = useRef<{ startX: number; startWidth: number } | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  type SidebarSection = 'status' | 'language' | 'keyTree'
+  type SidebarSection = 'status' | 'language' | 'tags' | 'keyTree'
   const [collapsedSidebarSections, setCollapsedSidebarSections] = useState<Set<SidebarSection>>(new Set())
   const toggleSidebarSection = useCallback((section: SidebarSection) => {
     setCollapsedSidebarSections((prev) => {
@@ -644,6 +646,18 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   }, [])
 
   // Filtered keys
+  // Tags were writable but nothing ever read them back. Derive the vocabulary
+  // from the keys already in memory — the same source every other filter uses.
+  const tagCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const k of keys) {
+      for (const tag of k.tags ?? []) counts.set(tag, (counts.get(tag) ?? 0) + 1)
+    }
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+  }, [keys])
+
+  const allTags = useMemo(() => tagCounts.map(([tag]) => tag), [tagCounts])
+
   const filteredKeys = useMemo(() => {
     let result = keys
 
@@ -672,6 +686,13 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
       })
     }
 
+    if (filterTags.size > 0) {
+      result = result.filter((k) => {
+        const owned = new Set(k.tags ?? [])
+        return Array.from(filterTags).every((tag) => owned.has(tag))
+      })
+    }
+
     columnFilters.forEach((colStatus, localeId) => {
       if (colStatus === 'all') return
       result = result.filter((k) => {
@@ -682,7 +703,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     })
 
     return result
-  }, [keys, selectedTreeKeyIds, search, filterStatus, selectedLocaleId, columnFilters, locales])
+  }, [keys, selectedTreeKeyIds, search, filterStatus, selectedLocaleId, filterTags, columnFilters, locales])
 
   // Virtual rows (flat list of group headers + key rows for the virtualizer)
   const virtualRows = useMemo((): VirtualRow[] => {
@@ -1839,11 +1860,19 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
       onRemove: () => setColumnFilters((prev) => { const n = new Map(prev); n.delete(localeId); return n }),
     })
   })
+  Array.from(filterTags).forEach((tag) => {
+    activeFilters.push({
+      key: `tag-${tag}`,
+      label: `Tag: ${tag}`,
+      onRemove: () => setFilterTags((prev) => { const n = new Set(prev); n.delete(tag); return n }),
+    })
+  })
   const clearAllFilters = () => {
     setSearch('')
     setFilterStatus('all')
     setSelectedLocaleId(null)
     setSelectedTreeKeyIds(new Set())
+    setFilterTags(new Set())
     setColumnFilters(new Map())
   }
 
@@ -2342,6 +2371,59 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                 )
               })}
             </div>
+
+            {/* Tags — only worth a section when the project actually uses them */}
+            {tagCounts.length > 0 && (
+              <div className="flex-shrink-0 border-t border-border p-3">
+                <button
+                  type="button"
+                  onClick={() => toggleSidebarSection('tags')}
+                  aria-expanded={!collapsedSidebarSections.has('tags')}
+                  className="mb-2 flex w-full items-center justify-between gap-1 px-1"
+                >
+                  <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Tags
+                    <Tooltip side="right" content="Filter by the tags set on each key. Selecting several shows only keys carrying all of them.">
+                      <Info className="h-3 w-3 text-muted-foreground hover:text-muted-foreground" />
+                    </Tooltip>
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    {filterTags.size > 0 && (
+                      <span className="text-[10px] text-muted-foreground">{filterTags.size} on</span>
+                    )}
+                    <ChevronDown className={cn(
+                      'h-3 w-3 flex-shrink-0 text-muted-foreground transition-transform',
+                      collapsedSidebarSections.has('tags') && '-rotate-90'
+                    )} />
+                  </span>
+                </button>
+                {!collapsedSidebarSections.has('tags') && (
+                  <div className="max-h-40 space-y-0.5 overflow-y-auto">
+                    {tagCounts.map(([tag, count]) => {
+                      const isActive = filterTags.has(tag)
+                      return (
+                        <button
+                          key={tag}
+                          onClick={() => setFilterTags((prev) => {
+                            const next = new Set(prev)
+                            if (next.has(tag)) next.delete(tag); else next.add(tag)
+                            return next
+                          })}
+                          className={cn(
+                            'flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs transition-colors',
+                            isActive ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+                          )}
+                        >
+                          <TagIcon className="h-3 w-3 flex-shrink-0" />
+                          <span className="flex-1 truncate text-left">{tag}</span>
+                          <span className="text-[10px] tabular-nums text-muted-foreground">{count}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Nested key tree */}
             <div className={cn(
@@ -3060,6 +3142,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
           orgId={project.org_id ?? undefined}
           canEdit={canEdit}
           canEditKeys={canEditKeys}
+          allTags={allTags}
           onClose={() => setSelectedKeyId(null)}
           onKeyUpdated={(patch) => handleKeyUpdated(selectedKeyId!, patch)}
           onKeyDeleted={handleKeyDeleted}
@@ -3121,6 +3204,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
           branchId={activeBranchId}
           locales={locales}
           existingKeys={keys.map((k) => k.key)}
+          allTags={allTags}
           onClose={() => setShowAddKey(false)}
           onCreated={handleKeyCreated}
         />
