@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, X, Languages, Star, Check, Loader2 } from 'lucide-react'
+import { Plus, X, Languages, Star, Check, Loader2, Pencil, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import {
@@ -25,12 +25,15 @@ interface Props {
   totalKeys?: number
   localeApproved?: Map<string, number>
   localePercent?: Map<string, number>
+  // Keys holding text for each locale, any status. Changing a language keeps
+  // the translations, so this is what makes the warning concrete.
+  localeFilled?: Map<string, number>
 }
 
 type LocaleItem = ProjectWithStats['locales'][number]
 type PendingAction = { id: string; kind: 'remove' | 'setBase' }
 
-export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, localeApproved, localePercent }: Props) {
+export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, localeApproved, localePercent, localeFilled }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [locales, setLocales] = useState<LocaleItem[]>(project.locales)
@@ -47,6 +50,14 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
   const [bulkRemoving, setBulkRemoving] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
+  // Which language is being re-pointed, and what was picked for it. The pick
+  // comes from the same language list as adding does — a free-text code let
+  // anything through, including codes no locale actually has.
+  const [editingCodeId, setEditingCodeId] = useState<string | null>(null)
+  const [pickedLocale, setPickedLocale] = useState<LocaleOption | null>(null)
+  // Mid-save. The Save button spins on its own, but the picker and Cancel sit
+  // next to it and would otherwise stay live while the request is in flight.
+  const [savingCodeId, setSavingCodeId] = useState<string | null>(null)
 
   // Sync from props when dialog opens
   function handleOpenChange(next: boolean) {
@@ -57,6 +68,8 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
     setConfirmBulkRemove(false)
     setRemovingIds(new Set())
     setBulkRemoving(false)
+    setEditingCodeId(null)
+    setPickedLocale(null)
     setOpen(next)
   }
 
@@ -148,6 +161,37 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
     }
   }
 
+  /**
+   * Rewrite a language's code — `en` becomes `en-US` once a project starts
+   * tracking a second English, or a code was simply mistyped. Translations are
+   * attached to the language's id, so nothing moves with it.
+   */
+  async function handleUpdateCode(localeId: string) {
+    if (!pickedLocale || savingCodeId) return
+    const { code, name } = pickedLocale
+    setSavingCodeId(localeId)
+    const res = await fetch(`/api/projects/${project.id}/locales/${localeId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, name }),
+    })
+    const json = await res.json().catch(() => ({})) as { error?: string }
+    setSavingCodeId(null)
+
+    if (res.ok) {
+      // The name follows the code: a row reading en-CA should not still say
+      // "English (United States)".
+      setLocales((prev) => prev.map((l) => l.id === localeId ? { ...l, code, name } : l))
+      setEditingCodeId(null)
+      setPickedLocale(null)
+      toast.success(`Changed to ${name} (${code})`)
+      onLocalesChanged()
+      router.refresh()
+    } else {
+      toast.error(json.error ?? 'Failed to change the language')
+    }
+  }
+
   async function handleSetBase(localeId: string, localeName: string) {
     if (busy) return
     setPendingAction(null)
@@ -228,6 +272,15 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
         <div className="space-y-1 max-h-64 overflow-y-auto">
           {locales.map((locale) => {
             const isPending = pendingAction?.id === locale.id
+            const isEditingCode = editingCodeId === locale.id
+            // Everything already on the project is off the list, so a taken
+            // code cannot be picked; only a no-op pick has to be refused.
+            const canSaveCode = !!pickedLocale && pickedLocale.code !== locale.code
+            // Translations belong to the column, not to the code on it, so
+            // re-pointing a column that already holds text relabels that text
+            // rather than moving or clearing it.
+            const filled = localeFilled?.get(locale.id) ?? 0
+            const relabelling = canSaveCode && filled > 0
             const percent = localePercent?.get(locale.id) ?? locale.percent
             const approved = localeApproved?.get(locale.id) ?? locale.approved
             const total = totalKeys ?? locale.total
@@ -240,9 +293,40 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
                 key={locale.id}
                 className={cn(
                   'flex items-center justify-between gap-3 rounded px-1 py-2 hover:bg-muted/50',
-                  (removingIds.has(locale.id) || busy === locale.id) && 'opacity-60'
+                  (removingIds.has(locale.id) || busy === locale.id || savingCodeId === locale.id) && 'opacity-60'
                 )}
               >
+                {isEditingCode ? (
+                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                    <span className="text-base w-6 text-center flex-shrink-0">
+                      {localeFlag(pickedLocale?.code ?? locale.code)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <LocaleCombobox
+                        value={pickedLocale?.code ?? locale.code}
+                        disabled={savingCodeId === locale.id}
+                        onChange={(_code, option) => setPickedLocale(option)}
+                        placeholder="Pick a language…"
+                        excludeCodes={new Set(locales.filter((l) => l.id !== locale.id).map((l) => l.code))}
+                      />
+                      {relabelling ? (
+                        <span className="mt-0.5 flex items-start gap-1 text-[11px] text-amber-600 dark:text-amber-500">
+                          <AlertTriangle className="mt-px h-3 w-3 flex-shrink-0" />
+                          <span>
+                            {filled} translation{filled === 1 ? '' : 's'} written for{' '}
+                            <span className="font-mono">{locale.code}</span> will be labelled{' '}
+                            {pickedLocale?.name} — the text itself does not change
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                          Currently <span className="font-mono">{locale.code}</span>
+                          {filled > 0 && ` · ${filled} translation${filled === 1 ? '' : 's'}`}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
                 <div className="flex min-w-0 items-center gap-2.5">
                   {/* The base locale cannot be deleted, so it gets no checkbox
                       rather than one that always fails. */}
@@ -279,10 +363,31 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
                     </span>
                   </div>
                 </div>
+                )}
 
                 {removingIds.has(locale.id) ? (
                   <div className="flex flex-shrink-0 items-center gap-1 px-1">
                     <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" aria-label={`Removing ${locale.name}`} />
+                  </div>
+                ) : isEditingCode ? (
+                  <div className="flex flex-shrink-0 items-center gap-1.5">
+                    <LoadingButton
+                      size="sm"
+                      disabled={!canSaveCode}
+                      loading={savingCodeId === locale.id}
+                      className="h-6 px-2 text-[11px] bg-blue-600 text-white hover:bg-blue-500"
+                      onClick={() => handleUpdateCode(locale.id)}
+                      loadingText="Saving…"
+                    >
+                      Save
+                    </LoadingButton>
+                    <button
+                      onClick={() => { setEditingCodeId(null); setPickedLocale(null) }}
+                      disabled={savingCodeId === locale.id}
+                      className="rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-40"
+                    >
+                      Cancel
+                    </button>
                   </div>
                 ) : isPending ? (
                   <div className="flex flex-shrink-0 items-center gap-1.5">
@@ -313,6 +418,15 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
                   </div>
                 ) : (
                   <div className="flex flex-shrink-0 items-center gap-1">
+                    <button
+                      onClick={() => { setPendingAction(null); setPickedLocale(null); setEditingCodeId(locale.id) }}
+                      disabled={!!busy || !!savingCodeId}
+                      title="Change language"
+                      aria-label={`Change the language for ${locale.name}`}
+                      className="p-1 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
                     {!locale.is_base && (
                       <button
                         onClick={() => setPendingAction({ id: locale.id, kind: 'setBase' })}
