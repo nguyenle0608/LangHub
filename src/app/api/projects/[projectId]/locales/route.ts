@@ -45,11 +45,13 @@ export async function POST(
   const bulk = BulkAddLocalesSchema.safeParse(body)
   if (bulk.success) {
     const admin = createAdminClient()
-    const { error } = await admin.from('locales').insert(
+    // Return the inserted rows: the caller needs their ids to show the new
+    // languages without waiting for a full refetch.
+    const { data, error } = await admin.from('locales').insert(
       bulk.data.locales.map((l) => ({ project_id: params.projectId, code: l.code, name: l.name, is_base: false }))
-    )
+    ).select('id, code, name, is_base')
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ success: true }, { status: 201 })
+    return NextResponse.json({ success: true, locales: data ?? [] }, { status: 201 })
   }
 
   // Single: { code, name }
