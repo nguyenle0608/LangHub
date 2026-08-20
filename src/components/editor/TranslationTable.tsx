@@ -2353,12 +2353,8 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                   type="button"
                   onClick={() => toggleSidebarSection('keyTree')}
                   aria-expanded={!collapsedSidebarSections.has('keyTree')}
-                  className="flex min-w-0 items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground"
+                  className="flex min-w-0 flex-1 items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground"
                 >
-                  <ChevronDown className={cn(
-                    'h-3 w-3 flex-shrink-0 transition-transform',
-                    collapsedSidebarSections.has('keyTree') && '-rotate-90'
-                  )} />
                   Key tree
                   <Tooltip
                     side="right"
@@ -2398,6 +2394,18 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                     )}
                   </div>
                 )}
+                <button
+                  type="button"
+                  onClick={() => toggleSidebarSection('keyTree')}
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  className="flex flex-shrink-0 items-center text-muted-foreground"
+                >
+                  <ChevronDown className={cn(
+                    'h-3 w-3 flex-shrink-0 transition-transform',
+                    collapsedSidebarSections.has('keyTree') && '-rotate-90'
+                  )} />
+                </button>
               </div>
               {!collapsedSidebarSections.has('keyTree') && (
                 <div className="min-h-0 flex-1 overflow-y-auto pr-1">
