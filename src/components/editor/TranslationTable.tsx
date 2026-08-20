@@ -799,6 +799,10 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     const localeNeedsWork = new Map<string, number>()
     const localePercent = new Map<string, number>()
     const localeApproved = new Map<string, number>()
+    // Keys that actually hold text for this locale, whatever its status.
+    // Approved counts cannot answer "does this column have anything in it?" —
+    // a column full of pending translations is still 0% approved.
+    const localeFilled = new Map<string, number>()
     // Approved records for the overall progress bar. Normally scored over the
     // target (non-base) locales; if the project has only the base locale, the
     // base counts so progress reflects the user's work instead of staying 0%.
@@ -807,16 +811,19 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     for (const locale of locales) {
       let needsWork = 0
       let approved = 0
+      let filled = 0
       for (const key of keys) {
         const t = key.translations.find((tr) => tr.locale_id === locale.id)
         if (!t || !t.value || t.status === 'empty' || t.status === 'pending') needsWork++
         if (t?.status === 'approved') approved++
+        if (t?.value) filled++
       }
       // Per-locale stats cover every locale (incl. base) for the sidebar
       // counter and column-header percent.
       if (needsWork > 0) localeNeedsWork.set(locale.id, needsWork)
       localePercent.set(locale.id, totalKeys > 0 ? Math.round((approved / totalKeys) * 100) : 0)
       localeApproved.set(locale.id, approved)
+      localeFilled.set(locale.id, filled)
       const isScored = hasTargets ? !locale.is_base : true
       if (isScored) approvedRecords += approved
     }
@@ -827,6 +834,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
       localeNeedsWork,
       localePercent,
       localeApproved,
+      localeFilled,
     }
   }, [keys, locales])
 
@@ -1937,6 +1945,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
             totalKeys={stats.total}
             localeApproved={stats.localeApproved}
             localePercent={stats.localePercent}
+            localeFilled={stats.localeFilled}
           />
         )}
 

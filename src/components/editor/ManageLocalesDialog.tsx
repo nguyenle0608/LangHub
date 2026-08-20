@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, X, Languages, Star, Check, Loader2, Pencil } from 'lucide-react'
+import { Plus, X, Languages, Star, Check, Loader2, Pencil, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import {
@@ -25,12 +25,15 @@ interface Props {
   totalKeys?: number
   localeApproved?: Map<string, number>
   localePercent?: Map<string, number>
+  // Keys holding text for each locale, any status. Changing a language keeps
+  // the translations, so this is what makes the warning concrete.
+  localeFilled?: Map<string, number>
 }
 
 type LocaleItem = ProjectWithStats['locales'][number]
 type PendingAction = { id: string; kind: 'remove' | 'setBase' }
 
-export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, localeApproved, localePercent }: Props) {
+export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, localeApproved, localePercent, localeFilled }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [locales, setLocales] = useState<LocaleItem[]>(project.locales)
@@ -273,6 +276,11 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
             // Everything already on the project is off the list, so a taken
             // code cannot be picked; only a no-op pick has to be refused.
             const canSaveCode = !!pickedLocale && pickedLocale.code !== locale.code
+            // Translations belong to the column, not to the code on it, so
+            // re-pointing a column that already holds text relabels that text
+            // rather than moving or clearing it.
+            const filled = localeFilled?.get(locale.id) ?? 0
+            const relabelling = canSaveCode && filled > 0
             const percent = localePercent?.get(locale.id) ?? locale.percent
             const approved = localeApproved?.get(locale.id) ?? locale.approved
             const total = totalKeys ?? locale.total
@@ -301,9 +309,21 @@ export function ManageLocalesDialog({ project, onLocalesChanged, totalKeys, loca
                         placeholder="Pick a language…"
                         excludeCodes={new Set(locales.filter((l) => l.id !== locale.id).map((l) => l.code))}
                       />
-                      <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                        Currently <span className="font-mono">{locale.code}</span> — translations stay with this column
-                      </span>
+                      {relabelling ? (
+                        <span className="mt-0.5 flex items-start gap-1 text-[11px] text-amber-600 dark:text-amber-500">
+                          <AlertTriangle className="mt-px h-3 w-3 flex-shrink-0" />
+                          <span>
+                            {filled} translation{filled === 1 ? '' : 's'} written for{' '}
+                            <span className="font-mono">{locale.code}</span> will be labelled{' '}
+                            {pickedLocale?.name} — the text itself does not change
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                          Currently <span className="font-mono">{locale.code}</span>
+                          {filled > 0 && ` · ${filled} translation${filled === 1 ? '' : 's'}`}
+                        </span>
+                      )}
                     </div>
                   </div>
                 ) : (
