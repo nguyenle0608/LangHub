@@ -1,5 +1,6 @@
 import { createClient } from '../server'
 import { createAdminClient } from '../admin'
+import { resolveUserEmails } from './users'
 import type { Database } from '@/types/database'
 
 type TranslationRow = Database['public']['Tables']['translations']['Row']
@@ -163,9 +164,12 @@ export async function getTranslationHistoryForKey(keyId: string) {
     ])
   )
 
+  const emails = await resolveUserEmails(history.map((h) => h.changed_by))
+
   return history.map((h) => ({
     ...h,
     locale: localeByTranslationId[h.translation_id ?? ''] ?? { code: '?', name: '?' },
+    changed_by_email: h.changed_by ? (emails[h.changed_by] ?? null) : null,
   }))
 }
 
