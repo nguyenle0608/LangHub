@@ -241,15 +241,26 @@ export function ImportWizard({ project, branchId }: Props) {
    */
   const createLocaleFromColumn = async (entryKey: string, code: string) => {
     try {
+      // The name has to come from the language list — there is nothing else to
+      // derive "Arabic (United Arab Emirates)" from. When the list cannot be
+      // read the old code fell back to the locale code itself, which is stored
+      // and then shown forever as the language's name; the list serves a
+      // 17-entry offline fallback when its upstream is unreachable, so every
+      // regional code missed and got named after itself.
       const options = await fetch('/api/locales-list')
-        .then((r) => r.json() as Promise<{ code: string; name: string }[]>)
-        .catch(() => [] as { code: string; name: string }[])
-      const name = options.find((o) => o.code.toLowerCase() === code.toLowerCase())?.name ?? code
+        .then((r) => r.ok ? r.json() as Promise<{ code?: string; name?: string }[]> : [])
+        .catch(() => [] as { code?: string; name?: string }[])
+      const match = Array.isArray(options)
+        ? options.find((o) => o.code?.toLowerCase() === code.toLowerCase())
+        : undefined
+      if (!match?.name) {
+        throw new Error(`Could not look up the name for ${code} — try again, or add it from Manage Languages`)
+      }
 
       const resp = await fetch(`/api/projects/${project.id}/locales`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, name }),
+        body: JSON.stringify({ code, name: match.name }),
       })
       const data = await resp.json() as { locale?: LocaleWithStats; error?: unknown }
       if (!resp.ok || !data.locale) {
