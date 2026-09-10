@@ -111,6 +111,14 @@ export default function DocsPage() {
           </div>
 
           <div>
+            <h3 className="font-semibold">See what LangHub has</h3>
+            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`langhub locales`}</code></pre>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Lists the project&apos;s locales next to the file each one maps to, and ends with any code in <code className="rounded bg-muted px-1">langhub.json</code> that LangHub does not have — which is what <code className="rounded bg-muted px-1">pull</code> and <code className="rounded bg-muted px-1">push</code> will fail on. Run it first when a sync reports a locale it could not read.
+            </p>
+          </div>
+
+          <div>
             <h3 className="font-semibold">langhub.json</h3>
             <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`{
   "projectId": "4eb25308-4455-4fdc-881a-a9823bb6586b",
@@ -196,6 +204,9 @@ Replace 2 local values with LangHub's? [y]es all / [N]o / [r]eview each: r
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               The v1 API is disabled unless the deployment sets <code className="rounded bg-muted px-1">PUBLIC_API_ENABLED=true</code>, and a disabled deployment answers 404 rather than disclosing that the endpoints exist. That is by design, and it is the first thing to check when a correct token and project id still get nothing.
             </p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              A 404 on some locales but not others is a different thing: the project and branch are fine and those codes do not exist. <code className="rounded bg-muted px-1">langhub locales</code> says which. Both commands report every locale that failed rather than the first, and write nothing when any of them did.
+            </p>
           </div>
         </div>
       </section>
@@ -230,6 +241,7 @@ Replace 2 local values with LangHub's? [y]es all / [N]o / [r]eview each: r
                 <thead className="text-muted-foreground"><tr className="border-b"><th className="py-2 pr-4">Method</th><th className="py-2 pr-4">Path</th><th className="py-2 pr-4">Scope</th><th className="py-2">Purpose</th></tr></thead>
                 <tbody className="divide-y divide-border">
                   <tr><td className="py-2 pr-4 font-mono">GET</td><td className="py-2 pr-4 font-mono">/api/v1/projects</td><td className="py-2 pr-4">read</td><td className="py-2">Cursor-paginated projects for the token workspace.</td></tr>
+                  <tr><td className="py-2 pr-4 font-mono">GET</td><td className="py-2 pr-4 font-mono">/api/v1/projects/:id/locales</td><td className="py-2 pr-4">read</td><td className="py-2">Codes and names of the project&apos;s locales.</td></tr>
                   <tr><td className="py-2 pr-4 font-mono">GET</td><td className="py-2 pr-4 font-mono">/api/v1/projects/:id/translations</td><td className="py-2 pr-4">read</td><td className="py-2">Deterministic key/value JSON for one locale.</td></tr>
                   <tr><td className="py-2 pr-4 font-mono">GET</td><td className="py-2 pr-4 font-mono">/api/v1/projects/:id/export</td><td className="py-2 pr-4">read</td><td className="py-2">JSON, ARB, CSV, YAML, Android XML, or iOS strings.</td></tr>
                   <tr><td className="py-2 pr-4 font-mono">POST</td><td className="py-2 pr-4 font-mono">/api/v1/projects/:id/import</td><td className="py-2 pr-4">write</td><td className="py-2">Snapshot-first, transactional multipart import.</td></tr>

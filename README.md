@@ -121,6 +121,7 @@ Not published yet. Install it from source while it is still changing:
 ```bash
 cd cli && npx tsc -p tsconfig.json && npm link
 langhub init          # writes langhub.json and a gitignored .env.langhub
+langhub locales       # what LangHub has, and what langhub.json asks for that it does not
 langhub pull --check  # reports drift, writes nothing, exits 1 when out of date
 langhub pull          # LangHub -> repo: shows the plan, asks before replacing values
 langhub push          # repo -> LangHub: same, with a write-scoped token
