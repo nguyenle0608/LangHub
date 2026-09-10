@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { updateProject, deleteProject } from '@/lib/supabase/queries/projects'
 import { assertProjectAccess } from '@/lib/auth/access'
+import { zodErrorResponse } from '@/lib/api/validation-error'
 
 const UpdateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -19,7 +20,7 @@ export async function PATCH(
 
   const body: unknown = await request.json()
   const parsed = UpdateSchema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  if (!parsed.success) return zodErrorResponse(parsed.error)
 
   const access = await assertProjectAccess(user.id, params.projectId, 'admin')
   if (!access.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { updateMemberRole, removeMember } from '@/lib/supabase/queries/organizations'
 import type { MemberRole } from '@/types'
 import { assertOrgAccess } from '@/lib/auth/access'
+import { zodErrorResponse } from '@/lib/api/validation-error'
 
 const UpdateRoleSchema = z.object({
   role: z.enum(['admin', 'translator', 'viewer']),
@@ -33,7 +34,7 @@ export async function PATCH(
   const body: unknown = await request.json()
   const parsed = UpdateRoleSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+    return zodErrorResponse(parsed.error)
   }
 
   const result = await updateMemberRole(params.memberId, parsed.data.role as MemberRole)

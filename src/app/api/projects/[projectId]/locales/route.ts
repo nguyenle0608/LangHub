@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { addLocale } from '@/lib/supabase/queries/projects'
 import { assertProjectAccess } from '@/lib/auth/access'
 import { isValidLocaleCode, normalizeLocaleCode } from '@/lib/locale-code'
+import { zodErrorResponse } from '@/lib/api/validation-error'
 
 // Codes are stored canonically — lowercase language, uppercase region — so
 // en-US, en_us and EN-US cannot become three different locales on one project.
@@ -66,7 +67,7 @@ export async function POST(
 
   // Single: { code, name }
   const parsed = AddLocaleSchema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  if (!parsed.success) return zodErrorResponse(parsed.error)
 
   const result = await addLocale(params.projectId, parsed.data.code, parsed.data.name)
   if (result.error) return NextResponse.json({ error: result.error }, { status: 500 })

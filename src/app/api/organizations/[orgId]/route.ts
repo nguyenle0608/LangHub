@@ -5,6 +5,7 @@ import {
   updateOrganization,
   deleteOrganization,
 } from '@/lib/supabase/queries/organizations'
+import { zodErrorResponse } from '@/lib/api/validation-error'
 
 const UpdateOrgSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -51,7 +52,7 @@ export async function PATCH(
   const body: unknown = await request.json()
   const parsed = UpdateOrgSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+    return zodErrorResponse(parsed.error)
   }
 
   const result = await updateOrganization(params.orgId, parsed.data)

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { getComments, addComment, deleteComment } from '@/lib/supabase/queries/keys'
 import { assertKeysAccess } from '@/lib/auth/access'
+import { zodErrorResponse } from '@/lib/api/validation-error'
 
 const PostSchema = z.object({ message: z.string().min(1).max(2000) })
 
@@ -36,7 +37,7 @@ export async function POST(
 
   const body = await req.json() as unknown
   const parsed = PostSchema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  if (!parsed.success) return zodErrorResponse(parsed.error)
 
   const result = await addComment(keyId, user.id, parsed.data.message)
   if ('error' in result) return NextResponse.json({ error: result.error }, { status: 500 })

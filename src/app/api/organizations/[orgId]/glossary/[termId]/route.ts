@@ -4,6 +4,7 @@ import { assertOrgAccess } from '@/lib/auth/access'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { normalizeAssistanceText } from '@/lib/translation-assistance/matcher'
+import { zodErrorResponse } from '@/lib/api/validation-error'
 
 const UpdateSchema = z.object({
   sourceLocale: z.string().trim().toLowerCase().regex(/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/),
@@ -27,7 +28,7 @@ async function authorize(orgId: string) {
 export async function PATCH(request: Request, { params }: { params: { orgId: string; termId: string } }) {
   if (!(await authorize(params.orgId))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const parsed = UpdateSchema.safeParse(await request.json().catch(() => null))
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  if (!parsed.success) return zodErrorResponse(parsed.error)
   const value = parsed.data
   const { data, error } = await createAdminClient().from('glossary_terms').update({
     source_locale: value.sourceLocale.toLowerCase(), target_locale: value.targetLocale.toLowerCase(),

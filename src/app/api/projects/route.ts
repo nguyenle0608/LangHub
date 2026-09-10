@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createProject, getProjects } from '@/lib/supabase/queries/projects'
 import { assertOrgAccess } from '@/lib/auth/access'
+import { zodErrorResponse } from '@/lib/api/validation-error'
 
 const CreateProjectSchema = z.object({
   orgId: z.string().uuid(),
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
   const body: unknown = await request.json()
   const parsed = CreateProjectSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+    return zodErrorResponse(parsed.error)
   }
 
   const access = await assertOrgAccess(user.id, parsed.data.orgId, 'admin')
