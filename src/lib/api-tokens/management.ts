@@ -14,13 +14,26 @@ export interface ApiTokenMetadata {
   revokedAt: string | null
   createdAt: string
   createdBy: string | null
+  /** Set once this token has been rotated: the token that replaced it. */
+  replacedBy?: string | null
 }
+
+/**
+ * How long a rotated token keeps working after its replacement is issued.
+ *
+ * Zero means the old secret dies immediately, which is right for a leak. Any
+ * other value is an overlap for deployments to catch up in — the reason to
+ * rotate rather than revoke-and-recreate. Capped at a day: a grace period is a
+ * deployment window, and one that outlives the deploy is just a second live
+ * credential nobody is tracking.
+ */
+export const MAX_ROTATION_GRACE_MINUTES = 1440
 
 export async function listOrganizationApiTokens(orgId: string): Promise<ApiTokenMetadata[]> {
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('api_tokens')
-    .select('id, name, token_prefix, scope, last_used_at, expires_at, revoked_at, created_at, created_by')
+    .select('id, name, token_prefix, scope, last_used_at, expires_at, revoked_at, created_at, created_by, replaced_by')
     .eq('org_id', orgId)
     .order('created_at', { ascending: false })
   if (error) throw new Error('Failed to list API tokens')
@@ -34,6 +47,7 @@ export async function listOrganizationApiTokens(orgId: string): Promise<ApiToken
     revokedAt: token.revoked_at,
     createdAt: token.created_at,
     createdBy: token.created_by,
+    replacedBy: token.replaced_by,
   }))
 }
 
@@ -84,4 +98,61 @@ export async function revokeOrganizationApiToken(orgId: string, tokenId: string)
     .select('id')
     .maybeSingle()
   return !error && Boolean(data)
+}
+
+
+/**
+ * Issue a replacement for an existing token, keeping its name and scope.
+ *
+ * The caller gets the new secret once, exactly as on creation. The old one
+ * keeps working for `graceMinutes` so the systems configured with it can be
+ * updated without a window where nothing authenticates — which is the whole
+ * difference between rotating a credential and breaking one.
+ */
+export async function rotateOrganizationApiToken(input: {
+  orgId: string
+  userId: string
+  tokenId: string
+  graceMinutes: number
+}): Promise<
+  | { token: string; metadata: ApiTokenMetadata }
+  | { error: 'limit' | 'not_found' | 'not_active' | 'database' }
+> {
+  const admin = createAdminClient()
+  const token = generateApiToken()
+  const { data: rows, error } = await admin.rpc('rotate_api_token', {
+    p_org_id: input.orgId,
+    p_user_id: input.userId,
+    p_token_id: input.tokenId,
+    p_token_hash: hashApiToken(token),
+    p_token_prefix: apiTokenDisplayPrefix(token),
+    p_grace_minutes: input.graceMinutes,
+    p_active_limit: MAX_ACTIVE_API_TOKENS,
+  })
+  const data = rows?.[0]
+  if (error || !data) return { error: rotationError(error?.message) }
+  return {
+    token,
+    metadata: {
+      id: data.id,
+      name: data.name,
+      tokenPrefix: data.token_prefix,
+      scope: data.scope as ApiTokenScope,
+      lastUsedAt: data.last_used_at,
+      expiresAt: data.expires_at,
+      revokedAt: data.revoked_at,
+      createdAt: data.created_at,
+      createdBy: data.created_by,
+      replacedBy: null,
+    },
+  }
+}
+
+/** The function raises with a bare tag so the caller picks the wording. */
+export function rotationError(message: string | undefined): 'limit' | 'not_found' | 'not_active' | 'database' {
+  if (!message) return 'database'
+  if (message.includes('active_token_limit')) return 'limit'
+  if (message.includes('token_not_found')) return 'not_found'
+  if (message.includes('token_not_active')) return 'not_active'
+  return 'database'
 }

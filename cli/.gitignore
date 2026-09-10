@@ -1,0 +1,3 @@
+# Build output. Reproduced by `npx tsc -p tsconfig.json`, and published from
+# `files` in package.json rather than from the repository.
+dist/
