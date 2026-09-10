@@ -25,6 +25,8 @@
  *     values that were never quoted.
  */
 
+import { TRANSLATION_KEY_PATTERN } from '@/lib/translation-keys'
+
 const TAB = '\t'
 const QUOTE = '"'
 
@@ -109,7 +111,15 @@ export function foldContinuationRows(rows: string[][], width: number): string[][
     // column reaches full width before it is actually finished.
     const incomplete = previous
       && (previous.length < width || endsMidQuote(previous[previous.length - 1] ?? ''))
-    if (incomplete) {
+    // A full-width row led by a key is always a row of its own, whatever state
+    // the one above it is in. Without this a value broken inside the *last*
+    // column — which leaves its row at full width, so counting sees nothing
+    // wrong — swallows the next real row and corrupts that row's key.
+    const startsRow = row.length >= width && isKeyCell(row[0] ?? '')
+    // The mirror of that: the remainder of such a value is short and does not
+    // read as a key, so it belongs to the value above rather than to a row.
+    const continues = previous && !startsRow && (incomplete || !isKeyCell(row[0] ?? ''))
+    if (continues) {
       previous[previous.length - 1] += '\n' + (row[0] ?? '')
       previous.push(...row.slice(1))
       continue
@@ -118,6 +128,18 @@ export function foldContinuationRows(rows: string[][], width: number): string[][
   }
 
   return folded
+}
+
+/**
+ * Whether a cell reads as the key that opens a row. Deliberately unforgiving
+ * about surrounding space: a key never carries any, while the tail of a value
+ * broken over two lines usually starts with one.
+ *
+ * Empty counts, because a row with no key is still a row — a blank key is
+ * caught later, by the importer, with a message that says so.
+ */
+function isKeyCell(cell: string): boolean {
+  return cell === '' || TRANSLATION_KEY_PATTERN.test(cell)
 }
 
 /**
