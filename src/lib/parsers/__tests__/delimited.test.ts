@@ -120,4 +120,16 @@ describe('parseTsv', () => {
     expect(rows[1]!['en']).toBe('first line\nsecond line')
     expect(rows[2]!['en']).toBe('a, b')
   })
+  it('does not let a newline in the last column swallow the next row', () => {
+    const { rows } = parseTsv([
+      row('Key', 'en', 'km'),
+      row('greeting', 'Hello', 'Welcome to'),  // the km value breaks here...
+      ' WeMasterTrade',                        // ...and finishes on its own line
+      row('farewell', 'Bye', 'Lia hauy'),
+    ].join('\n'))
+
+    expect(rows.map((r) => r['Key'])).toEqual(['greeting', 'farewell'])
+    expect(rows[0]!['km']).toBe('Welcome to\n WeMasterTrade')
+    expect(rows[1]!['en']).toBe('Bye')
+  })
 })
