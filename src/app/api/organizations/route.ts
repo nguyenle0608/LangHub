@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { getOrganizations, createOrganization } from '@/lib/supabase/queries/organizations'
+import { zodErrorResponse } from '@/lib/api/validation-error'
 
 const CreateOrgSchema = z.object({
   name: z.string().min(1).max(100),
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
   const body: unknown = await request.json()
   const parsed = CreateOrgSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+    return zodErrorResponse(parsed.error)
   }
 
   const result = await createOrganization(parsed.data.name, user.id)

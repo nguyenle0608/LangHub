@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { restoreSnapshot } from '@/lib/versions/snapshot'
 import { resolveBranchId } from '@/lib/branches/queries'
 import { assertBranchAccess, assertProjectAccess, assertVersionAccess } from '@/lib/auth/access'
+import { zodErrorResponse } from '@/lib/api/validation-error'
 
 // Forking a 1191-key branch measured ~12.9s and a large import is comparable,
 // both past Netlify's 10s default. Route segment config is the Next-native way
@@ -32,7 +33,7 @@ export async function POST(
   const { versionId } = await params
   const body = await req.json() as unknown
   const parsed = RestoreSchema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  if (!parsed.success) return zodErrorResponse(parsed.error)
 
   const [projectAccess, versionAccess] = await Promise.all([
     assertProjectAccess(user.id, parsed.data.projectId, 'admin'),

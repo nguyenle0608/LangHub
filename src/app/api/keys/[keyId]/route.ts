@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { renameKey, updateKeyMeta } from '@/lib/supabase/queries/keys'
 import { assertKeysAccess } from '@/lib/auth/access'
 import { TRANSLATION_KEY_MAX_LENGTH, TRANSLATION_KEY_PATTERN } from '@/lib/translation-keys'
+import { zodErrorResponse } from '@/lib/api/validation-error'
 
 const PatchSchema = z.object({
   key: z.string().min(1).max(TRANSLATION_KEY_MAX_LENGTH).regex(TRANSLATION_KEY_PATTERN).optional(),
@@ -58,7 +59,7 @@ export async function PATCH(
 
   const body = await req.json() as unknown
   const parsed = PatchSchema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  if (!parsed.success) return zodErrorResponse(parsed.error)
 
   const { key, ...meta } = parsed.data
 

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { findDuplicateGroups, mergeKeys, linkKeys } from '@/lib/supabase/queries/keys'
 import { resolveBranchId } from '@/lib/branches/queries'
 import { assertKeysAccess, assertProjectAccess } from '@/lib/auth/access'
+import { zodErrorResponse } from '@/lib/api/validation-error'
 
 const MergeSchema = z.object({
   projectId: z.string().uuid(),
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
 
   if (action === 'link') {
     const parsed = LinkSchema.safeParse(body)
-    if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+    if (!parsed.success) return zodErrorResponse(parsed.error)
     const access = await assertKeysAccess(
       user.id,
       [parsed.data.parentKeyId, parsed.data.childKeyId],
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest) {
 
   // default: merge
   const parsed = MergeSchema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  if (!parsed.success) return zodErrorResponse(parsed.error)
   const [projectAccess, keysAccess] = await Promise.all([
     assertProjectAccess(user.id, parsed.data.projectId, 'admin'),
     assertKeysAccess(

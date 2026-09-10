@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { getOrgMembers, inviteMember } from '@/lib/supabase/queries/organizations'
 import type { MemberRole } from '@/types'
+import { zodErrorResponse } from '@/lib/api/validation-error'
 
 const InviteMemberSchema = z.object({
   email: z.string().email(),
@@ -54,7 +55,7 @@ export async function POST(
   const body: unknown = await request.json()
   const parsed = InviteMemberSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+    return zodErrorResponse(parsed.error)
   }
 
   const result = await inviteMember(params.orgId, parsed.data.email, parsed.data.role as MemberRole)

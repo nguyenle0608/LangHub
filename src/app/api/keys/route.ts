@@ -6,6 +6,7 @@ import { createTranslationKey, getTranslationKeys, getTranslationKeysPage } from
 import { resolveBranchId } from '@/lib/branches/queries'
 import { assertBranchAccess, assertKeysAccess, assertLocalesAccess, assertProjectAccess } from '@/lib/auth/access'
 import { TRANSLATION_KEY_FORMAT_HINT, TRANSLATION_KEY_MAX_LENGTH, TRANSLATION_KEY_PATTERN } from '@/lib/translation-keys'
+import { zodErrorResponse } from '@/lib/api/validation-error'
 
 const PostSchema = z.object({
   projectId: z.string().uuid(),
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json() as unknown
   const parsed = PostSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+    return zodErrorResponse(parsed.error)
   }
 
   const projectAccess = await assertProjectAccess(user.id, parsed.data.projectId, 'translator')
