@@ -126,3 +126,21 @@ async function send(
   }
   return response
 }
+
+export interface RemoteLocale {
+  code: string
+  name: string
+  isBase: boolean
+}
+
+/** Every locale the project has, so a caller can see what there is to ask for. */
+export async function fetchLocales(config: Config, token: string): Promise<RemoteLocale[]> {
+  const response = await send(
+    config,
+    `/api/v1/projects/${config.projectId}/locales`,
+    { headers: { Authorization: `Bearer ${token}` } },
+    'locales'
+  )
+  const json = await response.json() as { data?: RemoteLocale[] }
+  return json.data ?? []
+}

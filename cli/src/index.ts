@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process'
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import { fetchLocale, pushLocale } from './api.js'
+import { pathToFileURL } from 'node:url'
+import { fetchLocale, fetchLocales, pushLocale } from './api.js'
 import { ENV_FILE, loadEnvFile } from './env.js'
 import { loadConfig, requireToken, type Config } from './config.js'
 import { formatNotInLangHub, formatOverwrites, formatPlan, PULL_SIDES, PUSH_SIDES, type Sides } from './report.js'
@@ -40,13 +41,18 @@ async function pull(
   // Everything is fetched and merged before anything is written. A run that
   // asks "overwrite 40 values?" after having already written eleven files is
   // not asking a question — it is announcing a decision it half made.
-  const planned = []
-  for (const code of wanted) {
+  const { fetched, failed } = await fetchAll(wanted, (code) => fetchLocale(config, code, token))
+  if (failed.length) {
+    console.error(explainFailures(failed, fetched.length > 0, config))
+    return 1
+  }
+
+  const planned = fetched.map(({ code, value }) => {
     const path = resolve(config.output, `${config.locales[code]}.json`)
     const report = emptyReport()
-    const merged = merge(await fetchLocale(config, code, token), readLocal(path), report)
-    planned.push({ code, label: `${code} -> ${config.locales[code]}.json`, path, merged, report })
-  }
+    const merged = merge(value, readLocal(path), report)
+    return { code, label: `${code} -> ${config.locales[code]}.json`, path, merged, report }
+  })
 
   console.log('\nPlan:')
   for (const { label, report } of planned) console.log(formatPlan(label, report))
@@ -197,6 +203,90 @@ langhub.json holds no secret and belongs in git. The token never goes in it.`)
 }
 
 
+
+
+/**
+ * What LangHub has, next to what this repo asks for.
+ *
+ * The listing on its own would be half an answer. The question someone has when
+ * they run this is "why did my pull fail", and that is answered by the two
+ * sides together: a code in langhub.json that LangHub does not have is a typo
+ * or a locale nobody created, and a code LangHub has that langhub.json does not
+ * is a language this repo is simply not shipping yet.
+ */
+async function locales(config: Config): Promise<number> {
+  const remote = await fetchLocales(config, requireToken())
+  const mapped = new Set(Object.keys(config.locales))
+  const known = new Set(remote.map((locale) => locale.code))
+
+  console.log(`\n${remote.length} locale${remote.length === 1 ? '' : 's'} in this project:`)
+  for (const locale of remote) {
+    const marks = [locale.isBase ? 'base' : '', mapped.has(locale.code) ? '' : 'not in langhub.json']
+      .filter(Boolean).join(', ')
+    const target = mapped.has(locale.code) ? `-> ${config.locales[locale.code]}.json` : ''
+    console.log(`  ${locale.code.padEnd(8)} ${locale.name.padEnd(22)} ${target}${marks ? `  (${marks})` : ''}`)
+  }
+
+  const unknown = Object.keys(config.locales).filter((code) => !known.has(code))
+  if (unknown.length) {
+    console.log(`\n${unknown.length} in langhub.json that LangHub does not have — pull and push will fail on these:`)
+    for (const code of unknown) console.log(`  ${code} -> ${config.locales[code]}.json`)
+    return 1
+  }
+  return 0
+}
+
+export interface Fetched<T> { code: string; value: T }
+export interface Failed { code: string; message: string }
+
+/**
+ * Fetch every locale, and report all the ones that failed rather than the
+ * first.
+ *
+ * Stopping at the first bad locale means a config with three typos takes three
+ * runs to fix, each one revealing the next. Nothing is written either way — the
+ * caller still refuses the whole run — so there is no reason not to finish
+ * looking.
+ */
+export async function fetchAll<T>(
+  codes: string[],
+  load: (code: string) => Promise<T>
+): Promise<{ fetched: Array<Fetched<T>>; failed: Failed[] }> {
+  const fetched: Array<Fetched<T>> = []
+  const failed: Failed[] = []
+  for (const code of codes) {
+    try {
+      fetched.push({ code, value: await load(code) })
+    } catch (error) {
+      failed.push({ code, message: (error as Error).message })
+    }
+  }
+  return { fetched, failed }
+}
+
+/**
+ * Say which of the three things is missing.
+ *
+ * The API answers 404 the same way for a project, a branch and a locale it
+ * cannot find, which is right of it — telling an unauthorized caller which part
+ * of a guess was correct is how a resource gets enumerated. From in here the
+ * ambiguity is only unhelpful, and one fact resolves it: if some locales came
+ * back, the project and branch are fine and the rest are locale names.
+ */
+export function explainFailures(failed: Failed[], anySucceeded: boolean, config: Config): string {
+  const lines = [`\n${failed.length} locale${failed.length === 1 ? '' : 's'} could not be read:`]
+  for (const { code, message } of failed) {
+    lines.push(`  ${code} -> ${config.locales[code]}.json`)
+    lines.push(`    ${message}`)
+  }
+  lines.push(anySucceeded
+    ? '\nOther locales worked, so the project and branch are right. Check that these\n' +
+      'codes exist in LangHub and match the left-hand side of "locales" in langhub.json.'
+    : `\nNo locale worked, so this is more likely the project or the branch than the\n` +
+      `locale names. Check projectId and branch "${config.branch}" in langhub.json.`)
+  return lines.join('\n')
+}
+
 /**
  * Ask what to do about overwrites, in whichever direction.
  *
@@ -267,15 +357,21 @@ async function push(
   if (unknown.length) throw new Error(`Not in langhub.json locales: ${unknown.join(', ')}`)
 
   const wanted = options.only.length ? options.only : Object.keys(config.locales)
-  const planned = []
-  for (const code of wanted) {
-    const path = resolve(config.output, `${config.locales[code]}.json`)
-    const local = readLocal(path)
-    if (Object.keys(local).length === 0) continue
-    const report = emptyReport()
-    const outgoing = diffForPush(local, await fetchLocale(config, code, token, 'all'), report)
-    planned.push({ code, label: `${config.locales[code]}.json -> ${code}`, outgoing, report })
+  // Only locales this repo actually has a file for: pushing is about sending
+  // what is here, and a locale with no file has nothing to say.
+  const present = wanted.filter((code) =>
+    Object.keys(readLocal(resolve(config.output, `${config.locales[code]}.json`))).length > 0)
+  const { fetched, failed } = await fetchAll(present, (code) => fetchLocale(config, code, token, 'all'))
+  if (failed.length) {
+    console.error(explainFailures(failed, fetched.length > 0, config))
+    return 1
   }
+
+  const planned = fetched.map(({ code, value }) => {
+    const local = readLocal(resolve(config.output, `${config.locales[code]}.json`))
+    const report = emptyReport()
+    return { code, label: `${config.locales[code]}.json -> ${code}`, outgoing: diffForPush(local, value, report), report }
+  })
 
   if (planned.length === 0) throw new Error('No locale files found to push')
 
@@ -334,6 +430,7 @@ async function push(
 const USAGE = `langhub — move translations between LangHub and this repo
 
   langhub init                                          write a starter langhub.json
+  langhub locales                                       list the project's locales
   langhub pull [--check] [--yes] [--locale <code>]...   LangHub -> this repo
   langhub push [--check] [--yes] [--locale <code>]...   this repo -> LangHub
 
@@ -348,6 +445,16 @@ and guarantees the keys, and leaves what a value means to the project reading it
 The token comes from LANGHUB_TOKEN, so the config file can be committed and the
 credential cannot.`
 
+function isEntryPoint(): boolean {
+  const invoked = process.argv[1]
+  if (!invoked) return false
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(invoked)).href
+  } catch {
+    return false
+  }
+}
+
 async function main(argv: string[]): Promise<number> {
   loadEnvFile(process.cwd())
   const [command, ...rest] = argv
@@ -356,6 +463,7 @@ async function main(argv: string[]): Promise<number> {
     return 0
   }
   if (command === 'init') return init(process.cwd())
+  if (command === 'locales') return locales(loadConfig(process.cwd()))
   if (command !== 'pull' && command !== 'push') {
     console.error(`Unknown command "${command}".\n\n${USAGE}`)
     return 2
@@ -379,9 +487,17 @@ async function main(argv: string[]): Promise<number> {
     : pull(config, { check, yes, only })
 }
 
-main(process.argv.slice(2))
-  .then((code) => { process.exitCode = code })
-  .catch((error: Error) => {
-    console.error(`\n${error.message}`)
-    process.exitCode = 1
-  })
+// Only when run as a command. Importing this module — a test reaching for one
+// of the helpers above — must not execute a CLI run as a side effect.
+//
+// Compared after resolving symlinks: `npm link` puts a link on PATH, so argv[1]
+// is the link and import.meta.url is what it points at, and comparing them raw
+// silently turns the command into a no-op.
+if (isEntryPoint()) {
+  main(process.argv.slice(2))
+    .then((code) => { process.exitCode = code })
+    .catch((error: Error) => {
+      console.error(`\n${error.message}`)
+      process.exitCode = 1
+    })
+}
