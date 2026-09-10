@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { ArrowRight, BookOpen, Download, GitBranch, History, KeyRound, Languages, Terminal } from 'lucide-react'
+import { ArrowRight, BookOpen, Download, GitBranch, History, KeyRound, Languages, TerminalSquare, Terminal } from 'lucide-react'
 import { CurlCodeBlock } from '@/components/marketing/CurlCodeBlock'
 
 export const metadata: Metadata = {
@@ -75,6 +75,128 @@ export default function DocsPage() {
               <p className="mt-2 text-sm leading-6 text-muted-foreground">{guide.text}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section id="cli" className="mt-14 scroll-mt-20">
+        <div className="flex items-center gap-3">
+          <div className="inline-flex rounded-lg bg-blue-500/10 p-2.5 ring-1 ring-inset ring-blue-500/20">
+            <TerminalSquare className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight">Command line</h2>
+            <p className="text-sm text-muted-foreground">Move translations between LangHub and a repository, one command each way.</p>
+          </div>
+        </div>
+
+        <div className="mt-6 space-y-8 rounded-xl border border-border bg-card p-6">
+          <div>
+            <p className="text-sm leading-6 text-muted-foreground">
+              The CLI carries the strings and guarantees which keys are present. What a value <em>means</em> — placeholder syntax, plural rules, whether an empty one falls back — belongs to the i18n library reading the file, so the CLI has no framework-specific rules and needs none. It writes JSON today; other formats report that they are coming.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-semibold">Install</h3>
+            <p className="mt-2 text-sm text-muted-foreground">Not on npm yet. Build it from the LangHub repository:</p>
+            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`cd cli && npx tsc -p tsconfig.json && npm link`}</code></pre>
+          </div>
+
+          <div>
+            <h3 className="font-semibold">Set up a repository</h3>
+            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`langhub init`}</code></pre>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Writes <code className="rounded bg-muted px-1">langhub.json</code> and an empty <code className="rounded bg-muted px-1">.env.langhub</code>, and adds the latter to <code className="rounded bg-muted px-1">.gitignore</code> unless git already ignores it. Nothing is ever overwritten, so it is safe to re-run on a repository that is half configured. The config file holds no secret and belongs in git; the token never goes in it.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-semibold">langhub.json</h3>
+            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`{
+  "projectId": "4eb25308-4455-4fdc-881a-a9823bb6586b",
+  "branch": "main",
+  "format": "json",
+  "output": "assets/translations",
+  "apiBase": "https://lang-hub.netlify.app",
+  "locales": {
+    "en-US": "en-US",
+    "vi-VN": "vi-VN",
+    "hi-IN": "en-IN"
+  }
+}`}</code></pre>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              <code className="rounded bg-muted px-1">locales</code> maps a LangHub locale code to the file this repository reads it from, and the two sides are allowed to differ — the <code className="rounded bg-muted px-1">hi-IN → en-IN</code> line above is a real case, where an app serves Hindi under the tag its backend already uses. This is the field worth checking twice: getting it wrong ships one language&apos;s text under another language&apos;s name, and nothing downstream will notice.
+            </p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              <code className="rounded bg-muted px-1">apiBase</code> has no default and must be set. The CLI sends a bearer token, so the host receiving it is always a choice someone made rather than a guess. https is required except on localhost.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-semibold">Credentials</h3>
+            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`# .env.langhub — gitignored
+LANGHUB_TOKEN=lh_...`}</code></pre>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              A <code className="rounded bg-muted px-1">read</code> token is enough to pull; pushing needs <code className="rounded bg-muted px-1">write</code>. A variable already set in the environment wins over the file, so a CI secret is never overridden by a copy someone left behind locally.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-semibold">Pull, and push back</h3>
+            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`langhub pull --check    # what would change here; writes nothing, exits 1 when out of date
+langhub pull            # LangHub -> this repo
+langhub push            # this repo -> LangHub`}</code></pre>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Both fetch and merge everything before writing anything, then print a plan. A run that asks &ldquo;overwrite 40 values?&rdquo; after having already written eleven files is not asking a question.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-semibold">Reviewing what gets replaced</h3>
+            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`Plan:
+  vi-VN -> vi-VN.json    1 added, 2 overwritten, 1 kept
+
+vi-VN -> vi-VN.json — 2 values would be replaced:
+  buttons.save
+    here:    Lưu lại
+    LangHub: Lưu
+
+Replace 2 local values with LangHub's? [y]es all / [N]o / [r]eview each: r
+
+[1/2] vi-VN -> vi-VN.json  buttons.save
+  here:    Lưu lại
+  LangHub: Lưu
+  [y]take / [N]keep / [a]take rest / [k]keep rest / [q]uit:`}</code></pre>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              New keys are written without asking — nothing is lost. Only a differing value needs a decision, and both values are shown because a count cannot be judged: &ldquo;20 overwritten&rdquo; is either a routine sync or a morning of someone&apos;s work. Keeping one value leaves the rest of that file to be written normally. Quitting writes nothing at all.
+            </p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              <code className="rounded bg-muted px-1">--yes</code> accepts every replacement without asking. Without a terminal to ask — CI, a cron job — the run refuses rather than assuming, so <code className="rounded bg-muted px-1">--yes</code> is how an unattended run says in writing that it accepts them.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-semibold">What the CLI will not do</h3>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-muted-foreground">
+              <li><strong>It never deletes a key.</strong> One that exists on one side and not the other is reported and kept. &ldquo;Not uploaded yet&rdquo; and &ldquo;deliberately removed&rdquo; are indistinguishable from here, and only someone who can tell them apart should act on it.</li>
+              <li><strong>It does not read inside a value.</strong> Placeholders, plural forms and markup are carried through exactly as they are.</li>
+              <li><strong>It does not write empty values.</strong> A key with no approved translation is left out, so the reading library falls back instead of rendering nothing.</li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 className="font-semibold">Round trip</h3>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              An import lands as <code className="rounded bg-muted px-1">pending</code>, and <code className="rounded bg-muted px-1">pull</code> takes only approved values. So a value pushed up has to be reviewed in LangHub before it comes back down — until then a pull looks exactly like the push having failed. <code className="rounded bg-muted px-1">push</code> compares against everything LangHub holds, not only approved values, so someone else&apos;s draft appears in the plan instead of being silently replaced.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-semibold">If every request returns 404</h3>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              The v1 API is disabled unless the deployment sets <code className="rounded bg-muted px-1">PUBLIC_API_ENABLED=true</code>, and a disabled deployment answers 404 rather than disclosing that the endpoints exist. That is by design, and it is the first thing to check when a correct token and project id still get nothing.
+            </p>
+          </div>
         </div>
       </section>
 
