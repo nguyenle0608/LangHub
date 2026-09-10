@@ -1,0 +1,13 @@
+{
+  "name": "@langhub/cli",
+  "version": "0.1.0",
+  "description": "Pull translations from LangHub into a repo, with framework-aware rules",
+  "bin": { "langhub": "dist/index.js" },
+  "type": "module",
+  "files": ["dist"],
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build"
+  }
+}
