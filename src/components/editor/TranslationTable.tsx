@@ -34,6 +34,15 @@ const BulkActionBar = dynamic(() => import('./BulkActionBar').then((m) => m.Bulk
 const CellActionBar = dynamic(() => import('./CellActionBar').then((m) => m.CellActionBar))
 const ManageLocalesDialog = dynamic(() => import('./ManageLocalesDialog').then((m) => m.ManageLocalesDialog))
 import {
+  STATUS_ORDER,
+  formatStatusList,
+  matchesColumnStatus,
+  matchesKeyStatus,
+  toggleStatus,
+  STATUS_LABEL,
+  type KeyStatus,
+} from '@/lib/editor/status-filter'
+import {
   KEY_COL,
   buildCopyGrid,
   includesKeyColumn,
@@ -74,7 +83,14 @@ interface Props {
   initialSearch?: string
 }
 
-type FilterStatus = 'all' | 'empty' | 'pending' | 'reviewed' | 'approved'
+// 'all' is a row in the sidebar list and an item in the column popover — a
+// button that clears the selection. It is never stored: the selection is a set,
+// and an empty set already means "not filtered".
+type FilterStatus = 'all' | KeyStatus
+
+// Shared stand-in for "this column has no filter". A fresh `new Set()` per
+// render would be a new identity every pass.
+const EMPTY_STATUSES: ReadonlySet<KeyStatus> = new Set()
 
 type VirtualRow =
   | { type: 'group'; fullPath: string; label: string; depth: number; count: number }
@@ -234,7 +250,7 @@ function KeyTreeNodeRow({
 function keyOverallStatus(
   key: KeyWithTranslations,
   locales: ProjectWithStats['locales'],
-): string {
+): KeyStatus {
   // Status normally reflects the target (non-base) locales. When the project
   // has only the base locale, fall back to scoring the base itself — otherwise
   // every key would read as "empty" even after the base is filled/approved.
@@ -332,7 +348,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     else url.searchParams.delete('q')
     window.history.replaceState(null, '', `${url.pathname}${url.search}`)
   }, [search])
-  const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
+  const [filterStatus, setFilterStatus] = useState<Set<KeyStatus>>(new Set())
   const [filterTags, setFilterTags] = useState<Set<string>>(new Set())
   const [editingCell, setEditingCell] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
@@ -342,7 +358,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   const [showAddKey, setShowAddKey] = useState(false)
   const [showExport, setShowExport] = useState(false)
   const [mergeSourceId, setMergeSourceId] = useState<string | null>(null)
-  const [columnFilters, setColumnFilters] = useState<Map<string, FilterStatus>>(new Map())
+  const [columnFilters, setColumnFilters] = useState<Map<string, Set<KeyStatus>>>(new Map())
   const [selectedTreeKeyIds, setSelectedTreeKeyIds] = useState<Set<string>>(new Set())
   const [expandedKeyTreeNodeIds, setExpandedKeyTreeNodeIds] = useState<Set<string>>(() => new Set([KEY_TREE_ROOT_ID]))
   const [groupBy, setGroupBy] = useState(false)
@@ -682,8 +698,8 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
       )
     }
 
-    if (filterStatus !== 'all') {
-      result = result.filter((k) => keyOverallStatus(k, locales) === filterStatus)
+    if (filterStatus.size > 0) {
+      result = result.filter((k) => matchesKeyStatus(filterStatus, keyOverallStatus(k, locales)))
     }
 
     if (selectedLocaleId) {
@@ -700,13 +716,11 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
       })
     }
 
-    columnFilters.forEach((colStatus, localeId) => {
-      if (colStatus === 'all') return
-      result = result.filter((k) => {
-        const t = k.translations.find((tr) => tr.locale_id === localeId)
-        if (colStatus === 'empty') return !t?.value || t.status === 'empty'
-        return t?.status === colStatus
-      })
+    columnFilters.forEach((selected, localeId) => {
+      if (selected.size === 0) return
+      result = result.filter((k) =>
+        matchesColumnStatus(selected, k.translations.find((tr) => tr.locale_id === localeId))
+      )
     })
 
     return result
@@ -1912,17 +1926,25 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
 
   const selectedKey = keys.find((k) => k.id === selectedKeyId)
 
+  const statusCounts: Record<KeyStatus, number> = {
+    empty: stats.empty, pending: stats.pending, reviewed: stats.reviewed, approved: stats.approved,
+  }
+
   // Active-filter chips — one per enabled filter, so the AND-combination is
   // visible and each can be removed individually (or all at once).
-  const STATUS_LABEL: Record<Exclude<FilterStatus, 'all'>, string> = {
-    empty: 'Untranslated', pending: 'Pending', reviewed: 'Reviewed', approved: 'Approved',
-  }
   const activeFilters: { key: string; label: string; onRemove: () => void }[] = []
   if (search) {
     activeFilters.push({ key: 'search', label: `Search: “${search}”`, onRemove: () => setSearch('') })
   }
-  if (filterStatus !== 'all') {
-    activeFilters.push({ key: 'status', label: `Status: ${STATUS_LABEL[filterStatus]}`, onRemove: () => setFilterStatus('all') })
+  if (filterStatus.size > 0) {
+    // One chip for the whole set, not one per status: a four-status selection
+    // across three columns would crowd every other filter off the row. A single
+    // status is removed where it was picked, which also shows its count.
+    activeFilters.push({
+      key: 'status',
+      label: `Status: ${formatStatusList(filterStatus)}`,
+      onRemove: () => setFilterStatus(new Set()),
+    })
   }
   if (selectedLocaleId) {
     const loc = locales.find((l) => l.id === selectedLocaleId)
@@ -1935,12 +1957,12 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
       onRemove: () => setSelectedTreeKeyIds(new Set()),
     })
   }
-  columnFilters.forEach((st, localeId) => {
-    if (st === 'all') return
+  columnFilters.forEach((selected, localeId) => {
+    if (selected.size === 0) return
     const loc = locales.find((l) => l.id === localeId)
     activeFilters.push({
       key: `col-${localeId}`,
-      label: `${(loc?.code ?? '').toUpperCase()}: ${STATUS_LABEL[st]}`,
+      label: `${(loc?.code ?? '').toUpperCase()}: ${formatStatusList(selected)}`,
       onRemove: () => setColumnFilters((prev) => { const n = new Map(prev); n.delete(localeId); return n }),
     })
   })
@@ -1953,7 +1975,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   })
   const clearAllFilters = () => {
     setSearch('')
-    setFilterStatus('all')
+    setFilterStatus(new Set())
     setSelectedLocaleId(null)
     setSelectedTreeKeyIds(new Set())
     setFilterTags(new Set())
@@ -2366,12 +2388,14 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
               </button>
               {!collapsedSidebarSections.has('status') && ([
                 { id: 'all', label: 'All Keys', count: stats.total },
-                { id: 'empty', label: 'Untranslated', count: stats.empty },
-                { id: 'pending', label: 'Pending', count: stats.pending },
-                { id: 'reviewed', label: 'Reviewed', count: stats.reviewed },
-                { id: 'approved', label: 'Approved', count: stats.approved },
+                // Counts are whole-project totals, not what survives the current
+                // filter — they are how a user decides what to select next.
+                ...STATUS_ORDER.map((id) => ({ id, label: STATUS_LABEL[id], count: statusCounts[id] })),
               ] as { id: FilterStatus; label: string; count: number }[]).map((item) => {
-                const isActive = filterStatus === item.id && !selectedLocaleId
+                // "All Keys" is the cleared state, not a selected one.
+                const isActive = item.id === 'all'
+                  ? filterStatus.size === 0 && !selectedLocaleId
+                  : filterStatus.has(item.id) && !selectedLocaleId
                 const dotColor =
                   item.id === 'approved' ? 'bg-emerald-500' :
                   item.id === 'reviewed' ? 'bg-blue-500' :
@@ -2380,7 +2404,15 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                 return (
                   <button
                     key={item.id}
-                    onClick={() => { setFilterStatus(item.id); setSelectedLocaleId(null) }}
+                    // Every update goes through the functional form. A set built
+                    // during render would change identity on each pass, and the
+                    // effect watching filterStatus would clear the user's cell
+                    // selection continuously.
+                    onClick={() => {
+                      setFilterStatus((prev) => (item.id === 'all' ? new Set() : toggleStatus(prev, item.id)))
+                      setSelectedLocaleId(null)
+                    }}
+                    aria-pressed={item.id === 'all' ? undefined : isActive}
                     className={cn(
                       'w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors',
                       isActive ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
@@ -2435,7 +2467,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                     key={locale.id}
                     onClick={() => {
                       setSelectedLocaleId(isActive ? null : locale.id)
-                      setFilterStatus('all')
+                      setFilterStatus(new Set())
                     }}
                     className={cn(
                       'w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors',
@@ -2742,14 +2774,11 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
               )}
               {/* Locale columns */}
               {visibleLocales.map((locale, colIndex) => {
-                const colStatus = columnFilters.get(locale.id) ?? 'all'
-                const isFiltered = colStatus !== 'all'
+                const colStatuses = columnFilters.get(locale.id) ?? EMPTY_STATUSES
+                const isFiltered = colStatuses.size > 0
                 const COL_STATUS_OPTIONS: { id: FilterStatus; label: string }[] = [
                   { id: 'all', label: 'All' },
-                  { id: 'empty', label: 'Empty' },
-                  { id: 'pending', label: 'Pending' },
-                  { id: 'reviewed', label: 'Reviewed' },
-                  { id: 'approved', label: 'Approved' },
+                  ...STATUS_ORDER.map((id) => ({ id, label: STATUS_LABEL[id] })),
                 ]
                 const isFrozen = frozenCols.has(locale.id)
                 const isLocked = lockedCols.has(locale.id)
@@ -2809,7 +2838,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                               ? 'text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:text-blue-300'
                               : 'text-muted-foreground hover:text-foreground'
                           )}
-                          title={`Filter ${locale.code.toUpperCase()} column by status. Combines (AND) with other active filters — may show no rows if they conflict.`}
+                          title={`Filter ${locale.code.toUpperCase()} column by status. Pick several — they combine with OR. Combines (AND) with other active filters, so may show no rows if they conflict.`}
                         >
                           <ListFilter className="h-3 w-3" />
                         </button>
@@ -2821,14 +2850,18 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                             onClick={() => {
                               setColumnFilters((prev) => {
                                 const next = new Map(prev)
-                                if (opt.id === 'all') next.delete(locale.id)
-                                else next.set(locale.id, opt.id)
+                                if (opt.id === 'all') { next.delete(locale.id); return next }
+                                const selected = toggleStatus(prev.get(locale.id) ?? EMPTY_STATUSES, opt.id)
+                                // An unfiltered column holds no entry at all, so
+                                // isFiltered and the chips need no empty-set case.
+                                if (selected.size === 0) next.delete(locale.id)
+                                else next.set(locale.id, selected)
                                 return next
                               })
                             }}
                             className={cn(
                               'w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors',
-                              colStatus === opt.id
+                              (opt.id === 'all' ? colStatuses.size === 0 : colStatuses.has(opt.id))
                                 ? 'bg-muted text-foreground'
                                 : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
                             )}
@@ -2879,11 +2912,11 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                       <button
                         className={cn(
                           'p-0.5 rounded transition-colors',
-                          filterStatus !== 'all'
+                          filterStatus.size > 0
                             ? 'text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:text-blue-300'
                             : 'text-muted-foreground hover:text-foreground'
                         )}
-                        title="Filter by each key's overall status across all target languages. Same filter as the sidebar Status list."
+                        title="Filter by each key's overall status across all target languages. Pick several — they combine with OR. Same filter as the sidebar Status list."
                       >
                         <ListFilter className="h-3 w-3" />
                       </button>
@@ -2891,17 +2924,17 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                     <PopoverContent className="w-40 p-1 bg-card border-border" align="end">
                       {([
                         { id: 'all', label: 'All' },
-                        { id: 'empty', label: 'Untranslated' },
-                        { id: 'pending', label: 'Pending' },
-                        { id: 'reviewed', label: 'Reviewed' },
-                        { id: 'approved', label: 'Approved' },
+                        ...STATUS_ORDER.map((id) => ({ id, label: STATUS_LABEL[id] })),
                       ] as { id: FilterStatus; label: string }[]).map((opt) => (
                         <button
                           key={opt.id}
-                          onClick={() => { setFilterStatus(opt.id); setSelectedLocaleId(null) }}
+                          onClick={() => {
+                            setFilterStatus((prev) => (opt.id === 'all' ? new Set() : toggleStatus(prev, opt.id)))
+                            setSelectedLocaleId(null)
+                          }}
                           className={cn(
                             'w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs normal-case tracking-normal transition-colors',
-                            filterStatus === opt.id
+                            (opt.id === 'all' ? filterStatus.size === 0 : filterStatus.has(opt.id))
                               ? 'bg-muted text-foreground'
                               : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
                           )}
