@@ -33,6 +33,15 @@ const ExportSheet = dynamic(() => import('@/components/export/ExportSheet').then
 const BulkActionBar = dynamic(() => import('./BulkActionBar').then((m) => m.BulkActionBar))
 const CellActionBar = dynamic(() => import('./CellActionBar').then((m) => m.CellActionBar))
 const ManageLocalesDialog = dynamic(() => import('./ManageLocalesDialog').then((m) => m.ManageLocalesDialog))
+import {
+  KEY_COL,
+  buildCopyGrid,
+  includesKeyColumn,
+  selectionBounds,
+  selectionCellCount,
+  writableColumns,
+  type Cell,
+} from '@/lib/editor/cell-selection'
 import { useRealtime } from '@/hooks/useRealtime'
 import { usePresence } from '@/hooks/usePresence'
 import type { ProjectWithStats, MemberRole } from '@/types'
@@ -242,9 +251,6 @@ function keyOverallStatus(
   return 'pending'
 }
 
-// A cell coordinate in the selectable grid: row = index over visible key rows,
-// col = index over visibleLocales.
-type Cell = { row: number; col: number }
 
 // One cell's value/status transition, for undo/redo history.
 type CellState = { value: string; status: string }
@@ -374,7 +380,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   const [resizingColumnId, setResizingColumnId] = useState<string | null>(null)
   const columnResizeRef = useRef<{ columnId: string; startX: number; startWidth: number; min: number; max: number } | null>(null)
 
-  // Excel-like range selection (drag across locale cells, then copy/paste)
+  // Excel-like range selection (drag across the Key and locale cells, then copy/paste)
   const [selRange, setSelRange] = useState<{ anchor: Cell; focus: Cell } | null>(null)
   const pointerDownRef = useRef(false)
   const didDragRef = useRef(false)
@@ -1114,8 +1120,9 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     }
   }, [filteredKeys, selectedRows.size])
 
-  // Select every cell in a column (Excel-style column-header click). Reuses the
-  // cell range selection, so the CellActionBar / copy / clear all work as usual.
+  // Select every cell in a column (Excel-style column-header click) — a locale
+  // column, or KEY_COL for the Key column. Reuses the cell range selection, so
+  // the CellActionBar / copy / clear all work as usual.
   const selectColumn = useCallback((colIndex: number) => {
     const last = rowOrder.length - 1
     if (last < 0) return
@@ -1365,14 +1372,10 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
 
   // ── Excel-like copy / paste ──────────────────────────────────────────────
   // Normalized selection bounds (inclusive) for highlight + copy/paste
-  const selBounds = selRange
-    ? {
-        r0: Math.min(selRange.anchor.row, selRange.focus.row),
-        r1: Math.max(selRange.anchor.row, selRange.focus.row),
-        c0: Math.min(selRange.anchor.col, selRange.focus.col),
-        c1: Math.max(selRange.anchor.col, selRange.focus.col),
-      }
-    : null
+  const selBounds = selRange ? selectionBounds(selRange.anchor, selRange.focus) : null
+  // Whether the selection has anything the grid may write to — a selection
+  // sitting entirely in the Key column has not.
+  const selHasWritable = selBounds ? writableColumns(selBounds) !== null : false
 
   // Mirror latest render state into a ref so the once-bound listeners read fresh data
   const latestRef = useRef<{
@@ -1444,13 +1447,20 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     const items: { keyId: string; localeId: string; value: string; status: 'pending' | 'empty' }[] = []
     const changes: CellChange[] = []
     let lockedSkipped = 0
+    let keySkipped = 0
     for (let i = 0; i < grid.length; i++) {
       const gridRow = grid[i]
       if (!gridRow) continue
       const keyId = order[aRow + i]
       if (!keyId) break // past the last row
       for (let j = 0; j < gridRow.length; j++) {
-        const locale = vis[aCol + j]
+        const col = aCol + j
+        // A pasted column landing on the Key column is dropped rather than
+        // shifted onto the first locale: the user selected that column, and
+        // silently moving their data one column right is worse than not
+        // writing it. The count says how much was dropped.
+        if (col === KEY_COL) { keySkipped++; continue }
+        const locale = vis[col]
         if (!locale) continue // past the last column
         if (locked.has(locale.id)) { lockedSkipped++; continue }
         const value = gridRow[j] ?? ''
@@ -1466,6 +1476,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     }
     if (items.length === 0) {
       if (lockedSkipped) toast.error('Target column is locked')
+      else if (keySkipped) toast.error('The Key column cannot be pasted into — rename a key from its detail panel')
       return
     }
     pushUndo(changes)
@@ -1503,7 +1514,8 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
       errorMsg: 'Paste failed',
       onSuccess: () => toast.success(
         `Pasted ${items.length} cell${items.length > 1 ? 's' : ''}` +
-        (lockedSkipped ? ` · ${lockedSkipped} locked skipped` : '')
+        (lockedSkipped ? ` · ${lockedSkipped} locked skipped` : '') +
+        (keySkipped ? ` · ${keySkipped} in Key skipped` : '')
       ),
     })
   }, [pushUndo, canEdit, activeBranchId, enqueueWrite])
@@ -1513,8 +1525,11 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     if (!canEdit) return
     const { selRange: sel, rowOrder: order, visibleLocales: vis, lockedCols: locked, keys: cur } = latestRef.current
     if (!sel) return
-    const r0 = Math.min(sel.anchor.row, sel.focus.row), r1 = Math.max(sel.anchor.row, sel.focus.row)
-    const c0 = Math.min(sel.anchor.col, sel.focus.col), c1 = Math.max(sel.anchor.col, sel.focus.col)
+    const bounds = selectionBounds(sel.anchor, sel.focus)
+    const writable = writableColumns(bounds)
+    if (!writable) { toast.error('The Key column cannot be cleared'); return }
+    const { r0, r1 } = bounds
+    const { c0, c1 } = writable
     const keyById = new Map(cur.map((k) => [k.id, k]))
 
     const items: { keyId: string; localeId: string; value: string; status: 'empty' }[] = []
@@ -1566,8 +1581,11 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     if (!canReview) return
     const { selRange: sel, rowOrder: order, visibleLocales: vis, lockedCols: locked, keys: cur } = latestRef.current
     if (!sel) return
-    const r0 = Math.min(sel.anchor.row, sel.focus.row), r1 = Math.max(sel.anchor.row, sel.focus.row)
-    const c0 = Math.min(sel.anchor.col, sel.focus.col), c1 = Math.max(sel.anchor.col, sel.focus.col)
+    const bounds = selectionBounds(sel.anchor, sel.focus)
+    const writable = writableColumns(bounds)
+    if (!writable) { toast.info('A key has no translation status — select a language column'); return }
+    const { r0, r1 } = bounds
+    const { c0, c1 } = writable
     const keyById = new Map(cur.map((k) => [k.id, k]))
 
     const items: { keyId: string; localeId: string; value: string }[] = []
@@ -1696,21 +1714,15 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     const onCopy = (e: ClipboardEvent) => {
       const { selRange: sel, editingCell: editing, rowOrder: order, visibleLocales: vis, keys: cur } = latestRef.current
       if (!sel || editing || isEditableTarget(document.activeElement)) return
-      const r0 = Math.min(sel.anchor.row, sel.focus.row), r1 = Math.max(sel.anchor.row, sel.focus.row)
-      const c0 = Math.min(sel.anchor.col, sel.focus.col), c1 = Math.max(sel.anchor.col, sel.focus.col)
       const keyById = new Map(cur.map((k) => [k.id, k]))
-      const grid: string[][] = []
-      for (let r = r0; r <= r1; r++) {
-        const keyId = order[r]
-        const key = keyId ? keyById.get(keyId) : undefined
-        const line: string[] = []
-        for (let c = c0; c <= c1; c++) {
-          const localeId = vis[c]?.id
-          const t = key?.translations.find((tr) => tr.locale_id === localeId)
-          line.push(t?.value ?? '')
-        }
-        grid.push(line)
-      }
+      const grid = buildCopyGrid(
+        selectionBounds(sel.anchor, sel.focus),
+        order,
+        vis.map((l) => l.id),
+        (keyId) => keyById.get(keyId)?.key ?? '',
+        (keyId, localeId) =>
+          keyById.get(keyId)?.translations.find((tr) => tr.locale_id === localeId)?.value ?? '',
+      )
       e.preventDefault()
       e.clipboardData?.setData('text/plain', serializeClipboardTable(grid))
     }
@@ -2700,7 +2712,16 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                   style={stickyLeft.has('key') ? { left: stickyLeft.get('key') } : undefined}
                 >
                   {frozenCols.has('key') && <Pin className="h-2.5 w-2.5 text-blue-500 flex-shrink-0" />}
-                  Key
+                  <Tooltip side="bottom" content="Click to select the entire column">
+                    <button
+                      type="button"
+                      data-keep-selection="1"
+                      onClick={() => selectColumn(KEY_COL)}
+                      className="flex items-center gap-1 rounded px-1 py-0.5 cursor-pointer bg-muted/60 ring-1 ring-inset ring-zinc-700/70 hover:bg-accent/70 hover:text-foreground hover:ring-zinc-600 transition-colors"
+                    >
+                      Key
+                    </button>
+                  </Tooltip>
                   <div
                     role="separator"
                     aria-orientation="vertical"
@@ -3073,11 +3094,17 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                             {canSelect && <input type="checkbox" checked={isSelected} onChange={() => undefined} aria-label={`Select ${keyItem.key}`} className="accent-blue-500 cursor-pointer" />}
                           </div>
 
-                          {/* Key name */}
-                          {showKey && (
+                          {/* Key name — selectable like a translation cell, but read-only */}
+                          {showKey && (() => {
+                            const keyInSel = !!selBounds && includesKeyColumn(selBounds) &&
+                              rowIndex >= selBounds.r0 && rowIndex <= selBounds.r1
+                            return (
                             <div
+                              data-cell="1"
+                              data-row={rowIndex}
+                              data-col={KEY_COL}
                               className={cn(
-                                'flex flex-col justify-start pt-2 cursor-pointer pr-3',
+                                'relative flex flex-col justify-start pt-2 cursor-pointer pr-3 select-none',
                                 frozenCols.has('key') && cn(
                                   'sticky z-10',
                                   isActive ? 'bg-muted' : 'bg-background group-hover:bg-muted',
@@ -3088,14 +3115,46 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
                                 paddingLeft: `${12 + row.depth * 16}px`,
                                 ...(frozenCols.has('key') ? { left: stickyLeft.get('key') } : {}),
                               }}
-                              onClick={() => setSelectedKeyId(isActive ? null : keyItem.id)}
+                              onMouseDown={(e) => {
+                                if (e.button !== 0) return
+                                // Commit any edit elsewhere — preventDefault below blocks the native blur
+                                const ae = document.activeElement as HTMLElement | null
+                                if (ae && (ae.tagName === 'TEXTAREA' || ae.tagName === 'INPUT')) ae.blur()
+                                if (e.shiftKey && selRangeRef.current) {
+                                  e.preventDefault()
+                                  didDragRef.current = true
+                                  setSelRange({ anchor: selRangeRef.current.anchor, focus: { row: rowIndex, col: KEY_COL } })
+                                  return
+                                }
+                                e.preventDefault()
+                                pointerDownRef.current = true
+                                didDragRef.current = false
+                                setSelRange({ anchor: { row: rowIndex, col: KEY_COL }, focus: { row: rowIndex, col: KEY_COL } })
+                              }}
+                              onMouseEnter={() => {
+                                if (!pointerDownRef.current) return
+                                didDragRef.current = true
+                                setSelRange((prev) => (prev ? { anchor: prev.anchor, focus: { row: rowIndex, col: KEY_COL } } : prev))
+                              }}
+                              // A drag that ends here was a selection, not a click — opening
+                              // the detail panel on it would fight the selection it just made.
+                              onClick={() => {
+                                const dragged = didDragRef.current
+                                didDragRef.current = false
+                                if (dragged) return
+                                setSelectedKeyId(isActive ? null : keyItem.id)
+                              }}
                             >
                               <span className="font-mono text-xs text-foreground truncate">{displayKey}</span>
                               {keyItem.description && (
                                 <span className="text-[10px] text-muted-foreground truncate">{keyItem.description}</span>
                               )}
+                              {keyInSel && (
+                                <div className="pointer-events-none absolute inset-0 z-20 bg-blue-500/15 ring-1 ring-inset ring-blue-400/70" />
+                              )}
                             </div>
-                          )}
+                            )
+                          })()}
 
                           {/* Translation cells */}
                           {visibleLocales.map((locale, colIndex) => {
@@ -3245,9 +3304,9 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
       {/* Cell-range action bar — shows whenever one or more cells are selected */}
       {canEdit && selBounds && (
         <CellActionBar
-          cellCount={(selBounds.r1 - selBounds.r0 + 1) * (selBounds.c1 - selBounds.c0 + 1)}
-          canReview={canReview}
-          canEdit={canEdit}
+          cellCount={selectionCellCount(selBounds)}
+          canReview={canReview && selHasWritable}
+          canEdit={canEdit && selHasWritable}
           onDeselect={() => setSelRange(null)}
           onClearContent={clearSelection}
           onReview={() => setSelectionStatus('reviewed')}
