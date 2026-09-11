@@ -4,6 +4,7 @@ import { assertOrgAccess } from '@/lib/auth/access'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { normalizeAssistanceText } from '@/lib/translation-assistance/matcher'
+import { zodErrorResponse } from '@/lib/api/validation-error'
 
 const CreateSchema = z.object({
   sourceLocale: z.string().trim().toLowerCase().regex(/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/),
@@ -58,7 +59,7 @@ export async function POST(request: Request, { params }: { params: { orgId: stri
   const auth = await userAndRole(params.orgId, 'translator')
   if (!auth) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const parsed = CreateSchema.safeParse(await request.json().catch(() => null))
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  if (!parsed.success) return zodErrorResponse(parsed.error)
   const value = parsed.data
   const { data, error } = await createAdminClient().from('glossary_terms').insert({
     org_id: params.orgId,

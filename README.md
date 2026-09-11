@@ -111,3 +111,26 @@ See [`docs/project-struct.md`](docs/project-struct.md) for a detailed breakdown.
 ## Public API operations
 
 Rate-limit buckets and idempotency records are intentionally retained for short-lived replay and diagnostics. Schedule the cleanup SQL in [`docs/public-api-operations.md`](docs/public-api-operations.md) daily after enabling v1.
+
+## CLI
+
+`cli/` pulls translations from LangHub into a repo over the v1 API. It carries the strings and guarantees the keys; what a value means — placeholder syntax, plural rules, fallback behaviour — belongs to the i18n library reading the file, so the CLI has no framework-specific rules.
+
+Not published yet. Install it from source while it is still changing:
+
+```bash
+cd cli && npx tsc -p tsconfig.json && npm link
+langhub init          # writes langhub.json and a gitignored .env.langhub
+langhub locales       # what LangHub has, and what langhub.json asks for that it does not
+langhub pull --check  # reports drift, writes nothing, exits 1 when out of date
+langhub pull          # LangHub -> repo: shows the plan, asks before replacing values
+langhub push          # repo -> LangHub: same, with a write-scoped token
+```
+
+`pull` fetches and merges everything before writing anything, then prints what would change. Keys LangHub adds are written without asking — nothing is lost. Keys whose local value differs are listed with both values and need a confirmation, because whether that value is a stale copy or this morning's edit cannot be known from here. `push` is the same in reverse, and needs a `write` token. It compares against everything LangHub holds, not only approved values — a pending translation filtered out of the comparison would look like an empty slot and be overwritten without appearing in the plan. Keys LangHub has and the repo does not are never touched: an import writes only the keys it names, and the server snapshots before each one. Pushed values land as `pending`, and `pull` takes only approved ones — so a value has to be reviewed in LangHub before it comes back down, and until then a pull looks like the push did nothing.
+
+The prompt offers `[y]es all / [N]o / [r]eview each`; reviewing walks the values one at a time — take, keep, take the rest, keep the rest, or quit — and a key you keep stays as it is while the rest of that file is still written. `--yes` accepts everything without asking; without a terminal to ask, the run refuses rather than assuming.
+
+`init` also makes sure `.env.langhub` cannot be committed — appending to `.gitignore` only when git does not already ignore it. `LANGHUB_TOKEN` is read from there or from the environment, never from `langhub.json`; a variable already set wins, so CI secrets are not overridden by a file left behind locally.
+
+`apiBase` has no default and must be set: the CLI sends a bearer token, so the host receiving it is always a choice someone made, never a guess. https is required except on localhost. The environment being pulled from also needs `PUBLIC_API_ENABLED=true`, or every request returns 404. Full usage is documented at `/docs#cli`; publishing it to npm is in [`docs/ROADMAP.md`](docs/ROADMAP.md).

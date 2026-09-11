@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createSnapshot, getVersions } from '@/lib/versions/snapshot'
 import { resolveBranchId } from '@/lib/branches/queries'
 import { assertBranchAccess, assertProjectAccess } from '@/lib/auth/access'
+import { zodErrorResponse } from '@/lib/api/validation-error'
 
 const PostSchema = z.object({
   projectId: z.string().uuid(),
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json() as unknown
   const parsed = PostSchema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  if (!parsed.success) return zodErrorResponse(parsed.error)
 
   const projectAccess = await assertProjectAccess(user.id, parsed.data.projectId, 'translator')
   if (!projectAccess.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

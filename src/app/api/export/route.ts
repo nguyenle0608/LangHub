@@ -6,6 +6,7 @@ import { ExportDataQueryError } from '@/lib/exporters/data'
 import { executeExport, ExportServiceError } from '@/lib/exporters/service'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { zodErrorResponse } from '@/lib/api/validation-error'
 
 const ExportSchema = z.object({
   projectId: z.string().min(1),
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const parsed = ExportSchema.safeParse(await req.json().catch(() => null))
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  if (!parsed.success) return zodErrorResponse(parsed.error)
 
   const { projectId, localeIds } = parsed.data
   const projectAccess = await assertProjectAccess(user.id, projectId, 'viewer')

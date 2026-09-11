@@ -46,6 +46,7 @@ import {
   type TranslationKeyTreeNode,
   type TreeNodeCheckState,
 } from '@/lib/translation-key-tree'
+import { chunkBulkItems, partialWriteMessage } from '@/lib/api/bulk-translations'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1159,6 +1160,83 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     toast.success(`Deleted ${ids.length} key${ids.length > 1 ? 's' : ''}`)
   }, [selectedRows])
 
+  // "Approve all" / "Review all" over a whole project can cover tens of
+  // thousands of translations, past what one request may carry. Splitting is
+  // the caller's job — the route rejects an oversized body rather than
+  // silently truncating it — so send the work in bounded batches.
+  //
+  // A batch that fails does not undo the ones before it, so the count of what
+  // actually landed comes back with the error. The caller marks that much and
+  // no more: a screen claiming every row is approved when half the write was
+  // refused is worse than a screen that says so.
+  const postTranslationStatus = useCallback(
+    async (
+      items: Array<{ keyId: string; localeId: string; value: string }>,
+      status: 'reviewed' | 'approved'
+    ): Promise<{ committed: typeof items; error: string | null }> => {
+      const committed: typeof items = []
+      for (const batch of chunkBulkItems(items)) {
+        let res: Response
+        try {
+          res = await fetch('/api/translations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ branchId: activeBranchId, status, items: batch }),
+          })
+        } catch {
+          return { committed, error: 'Network error' }
+        }
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({})) as { error?: string }
+          return { committed, error: json.error || '' }
+        }
+        committed.push(...batch)
+      }
+      return { committed, error: null }
+    },
+    [activeBranchId]
+  )
+
+  /** Marks exactly the translations that the server accepted. */
+  const applyCommittedStatus = useCallback(
+    (committed: Array<{ keyId: string; localeId: string }>, status: 'reviewed' | 'approved') => {
+      const done = new Set(committed.map((item) => `${item.keyId}:${item.localeId}`))
+      if (done.size === 0) return
+      setKeys((prev) =>
+        prev.map((k) => ({
+          ...k,
+          translations: k.translations.map((t) =>
+            done.has(`${k.id}:${t.locale_id}`) ? { ...t, status } : t
+          ),
+        }))
+      )
+    },
+    []
+  )
+
+  /** Puts optimistically-marked cells back the way the server still has them. */
+  const revertCellChanges = useCallback((changes: CellChange[]) => {
+    if (changes.length === 0) return
+    const previous = new Map(changes.map((c) => [`${c.keyId}:${c.localeId}`, c.before]))
+    setKeys((prev) =>
+      prev.map((k) => ({
+        ...k,
+        translations: k.translations.map((t) => {
+          const before = previous.get(`${k.id}:${t.locale_id}`)
+          return before ? { ...t, value: before.value, status: before.status } : t
+        }),
+      }))
+    )
+  }, [])
+
+  /** "12 of 4,000 were saved before it failed" — never just "it failed". */
+  const reportPartialWrite = useCallback(
+    (committed: number, total: number, error: string, fallback: string) => {
+      toast.error(partialWriteMessage(committed, total, error || fallback))
+    },
+    []
+  )
+
   const handleBulkApprove = useCallback(async () => {
     if (!canReview) return
     const ids = Array.from(selectedRows)
@@ -1173,30 +1251,15 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
         .filter((x): x is NonNullable<typeof x> => x !== null)
     })
     if (items.length === 0) return
-    const res = await fetch('/api/translations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ branchId: activeBranchId, status: 'approved', items }),
-    })
-    if (!res.ok) {
-      const json = await res.json() as { error?: string }
-      toast.error(json.error ?? 'Approve failed')
+    const { committed, error } = await postTranslationStatus(items, 'approved')
+    applyCommittedStatus(committed, 'approved')
+    if (error !== null) {
+      reportPartialWrite(committed.length, items.length, error, 'Approve failed')
       return
     }
-    setKeys((prev) =>
-      prev.map((k) => {
-        if (!selectedRows.has(k.id)) return k
-        return {
-          ...k,
-          translations: k.translations.map((t) =>
-            t.value ? { ...t, status: 'approved' } : t
-          ),
-        }
-      })
-    )
     setSelectedRows(new Set())
     toast.success(`Approved ${ids.length} key${ids.length > 1 ? 's' : ''}`)
-  }, [canReview, selectedRows, locales, keys, activeBranchId])
+  }, [canReview, selectedRows, locales, keys, postTranslationStatus, applyCommittedStatus, reportPartialWrite])
 
   const handleBulkReview = useCallback(async () => {
     if (!canReview) return
@@ -1212,32 +1275,15 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
         .filter((x): x is NonNullable<typeof x> => x !== null)
     })
     if (items.length === 0) { toast.info('No eligible translations to review'); return }
-    const res = await fetch('/api/translations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ branchId: activeBranchId, status: 'reviewed', items }),
-    })
-    if (!res.ok) {
-      const json = await res.json() as { error?: string }
-      toast.error(json.error ?? 'Review failed')
+    const { committed, error } = await postTranslationStatus(items, 'reviewed')
+    applyCommittedStatus(committed, 'reviewed')
+    if (error !== null) {
+      reportPartialWrite(committed.length, items.length, error, 'Review failed')
       return
     }
-    setKeys((prev) =>
-      prev.map((k) => {
-        if (!selectedRows.has(k.id)) return k
-        return {
-          ...k,
-          translations: k.translations.map((t) =>
-            t.value && t.status !== 'reviewed' && t.status !== 'approved'
-              ? { ...t, status: 'reviewed' }
-              : t
-          ),
-        }
-      })
-    )
     setSelectedRows(new Set())
     toast.success(`Marked ${ids.length} key${ids.length > 1 ? 's' : ''} as reviewed`)
-  }, [canReview, selectedRows, locales, keys, activeBranchId])
+  }, [canReview, selectedRows, locales, keys, postTranslationStatus, applyCommittedStatus, reportPartialWrite])
 
   // Column layout
   const getLocaleColWidth = useCallback(
@@ -1355,7 +1401,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   const [pendingWrites, setPendingWrites] = useState(0)
   const pendingWritesRef = useRef(0)
   const enqueueWrite = useCallback(
-    (body: unknown, opts?: { errorMsg?: string; onSuccess?: () => void }) => {
+    (body: unknown, opts?: { errorMsg?: string; onSuccess?: () => void; onError?: () => void }) => {
       pendingWritesRef.current += 1
       setPendingWrites((n) => n + 1)
       const run = writeChainRef.current.then(async () => {
@@ -1367,12 +1413,14 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
           })
           if (!res.ok) {
             const json = await res.json().catch(() => ({})) as { error?: string }
-            toast.error(json.error ?? opts?.errorMsg ?? 'Update failed')
+            toast.error(json.error || opts?.errorMsg || 'Update failed')
+            opts?.onError?.()
           } else {
             opts?.onSuccess?.()
           }
         } catch {
           toast.error('Network error')
+          opts?.onError?.()
         } finally {
           pendingWritesRef.current = Math.max(0, pendingWritesRef.current - 1)
           setPendingWrites((n) => Math.max(0, n - 1))
@@ -1562,13 +1610,29 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
       }))
     )
 
-    void enqueueWrite({ branchId: activeBranchId, status: newStatus, items }, {
-      onSuccess: () => toast.success(
-        `${newStatus === 'approved' ? 'Approved' : 'Marked as reviewed'} ${items.length} cell${items.length > 1 ? 's' : ''}` +
-        (lockedSkipped ? ` · ${lockedSkipped} locked skipped` : '')
-      ),
+    // A selection can cover the whole grid, which is more than one request may
+    // carry. enqueueWrite chains, so the batches still commit in order; only
+    // the last one reports, to keep one action to one toast.
+    //
+    // The cells were marked optimistically above, before any batch was sent. A
+    // batch the server refuses has to put its own cells back — otherwise the
+    // grid keeps showing a status that was never written, and the next reload
+    // silently takes it away again.
+    const batches = chunkBulkItems(items)
+    const changeBatches = chunkBulkItems(changes)
+    batches.forEach((batch, i) => {
+      const isLast = i === batches.length - 1
+      void enqueueWrite({ branchId: activeBranchId, status: newStatus, items: batch }, {
+        onSuccess: isLast
+          ? () => toast.success(
+            `${newStatus === 'approved' ? 'Approved' : 'Marked as reviewed'} ${items.length} cell${items.length > 1 ? 's' : ''}` +
+            (lockedSkipped ? ` · ${lockedSkipped} locked skipped` : '')
+          )
+          : undefined,
+        onError: () => revertCellChanges(changeBatches[i] ?? []),
+      })
     })
-  }, [pushUndo, canReview, activeBranchId, enqueueWrite])
+  }, [pushUndo, canReview, activeBranchId, enqueueWrite, revertCellChanges])
 
   // Apply a set of cell states (optimistic + persist) — used by undo/redo
   const commitCells = useCallback((cells: { keyId: string; localeId: string; value: string; status: string }[]) => {

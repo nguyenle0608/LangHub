@@ -7,6 +7,7 @@ import {
   MAX_ACTIVE_API_TOKENS,
 } from '@/lib/api-tokens/management'
 import { createClient } from '@/lib/supabase/server'
+import { zodErrorResponse } from '@/lib/api/validation-error'
 
 const CreateTokenSchema = z.object({
   name: z.string().trim().min(1).max(100),
@@ -42,7 +43,7 @@ export async function POST(request: Request, { params }: { params: { orgId: stri
   const auth = await authorize(params.orgId)
   if (!auth.ok) return auth.response
   const parsed = CreateTokenSchema.safeParse(await request.json().catch(() => null))
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  if (!parsed.success) return zodErrorResponse(parsed.error)
 
   const result = await createOrganizationApiToken({
     orgId: params.orgId,

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { listBranches, createBranch, deleteBranch, renameBranch, setDefaultBranch, resolveBranchId } from '@/lib/branches/queries'
 import { assertBranchAccess, assertProjectAccess } from '@/lib/auth/access'
+import { zodErrorResponse } from '@/lib/api/validation-error'
 
 // Forking a 1191-key branch measured ~12.9s and a large import is comparable,
 // both past Netlify's 10s default. Route segment config is the Next-native way
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json() as unknown
   const parsed = PostSchema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  if (!parsed.success) return zodErrorResponse(parsed.error)
 
   const access = await assertProjectAccess(user.id, parsed.data.projectId, 'translator')
   if (!access.ok) {
@@ -75,7 +76,7 @@ export async function PATCH(req: NextRequest) {
 
   const body = await req.json() as unknown
   const parsed = PatchSchema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  if (!parsed.success) return zodErrorResponse(parsed.error)
 
   const access = await assertBranchAccess(user.id, parsed.data.branchId, 'admin', parsed.data.projectId)
   if (!access.ok) {
@@ -105,7 +106,7 @@ export async function DELETE(req: NextRequest) {
 
   const body = await req.json() as unknown
   const parsed = DeleteSchema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  if (!parsed.success) return zodErrorResponse(parsed.error)
 
   const access = await assertBranchAccess(user.id, parsed.data.branchId, 'admin', parsed.data.projectId)
   if (!access.ok) {

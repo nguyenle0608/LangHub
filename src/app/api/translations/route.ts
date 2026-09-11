@@ -4,6 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { updateTranslation } from '@/lib/supabase/queries/translations'
 import { assertTranslationItemsAccess } from '@/lib/auth/access'
+import { zodErrorResponse } from '@/lib/api/validation-error'
+import { MAX_BULK_TRANSLATION_ITEMS } from '@/lib/api/bulk-translations'
 
 const PatchSchema = z.object({
   branchId: z.string().uuid(),
@@ -22,7 +24,7 @@ export async function PATCH(req: NextRequest) {
   const body = await req.json() as unknown
   const parsed = PatchSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+    return zodErrorResponse(parsed.error)
   }
 
   const { branchId, keyId, localeId, value, status } = parsed.data
@@ -45,7 +47,7 @@ const BulkUpsertSchema = z.object({
     localeId: z.string().uuid(),
     value: z.string(),
     status: STATUS_ENUM.optional(),
-  })).min(1).max(5000),
+  })).min(1).max(MAX_BULK_TRANSLATION_ITEMS),
 })
 
 // Bulk upsert — single DB upsert for all items.
@@ -57,7 +59,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json() as unknown
   const parsed = BulkUpsertSchema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  if (!parsed.success) return zodErrorResponse(parsed.error)
 
   const access = await assertTranslationItemsAccess(
     user.id,

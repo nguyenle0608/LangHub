@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertTranslationItemsAccess } from '@/lib/auth/access'
+import { zodErrorResponse } from '@/lib/api/validation-error'
 
 const Schema = z.object({
   branchId: z.string().uuid(),
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json() as unknown
   const parsed = Schema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  if (!parsed.success) return zodErrorResponse(parsed.error)
 
   const access = await assertTranslationItemsAccess(
     user.id,
