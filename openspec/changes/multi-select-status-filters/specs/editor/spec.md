@@ -1,34 +1,4 @@
-# editor Specification
-
-## Purpose
-
-Define requirements for the translation editor UI and interactions.
-
-## Requirements
-
-### Requirement: Base language column exposes status filter
-The system SHALL show the per-column status filter affordance for base language columns in the editor translation table. The affordance SHALL accept one or more statuses for that column, and a row SHALL be shown when that column's translation matches ANY selected status.
-
-#### Scenario: Base language header is visible
-- **WHEN** a user views the editor translation table with a base language column
-- **THEN** the base language header shows the same status filter icon used by other language columns
-
-#### Scenario: User filters the base language column
-- **WHEN** a user selects one or more status options from the base language column filter
-- **THEN** the table filters rows to those whose base language translation matches any of the selected statuses
-
-#### Scenario: User selects several statuses without reopening the filter
-- **WHEN** a user selects a status option in a language column filter
-- **THEN** the filter stays open so further statuses can be selected or deselected in the same visit
-
-#### Scenario: User clears a language column filter
-- **WHEN** a user chooses "All" in a language column filter
-- **THEN** no status is selected for that column
-- **AND** the table is not filtered by that column's status
-
-#### Scenario: Base column filter is active
-- **WHEN** a base language column filter has one or more statuses selected
-- **THEN** the filter icon uses the active filter styling and the active-filter chips include that column filter with every selected status named
+## ADDED Requirements
 
 ### Requirement: Sidebar status filter accepts multiple statuses
 The system SHALL let a user filter the editor key list by one or more key statuses at once. A key SHALL be shown when its overall status matches ANY selected status. Selecting no status SHALL mean no status filtering is applied.
@@ -97,31 +67,28 @@ The system SHALL represent each active status filter as a single chip listing ev
 - **WHEN** a user clears all filters
 - **THEN** the sidebar status filter and every language column status filter are emptied
 
-### Requirement: Target cells show translation assistance on demand
-The editor SHALL request TM suggestions and applicable glossary terms when an editable non-base target cell with non-empty base source text receives focus. It SHALL NOT perform a new server search on every target-text keystroke.
+## MODIFIED Requirements
 
-#### Scenario: Translator focuses a target cell
-- **WHEN** an editable target cell receives focus and its key has non-empty base-locale text
-- **THEN** the editor loads bounded TM suggestions and glossary context for that authorized project, branch, key, and target locale
+### Requirement: Base language column exposes status filter
+The system SHALL show the per-column status filter affordance for base language columns in the editor translation table. The affordance SHALL accept one or more statuses for that column, and a row SHALL be shown when that column's translation matches ANY selected status.
 
-#### Scenario: Translator types in the target draft
-- **WHEN** the assistance context has loaded and the translator changes only the target draft
-- **THEN** the editor reuses the loaded context without issuing a TM search for each keystroke
+#### Scenario: Base language header is visible
+- **WHEN** a user views the editor translation table with a base language column
+- **THEN** the base language header shows the same status filter icon used by other language columns
 
-#### Scenario: Base cell is focused
-- **WHEN** the user focuses the project's base-locale cell
-- **THEN** the editor does not request target translation assistance
+#### Scenario: User filters the base language column
+- **WHEN** a user selects one or more status options from the base language column filter
+- **THEN** the table filters rows to those whose base language translation matches any of the selected statuses
 
-### Requirement: Assistance failures do not block editing
-The editor SHALL keep translation editing and saving available when TM or glossary lookup fails.
+#### Scenario: User selects several statuses without reopening the filter
+- **WHEN** a user selects a status option in a language column filter
+- **THEN** the filter stays open so further statuses can be selected or deselected in the same visit
 
-#### Scenario: Suggestion request fails
-- **WHEN** the assistance service returns an error or times out
-- **THEN** the editor shows a retryable unavailable state while preserving the current draft and save controls
+#### Scenario: User clears a language column filter
+- **WHEN** a user chooses "All" in a language column filter
+- **THEN** no status is selected for that column
+- **AND** the table is not filtered by that column's status
 
-### Requirement: Assistance context cannot mix project resources
-The server SHALL validate that the requested branch, key, base locale, and target locale all belong to the authorized project before returning editor assistance.
-
-#### Scenario: Request contains a foreign locale
-- **WHEN** an authorized project request includes a locale belonging to another project
-- **THEN** the system returns a generic not-found outcome and no TM or glossary data
+#### Scenario: Base column filter is active
+- **WHEN** a base language column filter has one or more statuses selected
+- **THEN** the filter icon uses the active filter styling and the active-filter chips include that column filter with every selected status named

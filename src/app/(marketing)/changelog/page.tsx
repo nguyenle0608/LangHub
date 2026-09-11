@@ -23,14 +23,17 @@ const typeStyles: Record<ChangeType, string> = {
 const releases: Release[] = [
   {
     date: 'September 2026',
-    title: 'The command line, and rotating a token',
+    title: 'The command line & the editor grid',
     changes: [
       { type: 'New', text: 'A command line tool. langhub pull and langhub push move translations between LangHub and the locale files in your repository, over the public API.' },
       { type: 'New', text: 'Every sync prints a plan before it writes anything, and shows both values for each translation that differs so you can keep or overwrite them one at a time.' },
       { type: 'New', text: 'langhub locales lists the languages a project actually has next to the ones your repository asks for — so a failed sync tells you which locale code is wrong instead of leaving you guessing.' },
       { type: 'New', text: 'Rotate an API token without an outage. The replacement is issued first and the old secret keeps working for a grace period, so deployments can catch up before it retires.' },
       { type: 'New', text: 'A new GET /api/v1/projects/:id/locales endpoint, so a caller holding a token can discover which locale codes to ask for.' },
+      { type: 'New', text: 'Drag across the Key column like any other. Select keys next to their translations and copy the block straight into a spreadsheet — the full dotted key, not the shortened one the cell had room to show.' },
+      { type: 'New', text: 'Filter by several statuses at once. Untranslated and Pending together is the real backlog, and you can now see it, select it and approve it in one pass instead of three.' },
       { type: 'Improved', text: 'The docs page now covers the CLI alongside the REST API, including the locale map, the review screen, and what the CLI deliberately will not do.' },
+      { type: 'Improved', text: 'Click a column header to select the whole column, the Key column included, and every status filter now says how it combines with the others.' },
       { type: 'Fixed', text: 'Approve all now works on projects of any size, and a refused request explains itself in a sentence instead of taking the editor down.' },
       { type: 'Fixed', text: 'Creating and deleting a branch no longer times out on a large project that has been fully approved.' },
       { type: 'Fixed', text: 'A TSV import survives an unquoted line break in the last column, instead of losing the next row and failing the whole file.' },
