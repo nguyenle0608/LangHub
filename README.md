@@ -116,10 +116,16 @@ Rate-limit buckets and idempotency records are intentionally retained for short-
 
 `cli/` pulls translations from LangHub into a repo over the v1 API. It carries the strings and guarantees the keys; what a value means — placeholder syntax, plural rules, fallback behaviour — belongs to the i18n library reading the file, so the CLI has no framework-specific rules.
 
-Not published yet. Install it from source while it is still changing:
+Published as [`langhub-cli`](https://www.npmjs.com/package/langhub-cli). Nothing to install — which is what makes it usable from a Flutter repo, or from CI, without adding Node tooling to a project that has none:
 
 ```bash
-cd cli && npx tsc -p tsconfig.json && npm link
+npx langhub-cli --help
+```
+
+The installed command is `langhub`, from the package's `bin` rather than its name. To work on the CLI itself, build and link it from source so a rebuild updates the command in place:
+
+```bash
+cd cli && npm run build && npm link
 langhub init          # writes langhub.json and a gitignored .env.langhub
 langhub locales       # what LangHub has, and what langhub.json asks for that it does not
 langhub pull --check  # reports drift, writes nothing, exits 1 when out of date
@@ -133,4 +139,4 @@ The prompt offers `[y]es all / [N]o / [r]eview each`; reviewing walks the values
 
 `init` also makes sure `.env.langhub` cannot be committed — appending to `.gitignore` only when git does not already ignore it. `LANGHUB_TOKEN` is read from there or from the environment, never from `langhub.json`; a variable already set wins, so CI secrets are not overridden by a file left behind locally.
 
-`apiBase` has no default and must be set: the CLI sends a bearer token, so the host receiving it is always a choice someone made, never a guess. https is required except on localhost. The environment being pulled from also needs `PUBLIC_API_ENABLED=true`, or every request returns 404. Full usage is documented at `/docs#cli`; publishing it to npm is in [`docs/ROADMAP.md`](docs/ROADMAP.md).
+`apiBase` has no default and must be set: the CLI sends a bearer token, so the host receiving it is always a choice someone made, never a guess. https is required except on localhost. The environment being pulled from also needs `PUBLIC_API_ENABLED=true`, or every request returns 404. Full usage is documented at `/docs#cli` and in [`cli/README.md`](cli/README.md), which is also the npm page.
