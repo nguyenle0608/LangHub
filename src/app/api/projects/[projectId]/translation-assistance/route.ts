@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { getTranslationAssistance } from '@/lib/translation-assistance/service'
+import { isFlagEnabled } from '@/lib/env-flags'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,7 +13,7 @@ const QuerySchema = z.object({
 })
 
 export async function GET(request: Request, { params }: { params: { projectId: string } }) {
-  if (process.env.TRANSLATION_ASSISTANCE_ENABLED !== 'true') {
+  if (!isFlagEnabled(process.env.TRANSLATION_ASSISTANCE_ENABLED)) {
     return NextResponse.json({ error: 'Not found' }, { status: 404, headers: { 'Cache-Control': 'no-store' } })
   }
   const supabase = await createClient()

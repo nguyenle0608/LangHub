@@ -52,5 +52,21 @@ describe('public API request authorization', () => {
     if (!result.ok) expect(await result.response.json()).toEqual({ error: 'Not found' })
     expect(disabledStore.findByHash).not.toHaveBeenCalled()
   })
+
+  it('accepts a flag someone wrote as TRUE', async () => {
+    // The strict comparison this replaced answered 404 for TRUE, which reads
+    // as "this deployment has not shipped the API" rather than "this value is
+    // the wrong case" — and nothing in the response separates the two.
+    process.env.PUBLIC_API_ENABLED = 'TRUE'
+    const result = await authorizePublicApiRequest(request(), 'read', { tokenStore, rateLimitStore: allowed })
+    expect(result.ok).toBe(true)
+  })
+
+  it('stays disabled for a value that is not a yes', async () => {
+    process.env.PUBLIC_API_ENABLED = 'false'
+    const result = await authorizePublicApiRequest(request(), 'read', { tokenStore, rateLimitStore: allowed })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.response.status).toBe(404)
+  })
 })
 

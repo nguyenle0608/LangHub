@@ -33,6 +33,7 @@ const releases: Release[] = [
       { type: 'New', text: 'A new GET /api/v1/projects/:id/locales endpoint, so a caller holding a token can discover which locale codes to ask for.' },
       { type: 'New', text: 'Drag across the Key column like any other. Select keys next to their translations and copy the block straight into a spreadsheet — the full dotted key, not the shortened one the cell had room to show.' },
       { type: 'New', text: 'Filter by several statuses at once. Untranslated and Pending together is the real backlog, and you can now see it, select it and approve it in one pass instead of three.' },
+      { type: 'Fixed', text: 'The public REST API and the command line tool now work against the hosted instance. The switch that enables them only accepted one exact spelling of its value, so a deployment that had turned them on still answered as though they did not exist.' },
       { type: 'Improved', text: 'The docs page now covers the CLI alongside the REST API, including the locale map, the review screen, and what the CLI deliberately will not do.' },
       { type: 'Improved', text: 'Click a column header to select the whole column, the Key column included, and every status filter now says how it combines with the others.' },
       { type: 'Fixed', text: 'Approve all now works on projects of any size, and a refused request explains itself in a sentence instead of taking the editor down.' },

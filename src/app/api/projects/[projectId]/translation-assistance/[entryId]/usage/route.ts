@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { recordSuggestionUsage } from '@/lib/translation-assistance/service'
+import { isFlagEnabled } from '@/lib/env-flags'
 
 export async function POST(
   _request: Request,
   { params }: { params: { projectId: string; entryId: string } }
 ) {
-  if (process.env.TRANSLATION_ASSISTANCE_ENABLED !== 'true') {
+  if (!isFlagEnabled(process.env.TRANSLATION_ASSISTANCE_ENABLED)) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
   const supabase = await createClient()
