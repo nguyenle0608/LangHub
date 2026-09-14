@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { isFlagEnabled } from '@/lib/env-flags'
 import { apiScopeAllows } from './access'
 import { authenticateApiToken, type ApiTokenContext, type ApiTokenScope, type ApiTokenStore } from './auth'
 import { apiError, getRequestId, unauthorizedApiResponse } from './responses'
@@ -13,7 +14,7 @@ export async function authorizePublicApiRequest(
   requiredScope: ApiTokenScope,
   options: { tokenStore?: ApiTokenStore; rateLimitStore?: ApiRateLimitStore; now?: Date } = {}
 ): Promise<PublicApiAuthorization> {
-  if (process.env.PUBLIC_API_ENABLED !== 'true') {
+  if (!isFlagEnabled(process.env.PUBLIC_API_ENABLED)) {
     return { ok: false, response: NextResponse.json({ error: 'Not found' }, { status: 404, headers: { 'Cache-Control': 'no-store' } }) }
   }
   const requestId = getRequestId(request)

@@ -1,6 +1,6 @@
 # Public API operations
 
-Keep `PUBLIC_API_ENABLED=false` until migrations, automated security tests, and live two-organization checks pass. Enable it only in the application environment; the database tables remain deny-by-default behind RLS.
+Keep `PUBLIC_API_ENABLED` unset until migrations, automated security tests, and live two-organization checks pass. It turns the API on only for an affirmative value — `true`, `1`, `yes` or `on`, in any casing — and anything else, including absent, leaves it off. Enable it only in the application environment; the database tables remain deny-by-default behind RLS.
 
 ## Retention cleanup
 
