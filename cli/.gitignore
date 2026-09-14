@@ -1,3 +1,9 @@
 # Build output. Reproduced by `npx tsc -p tsconfig.json`, and published from
 # `files` in package.json rather than from the repository.
 dist/
+
+# Left behind by running a command from in here with the wrong working
+# directory — `npm pack`, or a stray `next` invocation. Neither belongs to this
+# package.
+node_modules/
+.next/
