@@ -161,7 +161,8 @@ LANGHUB_TOKEN=lh_...`}</code></pre>
             <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`npx langhub-cli pull --check    # what would change here; writes nothing, exits 1 when out of date
 npx langhub-cli pull            # LangHub -> this repo
 npx langhub-cli push            # this repo -> LangHub
-npx langhub-cli pull --verbose  # list every key, not the first ten of each kind`}</code></pre>
+npx langhub-cli pull --verbose  # list every key, not the first ten of each kind
+npx langhub-cli pull --check --locale vi-VN --verbose   # one locale, in full`}</code></pre>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               Both fetch and merge everything before writing anything, then print a plan. A run that asks &ldquo;overwrite 40 values?&rdquo; after having already written eleven files is not asking a question.
             </p>
@@ -193,7 +194,7 @@ Replace 2 local values with LangHub's? [y]es all / [N]o / [r]eview each: r
   LangHub: Lưu
   [y]take / [N]keep / [a]take rest / [k]keep rest / [q]uit:`}</code></pre>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Every locale is listed separately, and every category names its keys rather than counting them — twelve added keys are either a feature someone just finished translating or a merge that went the wrong way, and those look identical until the keys are on screen. Long lists stop at ten; <code className="rounded bg-muted px-1">--verbose</code> lifts that. Progress goes to stderr while locales are read, so piping the plan to a file gets the plan alone.
+              Every locale is listed separately, and every category names its keys rather than counting them — twelve added keys are either a feature someone just finished translating or a merge that went the wrong way, and those look identical until the keys are on screen. Long lists stop at ten; <code className="rounded bg-muted px-1">--verbose</code> lifts that, and <code className="rounded bg-muted px-1">--locale</code> narrows a run to one language — of the request as well as the output, so only that locale is fetched. Progress goes to stderr while locales are read, so piping the plan to a file gets the plan alone.
             </p>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               New keys are written without asking — nothing is lost. Only a differing value needs a decision, and both values are shown because a count cannot be judged: &ldquo;20 overwritten&rdquo; is either a routine sync or a morning of someone&apos;s work. Keeping one value leaves the rest of that file to be written normally. Quitting writes nothing at all.

@@ -30,11 +30,21 @@ not exist, so every example below is written as `npx langhub-cli`.
 ## Commands
 
 ```bash
-npx langhub-cli pull --check     # report only, write nothing, exit 1 when out of date
-npx langhub-cli pull --verbose   # list every key rather than the first ten of each kind
-npx langhub-cli pull --yes       # accept every replacement without asking
-npx langhub-cli pull --locale vi-VN   # one locale; repeatable
+npx langhub-cli pull --check            # report only, write nothing, exit 1 when out of date
+npx langhub-cli pull --locale vi-VN     # just this locale; repeat the flag for several
+npx langhub-cli pull --verbose          # list every key, not the first ten of each kind
+npx langhub-cli pull --yes              # accept every replacement without asking
 ```
+
+To read one locale closely — every replacement with both values, every added
+key, every key it is keeping — narrow it and ask for everything:
+
+```bash
+npx langhub-cli pull --check --locale vi-VN --verbose
+```
+
+`--locale` narrows the request too, not just the output: only that locale is
+fetched. All four flags work the same on `push`.
 
 ## Configuration
 

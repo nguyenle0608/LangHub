@@ -430,15 +430,20 @@ const USAGE = `langhub — move translations between LangHub and this repo
 
   langhub init                                          write a starter langhub.json
   langhub locales                                       list the project's locales
-  langhub pull [--check] [--yes] [--locale <code>]...   LangHub -> this repo
-  langhub push [--check] [--yes] [--locale <code>]...   this repo -> LangHub
+  langhub pull [options]                                LangHub -> this repo
+  langhub push [options]                                this repo -> LangHub
 
-    --check     report only, change nothing
-    --yes       accept every overwrite without asking
-    --verbose   list every key, instead of the first ten of each kind
+    --check            report only, change nothing, exit 1 when out of date
+    --locale <code>    just this locale; repeat for several
+    --verbose          list every key, instead of the first ten of each kind
+    --yes              accept every replacement without asking
 
   Both show a plan first and, when a value would be replaced, offer to review
   the replacements one at a time. push needs a write-scoped token.
+
+  To read one locale closely, narrow it and ask for everything:
+
+    langhub pull --check --locale vi-VN --verbose
 
 Configuration lives in langhub.json. The CLI writes JSON; it carries the strings
 and guarantees the keys, and leaves what a value means to the project reading it.
