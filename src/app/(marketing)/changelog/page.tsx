@@ -25,6 +25,7 @@ const releases: Release[] = [
     date: 'September 2026',
     title: 'The command line & the editor grid',
     changes: [
+      { type: 'New', text: 'The command line tool is on npm. npx langhub-cli needs nothing installed, so a repository with no Node tooling — a Flutter app, a CI job — can still sync its translations.' },
       { type: 'New', text: 'A command line tool. langhub pull and langhub push move translations between LangHub and the locale files in your repository, over the public API.' },
       { type: 'New', text: 'Every sync prints a plan before it writes anything, and shows both values for each translation that differs so you can keep or overwrite them one at a time.' },
       { type: 'New', text: 'langhub locales lists the languages a project actually has next to the ones your repository asks for — so a failed sync tells you which locale code is wrong instead of leaving you guessing.' },
