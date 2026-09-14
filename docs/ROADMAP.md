@@ -27,10 +27,12 @@ CI pins. That is worth doing once the shape has survived a second consumer.
 
 ### Before publishing
 
-- **Settle the npm name.** `package.json` says `@langhub/cli`. A scoped name
-  needs an npm organization called `langhub` that we can publish to; if that
-  does not exist, either create it or drop the scope. Publishing cannot be
-  undone after 72 hours, so the name is a one-way decision.
+- ~~**Settle the npm name.**~~ Done: `langhub-cli`, unscoped. npm refused the
+  `langhub` organization — usernames and organization names share one namespace,
+  and something already holds it. Scope was not worth chasing a second name for:
+  it earns its keep across several packages sharing a namespace, and there is
+  one. The installed command is `langhub` either way, since that comes from
+  `bin` and not from the package name.
 - **A second consumer has used it.** The web app is the one that will show
   whether anything in the CLI is accidentally shaped around Flutter. Publishing
   before that means guessing which parts generalise.
@@ -47,7 +49,7 @@ Two things in it become wrong the moment the package is published, and have to
 change in the same commit:
 
 - **Install.** It currently says "not on npm yet" and gives the build-from-source
-  command. That becomes `npx @langhub/cli`, which needs nothing installed —
+  command. That becomes `npx langhub-cli`, which needs nothing installed —
   which is what makes it usable from a Flutter repository and from CI, so it
   should lead rather than follow a global install.
 - **`apiBase` in the example** points at `https://lang-hub.netlify.app`. Check

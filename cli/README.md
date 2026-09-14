@@ -1,15 +1,18 @@
-# @langhub/cli
+# langhub-cli
 
 Move translations between [LangHub](https://github.com/nguyenle0608/LangHub) and a repository.
 
 The CLI carries the strings and guarantees which keys are present. What a value *means* — placeholder syntax, plural rules, whether an empty one falls back — belongs to the i18n library reading the file, so the CLI has no framework-specific rules and needs none. It writes JSON; other formats report that they are coming.
 
 ```bash
-npx @langhub/cli init      # langhub.json and a gitignored .env.langhub
-npx @langhub/cli locales   # what the project has, and what langhub.json asks for that it does not
-npx @langhub/cli pull      # LangHub -> this repo
-npx @langhub/cli push      # this repo -> LangHub  (needs a write-scoped token)
+npx langhub-cli init      # langhub.json and a gitignored .env.langhub
+npx langhub-cli locales   # what the project has, and what langhub.json asks for that it does not
+npx langhub-cli pull      # LangHub -> this repo
+npx langhub-cli push      # this repo -> LangHub  (needs a write-scoped token)
 ```
+
+The command installed is `langhub`, not `langhub-cli` — the package name only
+appears when fetching it. After `npm i -g langhub-cli` it is `langhub pull`.
 
 ## Configuration
 
