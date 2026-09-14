@@ -1,5 +1,5 @@
 {
-  "name": "@langhub/cli",
+  "name": "langhub-cli",
   "version": "0.1.0",
   "description": "Move translations between LangHub and a repository. Carries the strings, guarantees the keys, and leaves what a value means to the i18n library reading it.",
   "keywords": [
@@ -29,9 +29,6 @@
   ],
   "engines": {
     "node": ">=18"
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.json",
