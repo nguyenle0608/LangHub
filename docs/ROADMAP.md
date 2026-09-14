@@ -6,51 +6,48 @@ it. Anything already shipped belongs in the changelog, not here.
 
 ---
 
-## Publish the CLI
+## The CLI's interface is now a contract
 
-**Status:** the CLI works, is installed locally with `npm link`, and is
-documented at `/docs#cli`. What is left is publishing it.
+`langhub-cli` is published. That closes the "publish the CLI" item, and opens
+this one in its place: what was a local tool is now something other
+repositories commit a config file for and CI pins a version of.
 
-`cli/` carries translations from LangHub into a repo over the public API. It
-guarantees which keys are present and leaves what a value means to the project
-reading the file — so it has no framework-specific rules and needs none. Today
-it writes JSON; ARB, Android XML, iOS `.strings` and the rest answer
-"coming soon", because each has file-level structure a merge has to preserve.
+Three things are load-bearing from here, and cannot be changed without a major
+version and a migration note:
 
-### Why it is not published yet
+- **`langhub.json`'s field names.** A repository that has committed one breaks
+  if a field is renamed. `locales`, `apiBase`, `projectId`, `branch`, `output`
+  and `format` are fixed.
+- **Exit codes.** `--check` exits 1 when out of date and 0 when not, which is
+  what makes it usable as a CI gate. A run that refuses to write also exits 1.
+- **`.env.langhub` and `LANGHUB_TOKEN`.** Both appear in people's CI
+  configuration, not only in their repositories.
 
-Deliberately held back. `npm link` is right while the CLI is still changing:
-rebuild and the command updates, no reinstall, no version to bump for every
-adjustment. Publishing freezes the interface — `langhub.json`'s shape, the
-report format, the exit codes — into something other repositories depend on and
-CI pins. That is worth doing once the shape has survived a second consumer.
+The report format and the prompt wording are *not* in that set, deliberately.
 
-### Before publishing
+### Still open from before publishing
 
-- ~~**Settle the npm name.**~~ Done: `langhub-cli`, unscoped. npm refused the
-  `langhub` organization — usernames and organization names share one namespace,
-  and something already holds it. Scope was not worth chasing a second name for:
-  it earns its keep across several packages sharing a namespace, and there is
-  one. The installed command is `langhub` either way, since that comes from
-  `bin` and not from the package name.
-- **A second consumer has used it.** The web app is the one that will show
-  whether anything in the CLI is accidentally shaped around Flutter. Publishing
-  before that means guessing which parts generalise.
-- **`langhub.json` is treated as a contract.** Once repositories commit one, its
-  fields cannot be renamed without breaking them. Read it once more with that in
-  mind before the first publish.
+**A second consumer has not used it.** The web app is the one that will show
+whether anything is accidentally shaped around Flutter. Publishing at `0.1.0`
+was a deliberate bet that the shape is close enough; the version says so, and
+leaves room to be wrong. If the web app needs something the current shape
+cannot express, `0.2.0` is the place to fix it — while the only consumers are
+still in this organization.
 
-### The docs page
+---
 
-Done — `src/app/(marketing)/docs/page.tsx`, section `#cli`, above the REST API
-section because the CLI is how most people will use that API.
+## Formats other than JSON
 
-Two things in it become wrong the moment the package is published, and have to
-change in the same commit:
+`format` accepts `json`. `arb`, `android`, `ios`, `yaml`, `csv` and `tsv`
+report that they are coming.
 
-- **Install.** It currently says "not on npm yet" and gives the build-from-source
-  command. That becomes `npx langhub-cli`, which needs nothing installed —
-  which is what makes it usable from a Flutter repository and from CI, so it
-  should lead rather than follow a global install.
-- **`apiBase` in the example** points at `https://lang-hub.netlify.app`. Check
-  that is still the address being documented publicly.
+Each has file-level structure a merge has to preserve, which is why they are
+not a flag: ARB carries `@key` metadata describing placeholders, Android and
+iOS have their own escaping, and a merge that writes the values correctly while
+losing the structure around them produces a file that parses and ships wrong.
+
+The order to do them in is the order someone asks. ARB is the likely first —
+Flutter's other localization path — and it is also the one where the metadata
+question has to be answered rather than avoided: LangHub does not store `@key`
+entries, so the CLI has to leave whatever the repository already has, which
+means reading the existing file rather than writing over it.

@@ -98,8 +98,10 @@ export default function DocsPage() {
 
           <div>
             <h3 className="font-semibold">Install</h3>
-            <p className="mt-2 text-sm text-muted-foreground">Not on npm yet. Build it from the LangHub repository:</p>
-            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`cd cli && npx tsc -p tsconfig.json && npm link`}</code></pre>
+            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`npx langhub-cli --help`}</code></pre>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Nothing to install — which is what makes it usable from a Flutter repository, or from a CI job, without adding Node tooling to a project that has none. To keep it on hand, <code className="rounded bg-muted px-1">npm i -g langhub-cli</code>; the installed command is <code className="rounded bg-muted px-1">langhub</code> either way, since that comes from the package&apos;s <code className="rounded bg-muted px-1">bin</code> rather than from its name.
+            </p>
           </div>
 
           <div>

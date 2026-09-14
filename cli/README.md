@@ -24,7 +24,7 @@ appears when fetching it. After `npm i -g langhub-cli` it is `langhub pull`.
   "branch": "main",
   "format": "json",
   "output": "assets/translations",
-  "apiBase": "https://langhub.example.com",
+  "apiBase": "https://lang-hub.netlify.app",
   "locales": {
     "en-US": "en-US",
     "vi-VN": "vi-VN",
@@ -35,7 +35,7 @@ appears when fetching it. After `npm i -g langhub-cli` it is `langhub pull`.
 
 `locales` maps a LangHub locale code to the file this repository reads it from, and the two sides are allowed to differ — `hi-IN → en-IN` above is a real case, where an app serves Hindi under the tag its backend already uses. Check this field twice: getting it wrong ships one language's text under another language's name, and nothing downstream notices.
 
-`apiBase` has no default and must be set. The CLI sends a bearer token, so the host receiving it is always a choice someone made rather than a guess. https is required except on localhost.
+`apiBase` is where your LangHub runs — the example above is the hosted one. It has no default and must be set. The CLI sends a bearer token, so the host receiving it is always a choice someone made rather than a guess. https is required except on localhost.
 
 ## Credentials
 
