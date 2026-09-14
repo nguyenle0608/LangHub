@@ -100,13 +100,18 @@ export default function DocsPage() {
             <h3 className="font-semibold">Install</h3>
             <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`npx langhub-cli --help`}</code></pre>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Nothing to install — which is what makes it usable from a Flutter repository, or from a CI job, without adding Node tooling to a project that has none. To keep it on hand, <code className="rounded bg-muted px-1">npm i -g langhub-cli</code>; the installed command is <code className="rounded bg-muted px-1">langhub</code> either way, since that comes from the package&apos;s <code className="rounded bg-muted px-1">bin</code> rather than from its name.
+              Nothing to install — which is what makes it usable from a Flutter repository, or from a CI job, without adding Node tooling to a project that has none.
+            </p>
+            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`npm i -g langhub-cli
+langhub --help`}</code></pre>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Install it globally instead if you run it often. The short <code className="rounded bg-muted px-1">langhub</code> command comes from the package&apos;s <code className="rounded bg-muted px-1">bin</code> and exists only after that global install — with <code className="rounded bg-muted px-1">npx</code> the command is <code className="rounded bg-muted px-1">npx langhub-cli</code>. The examples below use <code className="rounded bg-muted px-1">npx</code>.
             </p>
           </div>
 
           <div>
             <h3 className="font-semibold">Set up a repository</h3>
-            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`langhub init`}</code></pre>
+            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`npx langhub-cli init`}</code></pre>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               Writes <code className="rounded bg-muted px-1">langhub.json</code> and an empty <code className="rounded bg-muted px-1">.env.langhub</code>, and adds the latter to <code className="rounded bg-muted px-1">.gitignore</code> unless git already ignores it. Nothing is ever overwritten, so it is safe to re-run on a repository that is half configured. The config file holds no secret and belongs in git; the token never goes in it.
             </p>
@@ -114,7 +119,7 @@ export default function DocsPage() {
 
           <div>
             <h3 className="font-semibold">See what LangHub has</h3>
-            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`langhub locales`}</code></pre>
+            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`npx langhub-cli locales`}</code></pre>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               Lists the project&apos;s locales next to the file each one maps to, and ends with any code in <code className="rounded bg-muted px-1">langhub.json</code> that LangHub does not have — which is what <code className="rounded bg-muted px-1">pull</code> and <code className="rounded bg-muted px-1">push</code> will fail on. Run it first when a sync reports a locale it could not read.
             </p>
@@ -153,9 +158,11 @@ LANGHUB_TOKEN=lh_...`}</code></pre>
 
           <div>
             <h3 className="font-semibold">Pull, and push back</h3>
-            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`langhub pull --check    # what would change here; writes nothing, exits 1 when out of date
-langhub pull            # LangHub -> this repo
-langhub push            # this repo -> LangHub`}</code></pre>
+            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`npx langhub-cli pull --check    # what would change here; writes nothing, exits 1 when out of date
+npx langhub-cli pull            # LangHub -> this repo
+npx langhub-cli push            # this repo -> LangHub
+npx langhub-cli pull --verbose  # list every key, not the first ten of each kind
+npx langhub-cli pull --check --locale vi-VN --verbose   # one locale, in full`}</code></pre>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               Both fetch and merge everything before writing anything, then print a plan. A run that asks &ldquo;overwrite 40 values?&rdquo; after having already written eleven files is not asking a question.
             </p>
@@ -163,13 +170,22 @@ langhub push            # this repo -> LangHub`}</code></pre>
 
           <div>
             <h3 className="font-semibold">Reviewing what gets replaced</h3>
-            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`Plan:
-  vi-VN -> vi-VN.json    1 added, 2 overwritten, 1 kept
+            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5"><code>{`  [3/15] Reading vi-VN
 
-vi-VN -> vi-VN.json — 2 values would be replaced:
-  buttons.save
-    here:    Lưu lại
-    LangHub: Lưu
+Plan:
+  vi-VN -> vi-VN.json    14 added, 1 overwritten, 1 kept
+  fr-FR -> fr-FR.json    1 overwritten
+
+vi-VN -> vi-VN.json
+  1 value would be replaced:
+    buttons.save
+      here:    Lưu lại
+      LangHub: Lưu
+  14 keys would be added:
+    checkout.title
+    ... and 4 more (--verbose to list them)
+  1 key here but not in LangHub — kept, upload them:
+    quests.newQuest
 
 Replace 2 local values with LangHub's? [y]es all / [N]o / [r]eview each: r
 
@@ -177,6 +193,9 @@ Replace 2 local values with LangHub's? [y]es all / [N]o / [r]eview each: r
   here:    Lưu lại
   LangHub: Lưu
   [y]take / [N]keep / [a]take rest / [k]keep rest / [q]uit:`}</code></pre>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Every locale is listed separately, and every category names its keys rather than counting them — twelve added keys are either a feature someone just finished translating or a merge that went the wrong way, and those look identical until the keys are on screen. Long lists stop at ten; <code className="rounded bg-muted px-1">--verbose</code> lifts that, and <code className="rounded bg-muted px-1">--locale</code> narrows a run to one language — of the request as well as the output, so only that locale is fetched. Progress goes to stderr while locales are read, so piping the plan to a file gets the plan alone.
+            </p>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               New keys are written without asking — nothing is lost. Only a differing value needs a decision, and both values are shown because a count cannot be judged: &ldquo;20 overwritten&rdquo; is either a routine sync or a morning of someone&apos;s work. Keeping one value leaves the rest of that file to be written normally. Quitting writes nothing at all.
             </p>

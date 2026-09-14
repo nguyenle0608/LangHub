@@ -122,16 +122,21 @@ Published as [`langhub-cli`](https://www.npmjs.com/package/langhub-cli). Nothing
 npx langhub-cli --help
 ```
 
-The installed command is `langhub`, from the package's `bin` rather than its name. To work on the CLI itself, build and link it from source so a rebuild updates the command in place:
+`npm i -g langhub-cli` installs it as `langhub` — the short command comes from the package's `bin` and exists only after a global install or a link, not under `npx`.
+
+To work on the CLI itself, build and link it from source so a rebuild updates the command in place:
 
 ```bash
 cd cli && npm run build && npm link
-langhub init          # writes langhub.json and a gitignored .env.langhub
-langhub locales       # what LangHub has, and what langhub.json asks for that it does not
-langhub pull --check  # reports drift, writes nothing, exits 1 when out of date
-langhub pull          # LangHub -> repo: shows the plan, asks before replacing values
-langhub push          # repo -> LangHub: same, with a write-scoped token
+langhub init            # writes langhub.json and a gitignored .env.langhub
+langhub locales         # what LangHub has, and what langhub.json asks for that it does not
+langhub pull --check    # reports drift, writes nothing, exits 1 when out of date
+langhub pull            # LangHub -> repo: shows the plan, asks before replacing values
+langhub push            # repo -> LangHub: same, with a write-scoped token
+langhub pull --verbose  # list every key, not the first ten of each kind
 ```
+
+The plan lists every locale separately and names the keys in each category rather than counting them. Progress goes to stderr while locales are read, so piping the plan to a file gets the plan alone.
 
 `pull` fetches and merges everything before writing anything, then prints what would change. Keys LangHub adds are written without asking — nothing is lost. Keys whose local value differs are listed with both values and need a confirmation, because whether that value is a stale copy or this morning's edit cannot be known from here. `push` is the same in reverse, and needs a `write` token. It compares against everything LangHub holds, not only approved values — a pending translation filtered out of the comparison would look like an empty slot and be overwritten without appearing in the plan. Keys LangHub has and the repo does not are never touched: an import writes only the keys it names, and the server snapshots before each one. Pushed values land as `pending`, and `pull` takes only approved ones — so a value has to be reviewed in LangHub before it comes back down, and until then a pull looks like the push did nothing.
 
