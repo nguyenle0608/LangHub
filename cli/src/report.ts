@@ -1,5 +1,13 @@
 import type { Report, Overwrite } from './sync.js'
 
+/**
+ * How many entries a list shows before it summarises the rest.
+ *
+ * Ten is enough to recognise what a category contains — the shape of the keys,
+ * whether it is one feature or scattered — without a plan for fifteen locales
+ * scrolling a screenful per category. `--verbose` lifts it for the times the
+ * answer is in the part that got cut.
+ */
 const PREVIEW = 10
 
 /**
@@ -20,46 +28,73 @@ export function formatPlan(label: string, report: Report): string {
   return `  ${label.padEnd(22)} ${parts.join(', ') || 'no change'}`
 }
 
+export interface LocaleReport {
+  label: string
+  report: Report
+}
+
 /**
- * The keys that would lose their current value, with both values shown.
+ * The whole of what a run would do, one locale at a time.
  *
- * A count cannot be judged — "20 overwritten" is either a routine sync or a
- * morning of someone's work, and the two look identical until the values are
- * on screen. Showing them is what makes the confirmation a decision rather
- * than a keystroke.
+ * A count answers "is there anything to commit"; it does not answer "is this
+ * the change I meant to make". Twelve added keys are either the feature branch
+ * someone just finished translating or a merge that went the wrong way, and
+ * those look identical until the keys are on screen.
+ *
+ * Categories are ordered by what they cost. Overwrites first, because they are
+ * the only ones that destroy something. Then what is added, then what is kept
+ * for want of anywhere to send it.
  */
-export function formatOverwrites(
-  entries: Array<{ label: string; overwrites: Overwrite[] }>,
-  sides: Sides
-): string {
-  const lines: string[] = []
-  for (const { label, overwrites } of entries) {
-    if (overwrites.length === 0) continue
-    lines.push(`\n${label} — ${overwrites.length} value${overwrites.length === 1 ? '' : 's'} would be replaced:`)
-    for (const { key, from, to } of overwrites.slice(0, PREVIEW)) {
-      lines.push(`  ${key}`)
-      lines.push(`    ${sides.from} ${truncate(from)}`)
-      lines.push(`    ${sides.to} ${truncate(to)}`)
+export function formatDetails(locales: LocaleReport[], sides: Sides, verbose: boolean): string {
+  const limit = verbose ? Infinity : PREVIEW
+  const sections: string[] = []
+
+  for (const { label, report } of locales) {
+    const blocks: string[] = []
+
+    if (report.overwrites.length) {
+      blocks.push(list(
+        `${report.overwrites.length} ${plural(report.overwrites.length, 'value')} would be replaced`,
+        report.overwrites.map((entry) => overwriteLines(entry, sides)),
+        limit
+      ))
     }
-    if (overwrites.length > PREVIEW) lines.push(`  ... and ${overwrites.length - PREVIEW} more`)
+    if (report.added.length) {
+      blocks.push(list(
+        `${report.added.length} ${plural(report.added.length, 'key')} would be added`,
+        report.added.map((key) => [key]),
+        limit
+      ))
+    }
+    if (report.notInLangHub.length) {
+      blocks.push(list(
+        `${report.notInLangHub.length} ${plural(report.notInLangHub.length, 'key')} here but not in LangHub — kept, upload them`,
+        report.notInLangHub.map((key) => [key]),
+        limit
+      ))
+    }
+
+    if (blocks.length) sections.push(`\n${label}\n${blocks.join('\n')}`)
+  }
+
+  return sections.join('\n')
+}
+
+function overwriteLines({ key, from, to }: Overwrite, sides: Sides): string[] {
+  return [key, `  ${sides.from} ${truncate(from)}`, `  ${sides.to} ${truncate(to)}`]
+}
+
+/** Indentation lives here rather than in each producer, so it cannot drift. */
+function list(heading: string, entries: string[][], limit: number): string {
+  const shown = entries.slice(0, limit)
+  const lines = [`  ${heading}:`, ...shown.flat().map((line) => `    ${line}`)]
+  if (entries.length > shown.length) {
+    lines.push(`    ... and ${entries.length - shown.length} more (--verbose to list them)`)
   }
   return lines.join('\n')
 }
 
-/**
- * Keys this repo has and LangHub does not. Not a conflict — nothing is lost,
- * they are kept — but the only signal that something has not been uploaded.
- */
-export function formatNotInLangHub(entries: Array<{ label: string; keys: string[] }>): string {
-  const lines: string[] = []
-  for (const { label, keys } of entries) {
-    if (keys.length === 0) continue
-    lines.push(`\n${label} — ${keys.length} key${keys.length === 1 ? '' : 's'} here but not in LangHub (kept, upload them):`)
-    for (const key of keys.slice(0, PREVIEW)) lines.push(`  ${key}`)
-    if (keys.length > PREVIEW) lines.push(`  ... and ${keys.length - PREVIEW} more`)
-  }
-  return lines.join('\n')
-}
+const plural = (count: number, word: string) => (count === 1 ? word : `${word}s`)
 
 function truncate(value: string, max = 90): string {
   const flat = value.replace(/\n/g, '\\n')

@@ -25,6 +25,9 @@ const releases: Release[] = [
     date: 'September 2026',
     title: 'The command line & the editor grid',
     changes: [
+      { type: 'New', text: 'The editor remembers how you arranged your columns. Order, which are hidden, frozen or locked, and how wide they are — kept per project, so a language you never work in stays out of the way instead of coming back every time you open the editor.' },
+      { type: 'New', text: 'Drag languages into order inside the Columns popup, where the whole list is visible at once, instead of hunting for a column that may be scrolled off screen.' },
+      { type: 'Improved', text: 'The command line tool says what it is doing while it reads each language, and its plan now names the keys it would add, replace or keep rather than only counting them. Narrow a run to one language with --locale, or see every key with --verbose.' },
       { type: 'New', text: 'The command line tool is on npm. npx langhub-cli needs nothing installed, so a repository with no Node tooling — a Flutter app, a CI job — can still sync its translations.' },
       { type: 'New', text: 'A command line tool. langhub pull and langhub push move translations between LangHub and the locale files in your repository, over the public API.' },
       { type: 'New', text: 'Every sync prints a plan before it writes anything, and shows both values for each translation that differs so you can keep or overwrite them one at a time.' },

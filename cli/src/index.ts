@@ -6,7 +6,8 @@ import { pathToFileURL } from 'node:url'
 import { fetchLocale, fetchLocales, pushLocale } from './api.js'
 import { ENV_FILE, loadEnvFile } from './env.js'
 import { loadConfig, requireToken, type Config } from './config.js'
-import { formatNotInLangHub, formatOverwrites, formatPlan, PULL_SIDES, PUSH_SIDES, type Sides } from './report.js'
+import { formatDetails, formatPlan, PULL_SIDES, PUSH_SIDES, type Sides } from './report.js'
+import { createProgress } from './progress.js'
 import { askPlan, createPrompter } from './prompt.js'
 import { reviewOverwrites, wasTaken, type PendingOverwrite } from './review.js'
 import { diffForPush, emptyReport, hasChanges, merge, parseFile, serialize } from './sync.js'
@@ -30,7 +31,7 @@ function readLocal(path: string): Flat {
 
 async function pull(
   config: Config,
-  options: { check: boolean; yes: boolean; only: string[] }
+  options: { check: boolean; yes: boolean; verbose: boolean; only: string[] }
 ): Promise<number> {
   const token = requireToken()
   const unknown = options.only.filter((code) => !(code in config.locales))
@@ -57,13 +58,10 @@ async function pull(
   console.log('\nPlan:')
   for (const { label, report } of planned) console.log(formatPlan(label, report))
 
-  const overwrites = planned.map(({ label, report }) => ({ label, overwrites: report.overwrites }))
-  const total = overwrites.reduce((sum, entry) => sum + entry.overwrites.length, 0)
-  if (total > 0) console.log(formatOverwrites(overwrites, PULL_SIDES))
+  const details = formatDetails(planned, PULL_SIDES, options.verbose)
+  if (details) console.log(details)
 
-  const missing = planned.map(({ label, report }) => ({ label, keys: report.notInLangHub }))
-  if (missing.some((entry) => entry.keys.length > 0)) console.log(formatNotInLangHub(missing))
-
+  const total = planned.reduce((sum, { report }) => sum + report.overwrites.length, 0)
   const changed = planned.some(({ report }) => hasChanges(report))
   if (options.check) {
     console.log(`\n${changed ? 'Out of date — run `langhub pull`.' : 'Up to date.'}`)
@@ -250,17 +248,21 @@ export interface Failed { code: string; message: string }
  */
 export async function fetchAll<T>(
   codes: string[],
-  load: (code: string) => Promise<T>
+  load: (code: string) => Promise<T>,
+  what = 'Reading'
 ): Promise<{ fetched: Array<Fetched<T>>; failed: Failed[] }> {
   const fetched: Array<Fetched<T>> = []
   const failed: Failed[] = []
+  const progress = createProgress(codes.length)
   for (const code of codes) {
+    progress.step(`${what} ${code}`)
     try {
       fetched.push({ code, value: await load(code) })
     } catch (error) {
       failed.push({ code, message: (error as Error).message })
     }
   }
+  progress.done()
   return { fetched, failed }
 }
 
@@ -350,7 +352,7 @@ async function approve(
  */
 async function push(
   config: Config,
-  options: { check: boolean; yes: boolean; only: string[] }
+  options: { check: boolean; yes: boolean; verbose: boolean; only: string[] }
 ): Promise<number> {
   const token = requireToken()
   const unknown = options.only.filter((code) => !(code in config.locales))
@@ -361,7 +363,7 @@ async function push(
   // what is here, and a locale with no file has nothing to say.
   const present = wanted.filter((code) =>
     Object.keys(readLocal(resolve(config.output, `${config.locales[code]}.json`))).length > 0)
-  const { fetched, failed } = await fetchAll(present, (code) => fetchLocale(config, code, token, 'all'))
+  const { fetched, failed } = await fetchAll(present, (code) => fetchLocale(config, code, token, 'all'), 'Comparing')
   if (failed.length) {
     console.error(explainFailures(failed, fetched.length > 0, config))
     return 1
@@ -378,13 +380,10 @@ async function push(
   console.log('\nPlan:')
   for (const { label, report } of planned) console.log(formatPlan(label, report))
 
+  const details = formatDetails(planned, PUSH_SIDES, options.verbose)
+  if (details) console.log(details)
+
   const total = planned.reduce((sum, { report }) => sum + report.overwrites.length, 0)
-  if (total > 0) {
-    console.log(formatOverwrites(
-      planned.map(({ label, report }) => ({ label, overwrites: report.overwrites })),
-      PUSH_SIDES
-    ))
-  }
 
   const changed = planned.some(({ report }) => hasChanges(report))
   if (options.check) {
@@ -431,14 +430,20 @@ const USAGE = `langhub — move translations between LangHub and this repo
 
   langhub init                                          write a starter langhub.json
   langhub locales                                       list the project's locales
-  langhub pull [--check] [--yes] [--locale <code>]...   LangHub -> this repo
-  langhub push [--check] [--yes] [--locale <code>]...   this repo -> LangHub
+  langhub pull [options]                                LangHub -> this repo
+  langhub push [options]                                this repo -> LangHub
 
-    --check   report only, change nothing
-    --yes     accept every overwrite without asking
+    --check            report only, change nothing, exit 1 when out of date
+    --locale <code>    just this locale; repeat for several
+    --verbose          list every key, instead of the first ten of each kind
+    --yes              accept every replacement without asking
 
   Both show a plan first and, when a value would be replaced, offer to review
   the replacements one at a time. push needs a write-scoped token.
+
+  To read one locale closely, narrow it and ask for everything:
+
+    langhub pull --check --locale vi-VN --verbose
 
 Configuration lives in langhub.json. The CLI writes JSON; it carries the strings
 and guarantees the keys, and leaves what a value means to the project reading it.
@@ -472,9 +477,11 @@ async function main(argv: string[]): Promise<number> {
   const only: string[] = []
   let check = false
   let yes = false
+  let verbose = false
   for (let i = 0; i < rest.length; i++) {
     if (rest[i] === '--check') check = true
     else if (rest[i] === '--yes' || rest[i] === '-y') yes = true
+    else if (rest[i] === '--verbose' || rest[i] === '-v') verbose = true
     else if (rest[i] === '--locale') {
       const value = rest[++i]
       if (!value) throw new Error('--locale needs a locale code')
@@ -483,8 +490,8 @@ async function main(argv: string[]): Promise<number> {
   }
   const config = loadConfig(process.cwd())
   return command === 'push'
-    ? push(config, { check, yes, only })
-    : pull(config, { check, yes, only })
+    ? push(config, { check, yes, verbose, only })
+    : pull(config, { check, yes, verbose, only })
 }
 
 // Only when run as a command. Importing this module — a test reaching for one
