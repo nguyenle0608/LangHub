@@ -73,6 +73,7 @@ import {
   type ColumnPreferences,
 } from '@/lib/editor/column-preferences'
 import { chunkBulkItems, partialWriteMessage } from '@/lib/api/bulk-translations'
+import { completionPercent } from '@/lib/completion'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -908,7 +909,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
       // Per-locale stats cover every locale (incl. base) for the sidebar
       // counter and column-header percent.
       if (needsWork > 0) localeNeedsWork.set(locale.id, needsWork)
-      localePercent.set(locale.id, totalKeys > 0 ? Math.round((approved / totalKeys) * 100) : 0)
+      localePercent.set(locale.id, completionPercent(approved, totalKeys))
       localeApproved.set(locale.id, approved)
       localeFilled.set(locale.id, filled)
       const isScored = hasTargets ? !locale.is_base : true
@@ -930,9 +931,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   const overallPercent = useMemo(() => {
     const nonBaseCount = locales.filter((l) => !l.is_base).length
     const scoredCount = nonBaseCount > 0 ? nonBaseCount : locales.length
-    const total = keys.length * scoredCount
-    if (total === 0) return 0
-    return Math.round((stats.approvedRecords / total) * 100)
+    return completionPercent(stats.approvedRecords, keys.length * scoredCount)
   }, [keys, locales, stats.approvedRecords])
 
   // Realtime
