@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createSnapshot } from '@/lib/versions/snapshot'
 import type { ProjectWithStats } from '@/types'
 import type { Database, Json } from '@/types/database'
+import { completionPercent } from '@/lib/completion'
 
 export type Branch = Database['public']['Tables']['branches']['Row']
 
@@ -139,7 +140,7 @@ export async function listBranchesWithStats(projectId: string): Promise<BranchWi
       const keyCount = count ?? 0
       const approved = approvedCounts.reduce((sum, n) => sum + n, 0)
       const total = keyCount * nonBaseLocaleIds.size
-      const approvedPercent = total > 0 ? Math.round((approved / total) * 100) : 0
+      const approvedPercent = completionPercent(approved, total)
       return { ...b, keyCount, localeCount, approvedPercent }
     })
   )
