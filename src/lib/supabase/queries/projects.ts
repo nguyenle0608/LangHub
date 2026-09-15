@@ -3,6 +3,7 @@ import { createClient } from '../server'
 import { createAdminClient } from '../admin'
 import type { Database } from '@/types/database'
 import type { LocaleWithStats, MemberRole, ProjectWithStats } from '@/types'
+import { completionPercent } from '@/lib/completion'
 
 type LocaleRow = Database['public']['Tables']['locales']['Row']
 type BranchRow = Database['public']['Tables']['branches']['Row']
@@ -82,7 +83,7 @@ function computeLocaleStatsFromApproved(
 ): LocaleWithStats[] {
   return locales.map((locale) => {
     const approved = approvedByLocale.get(locale.id) ?? 0
-    const percent = totalKeys > 0 ? Math.round((approved / totalKeys) * 100) : 0
+    const percent = completionPercent(approved, totalKeys)
     return { id: locale.id, code: locale.code, name: locale.name, is_base: locale.is_base ?? false, total: totalKeys, approved, percent }
   })
 }
@@ -103,7 +104,7 @@ function computeOverallPercent(localesWithStats: LocaleWithStats[], totalKeys: n
   const nonBase = localesWithStats.filter((l) => !l.is_base)
   const overallApproved = nonBase.reduce((sum, l) => sum + l.approved, 0)
   const overallTotal = totalKeys * nonBase.length
-  return overallTotal > 0 ? Math.round((overallApproved / overallTotal) * 100) : 0
+  return completionPercent(overallApproved, overallTotal)
 }
 
 async function getBranchStats(

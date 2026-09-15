@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge'
 const VersionDiffView = dynamic(() => import('./VersionDiffView').then((m) => m.VersionDiffView))
 import type { VersionWithStats } from '@/lib/versions/snapshot'
 import type { ProjectWithStats } from '@/types'
+import { completionPercent } from '@/lib/completion'
 
 interface Props {
   project: ProjectWithStats
@@ -121,7 +122,7 @@ function VersionCard({
   const stats = version.stats
   const total = stats ? (stats.total_keys ?? 0) * (stats.total_locales ?? 0) : 0
   const approved = stats?.approved_count ?? 0
-  const pct = total > 0 ? Math.round((approved / total) * 100) : 0
+  const pct = completionPercent(approved, total)
 
   return (
     <div
