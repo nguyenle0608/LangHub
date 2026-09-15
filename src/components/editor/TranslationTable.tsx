@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useMemo, useCallback, Fragment, useEffect } from 'react'
+import { useState, useRef, useMemo, useCallback, Fragment, useEffect, useLayoutEffect } from 'react'
 import Link from 'next/link'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
@@ -64,6 +64,14 @@ import {
   type TranslationKeyTreeNode,
   type TreeNodeCheckState,
 } from '@/lib/translation-key-tree'
+import {
+  clearColumnPreferences,
+  defaultColumnPreferences,
+  moveLocale,
+  readColumnPreferences,
+  writeColumnPreferences,
+  type ColumnPreferences,
+} from '@/lib/editor/column-preferences'
 import { chunkBulkItems, partialWriteMessage } from '@/lib/api/bulk-translations'
 
 // ---------------------------------------------------------------------------
@@ -313,6 +321,15 @@ function serializeClipboardTable(grid: string[][]): string {
 // Main TranslationTable
 // ---------------------------------------------------------------------------
 
+/**
+ * `useLayoutEffect` on the client, `useEffect` on the server.
+ *
+ * React warns about a layout effect in a server-rendered tree, and this
+ * component is one. The effect only has anything to do on the client, so the
+ * server gets the harmless variant rather than the warning.
+ */
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
+
 export function TranslationTable({ project, initialKeys, totalKeyCount, branches: initialBranches, activeBranchId: initialBranchId, user, initialSearch }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const SIDEBAR_MIN_WIDTH = 180
@@ -393,6 +410,55 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   }, [])
   const [keyColWidth, setKeyColWidth] = useState(DEFAULT_COLS.key)
   const [localeColWidths, setLocaleColWidths] = useState<Map<string, number>>(new Map())
+
+  // Stored column arrangement.
+  //
+  // Applied after mount rather than in a state initialiser: this component is
+  // server-rendered, so reading storage during the first render would give the
+  // server the default and the client the saved arrangement — a hydration
+  // mismatch React resolves by keeping the server's markup. A *layout* effect
+  // rather than a plain one, so the rearrangement happens before the browser
+  // paints and is never seen as a reflow.
+  const preferencesLoadedFor = useRef<string | null>(null)
+
+  useIsomorphicLayoutEffect(() => {
+    if (preferencesLoadedFor.current === project.id) return
+    preferencesLoadedFor.current = project.id
+
+    const stored = readColumnPreferences(project.id, project.locales.map((locale) => locale.id))
+    setLocaleOrder(stored.order)
+    setHiddenCols(new Set(stored.hidden))
+    setFrozenCols(new Set(stored.frozen))
+    setLockedCols(new Set(stored.locked))
+    setKeyColWidth(stored.keyWidth ?? DEFAULT_COLS.key)
+    setLocaleColWidths(new Map(Object.entries(stored.localeWidths)))
+  }, [project.id, project.locales, DEFAULT_COLS.key])
+
+  const currentPreferences = useCallback((): ColumnPreferences => ({
+    order: localeOrder,
+    hidden: Array.from(hiddenCols),
+    frozen: Array.from(frozenCols),
+    locked: Array.from(lockedCols),
+    keyWidth: keyColWidth,
+    localeWidths: Object.fromEntries(localeColWidths),
+  }), [localeOrder, hiddenCols, frozenCols, lockedCols, keyColWidth, localeColWidths])
+
+  // Order, visibility, freezing and locking are one change per click, so they
+  // are written as they happen. Guarded on the load having run, or the first
+  // render would overwrite a stored arrangement with the defaults it starts on.
+  useEffect(() => {
+    if (preferencesLoadedFor.current !== project.id) return
+    writeColumnPreferences(project.id, currentPreferences())
+  }, [project.id, localeOrder, hiddenCols, frozenCols, lockedCols, currentPreferences])
+
+  // Widths arrive continuously while a column is dragged, so these are
+  // debounced — serialising the whole object on every mouse move is work
+  // nobody asked for.
+  useEffect(() => {
+    if (preferencesLoadedFor.current !== project.id) return
+    const timer = setTimeout(() => writeColumnPreferences(project.id, currentPreferences()), 300)
+    return () => clearTimeout(timer)
+  }, [project.id, keyColWidth, localeColWidths, currentPreferences])
   const [resizingColumnId, setResizingColumnId] = useState<string | null>(null)
   const columnResizeRef = useRef<{ columnId: string; startX: number; startWidth: number; min: number; max: number } | null>(null)
 
@@ -1338,20 +1404,26 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
   const showKey = !hiddenCols.has('key')
   const showStatus = !hiddenCols.has('status')
 
-  // Apply custom order, frozen locales first (for correct sticky offset); both filtered by visibility
-  const visibleLocales = useMemo(() => {
+  // Every locale in the arranged order, hidden ones included. The Columns
+  // popover lists these: a hidden column still has a position, and it takes
+  // that position when it is shown again.
+  const orderedLocales = useMemo(() => {
     const effectiveOrder = localeOrder.length ? localeOrder : locales.map((l) => l.id)
-    const sorted = [...locales]
-      .sort((a, b) => {
-        const ai = effectiveOrder.indexOf(a.id)
-        const bi = effectiveOrder.indexOf(b.id)
-        return (ai === -1 ? Infinity : ai) - (bi === -1 ? Infinity : bi)
-      })
-      .filter((l) => !hiddenCols.has(l.id))
+    return [...locales].sort((a, b) => {
+      const ai = effectiveOrder.indexOf(a.id)
+      const bi = effectiveOrder.indexOf(b.id)
+      return (ai === -1 ? Infinity : ai) - (bi === -1 ? Infinity : bi)
+    })
+  }, [locales, localeOrder])
+
+  // What the table renders: the same order, minus hidden columns, with frozen
+  // ones first so the sticky offsets line up.
+  const visibleLocales = useMemo(() => {
+    const sorted = orderedLocales.filter((l) => !hiddenCols.has(l.id))
     const frozen = sorted.filter((l) => frozenCols.has(l.id))
     const rest = sorted.filter((l) => !frozenCols.has(l.id))
     return [...frozen, ...rest]
-  }, [locales, localeOrder, frozenCols, hiddenCols])
+  }, [orderedLocales, frozenCols, hiddenCols])
 
   // Sticky left offset for each frozen column
   const stickyLeft = useMemo(() => {
@@ -1907,16 +1979,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
     draggingLocaleRef.current = null
     setDragOverLocaleId(null)
     if (!sourceId || sourceId === targetId) return
-    setLocaleOrder((prev) => {
-      const base = prev.length ? prev : locales.map((l) => l.id)
-      const from = base.indexOf(sourceId)
-      const to = base.indexOf(targetId)
-      if (from === -1 || to === -1) return prev
-      const next = [...base]
-      next.splice(from, 1)
-      next.splice(to, 0, sourceId)
-      return next
-    })
+    setLocaleOrder((prev) => moveLocale(prev, locales.map((l) => l.id), sourceId, targetId))
   }, [locales])
 
   const handleColDragEnd = useCallback(() => {
@@ -2227,12 +2290,28 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
             })()}
             <div className="border-t border-border my-1" />
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 py-1">Languages</p>
-            {locales.map((locale) => {
+            {/* Listed in column order, hidden ones included, and draggable.
+                The handlers are the table header's: they already hold the
+                first-reorder fallback, and two implementations of one gesture
+                drift — the second is always the one that forgets it. */}
+            {orderedLocales.map((locale) => {
               const hidden = hiddenCols.has(locale.id)
               const frozen = frozenCols.has(locale.id)
               const locked = lockedCols.has(locale.id)
               return (
-                <div key={locale.id} className="flex items-center gap-0.5 px-2 py-1 rounded hover:bg-muted/60">
+                <div
+                  key={locale.id}
+                  draggable
+                  onDragStart={(e) => handleColDragStart(e, locale.id)}
+                  onDragOver={(e) => handleColDragOver(e, locale.id)}
+                  onDrop={(e) => handleColDrop(e, locale.id)}
+                  onDragEnd={handleColDragEnd}
+                  className={cn(
+                    'flex items-center gap-0.5 px-2 py-1 rounded hover:bg-muted/60',
+                    dragOverLocaleId === locale.id && 'ring-1 ring-inset ring-blue-500/60 bg-blue-500/5'
+                  )}
+                >
+                  <GripVertical className="h-3 w-3 shrink-0 cursor-grab text-border" />
                   <span className="text-sm">{getFlag(locale.code)}</span>
                   <span className="flex-1 text-xs text-foreground truncate ml-1">{locale.name}</span>
                   <button
@@ -2277,7 +2356,7 @@ export function TranslationTable({ project, initialKeys, totalKeyCount, branches
               <>
                 <div className="border-t border-border my-1" />
                 <button
-                  onClick={() => { setHiddenCols(new Set()); setFrozenCols(new Set(['key'])); setLockedCols(new Set()); setLocaleOrder([]); resetColumnWidths() }}
+                  onClick={() => { const fresh = defaultColumnPreferences(); setHiddenCols(new Set(fresh.hidden)); setFrozenCols(new Set(fresh.frozen)); setLockedCols(new Set(fresh.locked)); setLocaleOrder(fresh.order); resetColumnWidths(); clearColumnPreferences(project.id) }}
                   className="w-full text-left text-xs text-muted-foreground hover:text-foreground px-2 py-1.5 rounded hover:bg-muted/60"
                 >
                   Reset all
