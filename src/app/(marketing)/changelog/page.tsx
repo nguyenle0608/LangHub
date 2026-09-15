@@ -25,6 +25,7 @@ const releases: Release[] = [
     date: 'September 2026',
     title: 'The command line & the editor grid',
     changes: [
+      { type: 'Fixed', text: 'Translation progress no longer rounds up to 100%. A language missing three of seven hundred keys read as complete, which is the one number that means there is nothing left to do — it now reads 99% until every key is done.' },
       { type: 'New', text: 'The editor remembers how you arranged your columns. Order, which are hidden, frozen or locked, and how wide they are — kept per project, so a language you never work in stays out of the way instead of coming back every time you open the editor.' },
       { type: 'New', text: 'Drag languages into order inside the Columns popup, where the whole list is visible at once, instead of hunting for a column that may be scrolled off screen.' },
       { type: 'Improved', text: 'The command line tool says what it is doing while it reads each language, and its plan now names the keys it would add, replace or keep rather than only counting them. Narrow a run to one language with --locale, or see every key with --verbose.' },
