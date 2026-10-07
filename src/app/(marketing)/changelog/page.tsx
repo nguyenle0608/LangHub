@@ -22,6 +22,13 @@ const typeStyles: Record<ChangeType, string> = {
 
 const releases: Release[] = [
   {
+    date: 'October 2026',
+    title: 'Reliable language column arrangement',
+    changes: [
+      { type: 'Fixed', text: 'Newly added languages can now be dragged into place even if you arranged your columns before adding them. Your existing arrangement is preserved, and new columns no longer get stuck at the end.' },
+    ],
+  },
+  {
     date: 'September 2026',
     title: 'The command line & the editor grid',
     changes: [
