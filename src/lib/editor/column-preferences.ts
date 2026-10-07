@@ -157,7 +157,10 @@ function safeRemove(key: string): void {
  */
 export function moveLocale(current: string[], allIds: string[], sourceId: string, targetId: string): string[] {
   if (sourceId === targetId) return current
-  const base = current.length ? current : allIds
+  // Saved arrangements can predate newly added locales. Reconcile against the
+  // full current list before moving, matching the order displayed by the editor.
+  const known = new Set(allIds)
+  const base = Array.from(new Set([...current.filter((id) => known.has(id)), ...allIds]))
   const from = base.indexOf(sourceId)
   const to = base.indexOf(targetId)
   if (from === -1 || to === -1) return current
