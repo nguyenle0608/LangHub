@@ -236,9 +236,22 @@ describe('moveLocale', () => {
     expect(moveLocale(current, ALL, 'a', 'ghost')).toBe(current)
   })
 
-  it('reorders a stored subset without resurrecting what it omits', () => {
-    // After a locale is removed from the project, the stored order is shorter
-    // than the project's list. The move must work within what is stored.
-    expect(moveLocale(['b', 'c'], ALL, 'c', 'b')).toEqual(['c', 'b'])
+  it('keeps newly added locales when reordering a stored subset', () => {
+    expect(moveLocale(['b', 'c'], ALL, 'c', 'b')).toEqual(['c', 'b', 'a', 'd'])
+  })
+
+  it('moves a newly added en-in column absent from the saved order', () => {
+    expect(moveLocale(['en', 'vi'], ['en', 'vi', 'en-in'], 'en-in', 'en'))
+      .toEqual(['en-in', 'en', 'vi'])
+  })
+
+  it('allows dropping an existing column on a newly added column', () => {
+    expect(moveLocale(['en', 'vi'], ['en', 'vi', 'en-in'], 'en', 'en-in'))
+      .toEqual(['vi', 'en-in', 'en'])
+  })
+
+  it('drops removed ids and deduplicates saved ids when moving', () => {
+    expect(moveLocale(['gone', 'b', 'b', 'a'], ['a', 'b', 'c'], 'c', 'b'))
+      .toEqual(['c', 'b', 'a'])
   })
 })
