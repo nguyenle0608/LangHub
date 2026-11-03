@@ -16,8 +16,10 @@ import type { JsonImportStructure } from '@/lib/localization-namespaces'
 export const maxDuration = 26
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
+  const startedAt = Date.now()
   const auth = await authorizePublicApiRequest(request, 'write')
   if (!auth.ok) return auth.response
+  console.log(`[import] start requestId=${auth.requestId} projectId=${params.id}`)
   const headers = publicApiHeaders(auth)
   const idempotencyKey = request.headers.get('idempotency-key')
   if (!idempotencyKey || !IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey)) {
@@ -81,14 +83,17 @@ export async function POST(request: Request, { params }: { params: { id: string 
       return apiError(409, 'conflict', message, auth.requestId, headers)
     }
     reservationMade = true
+    console.log(`[import] snapshot+apply start requestId=${auth.requestId} projectId=${params.id} elapsedMs=${Date.now() - startedAt}`)
     const result = await executeImport({
       projectId: params.id, branchId, localeId: locales[0].id, filename: file.name,
       entries: parsed.entries, actor: { kind: 'api_token', context: auth.context, requestId: auth.requestId },
       idempotency: { key: idempotencyKey, requestHash },
     })
+    console.log(`[import] done requestId=${auth.requestId} projectId=${params.id} elapsedMs=${Date.now() - startedAt}`)
     const body = { data: result }
     return NextResponse.json(body, { headers })
   } catch (error) {
+    console.error(`[import] failed requestId=${auth.requestId} projectId=${params.id} elapsedMs=${Date.now() - startedAt}`, error)
     if (reservationMade) await failImportIdempotency(auth.context.tokenId, idempotencyKey)
     if (error instanceof ImportValidationError) {
       const status = error.code === 'bounds' ? 413 : error.code === 'resource' ? 404 : 400
