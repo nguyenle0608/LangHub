@@ -22,6 +22,13 @@ const typeStyles: Record<ChangeType, string> = {
 
 const releases: Release[] = [
   {
+    date: 'November 2026',
+    title: 'More reliable API imports',
+    changes: [
+      { type: 'Fixed', text: 'A push via the API or the command line tool that timed out or crashed mid-import no longer locks its idempotency key for 24 hours. Retrying the same push now picks it back up within seconds instead of failing indefinitely.' },
+    ],
+  },
+  {
     date: 'October 2026',
     title: 'Reliable language column arrangement',
     changes: [
