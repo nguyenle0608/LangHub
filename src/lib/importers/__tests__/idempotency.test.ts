@@ -1,23 +1,35 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ insert: vi.fn(), existing: null as null | Record<string, unknown>, readError: null as null | { message: string } }))
+const mocks = vi.hoisted(() => ({
+  insert: vi.fn(),
+  existing: null as null | Record<string, unknown>,
+  readError: null as null | { message: string },
+  reclaim: vi.fn(async () => ({ data: [] as Array<{ token_id: string }>, error: null as null | { message: string } })),
+}))
 
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => ({
     from: () => {
-      const query = {
-        insert: mocks.insert,
-        select: () => query,
-        eq: () => query,
+      const readQuery = {
+        select: () => readQuery,
+        eq: () => readQuery,
         maybeSingle: async () => ({ data: mocks.existing, error: mocks.readError }),
-        update: () => query,
       }
-      return query
+      const updateQuery = {
+        eq: () => updateQuery,
+        lt: () => updateQuery,
+        select: () => mocks.reclaim(),
+      }
+      return {
+        insert: mocks.insert,
+        select: () => readQuery,
+        update: () => updateQuery,
+      }
     },
   }),
 }))
 
-import { hashImportRequest, IDEMPOTENCY_KEY_PATTERN, reserveImportIdempotency } from '../idempotency'
+import { hashImportRequest, IDEMPOTENCY_KEY_PATTERN, IN_PROGRESS_STALE_MS, reserveImportIdempotency } from '../idempotency'
 
 const input = { tokenId: 'token-a', key: 'request-123', requestHash: 'a'.repeat(64) }
 
@@ -25,9 +37,10 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.existing = {
     request_hash: input.requestHash, state: 'in_progress', response_status: null,
-    response_body: null, expires_at: '2999-01-01T00:00:00.000Z',
+    response_body: null, expires_at: '2999-01-01T00:00:00.000Z', updated_at: new Date().toISOString(),
   }
   mocks.readError = null
+  mocks.reclaim.mockResolvedValue({ data: [], error: null })
 })
 
 describe('import idempotency', () => {
@@ -59,6 +72,33 @@ describe('import idempotency', () => {
     mocks.insert.mockResolvedValue({ error: { code: '23505' } })
     mocks.existing = { ...mocks.existing!, request_hash: 'b'.repeat(64) }
     await expect(reserveImportIdempotency(input)).resolves.toEqual({ kind: 'conflict', reason: 'content_changed' })
+  })
+
+  it('reclaims a reservation abandoned by a crashed or timed-out function', async () => {
+    mocks.insert.mockResolvedValue({ error: { code: '23505' } })
+    mocks.existing = {
+      ...mocks.existing!,
+      updated_at: new Date(Date.now() - IN_PROGRESS_STALE_MS - 1_000).toISOString(),
+    }
+    mocks.reclaim.mockResolvedValue({ data: [{ token_id: input.tokenId }], error: null })
+    await expect(reserveImportIdempotency(input)).resolves.toEqual({ kind: 'new' })
+  })
+
+  it('still reports in_progress when a concurrent retry already reclaimed a stale reservation', async () => {
+    mocks.insert.mockResolvedValue({ error: { code: '23505' } })
+    mocks.existing = {
+      ...mocks.existing!,
+      updated_at: new Date(Date.now() - IN_PROGRESS_STALE_MS - 1_000).toISOString(),
+    }
+    mocks.reclaim.mockResolvedValue({ data: [], error: null })
+    await expect(reserveImportIdempotency(input)).resolves.toEqual({ kind: 'conflict', reason: 'in_progress' })
+  })
+
+  it('does not reclaim a reservation that is merely recent, not stale', async () => {
+    mocks.insert.mockResolvedValue({ error: { code: '23505' } })
+    // default mocks.existing.updated_at is "now" — well within the stale window
+    await expect(reserveImportIdempotency(input)).resolves.toEqual({ kind: 'conflict', reason: 'in_progress' })
+    expect(mocks.reclaim).not.toHaveBeenCalled()
   })
 })
 
