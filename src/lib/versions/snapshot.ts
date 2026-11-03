@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { fetchBranchTranslations } from '@/lib/branches/fetch'
+import { fetchBranchTranslations, type BranchTranslation } from '@/lib/branches/fetch'
 import { loadAllPages } from '@/lib/supabase/paginate'
 import type { Database } from '@/types/database'
 
@@ -43,57 +43,60 @@ export async function createSnapshot(
     return { error: message }
   }
 
-  // 2. Fetch all keys for this project. Paginated: an unpaged select stops at
-  //    1000 rows, which left every key past the cap with an empty key_name in
-  //    the snapshot and made the restore silently skip it.
-  let keys: Array<{ id: string; key: string }>
-  try {
-    keys = await loadAllPages('snapshot keys', (from, to) =>
+  // 2-4. Fetch keys, locales, and branch translations concurrently. None of
+  //    these reads depends on another's result, so serializing them (as
+  //    separate awaits) only added up their round-trip latencies — the
+  //    dominant cost of a snapshot on a project with many pages of any of
+  //    the three, and a direct contributor to /import exceeding Netlify's
+  //    function timeout.
+  const translationsPromise: Promise<BranchTranslation[]> = meta.branchId
+    ? fetchBranchTranslations(admin, meta.branchId, { throwOnError: true })
+    : Promise.resolve([])
+  const [keysResult, localesResult, translationsResult] = await Promise.allSettled([
+    loadAllPages<{ id: string; key: string }>('snapshot keys', (from, to) =>
       admin
         .from('translation_keys')
         .select('id, key')
         .eq('project_id', projectId)
         .order('id', { ascending: true })
         .range(from, to)
-    )
-  } catch (error) {
-    return fail(error instanceof Error ? error.message : 'Failed to snapshot keys')
+    ),
+    admin.from('locales').select('id, code').eq('project_id', projectId),
+    translationsPromise,
+  ])
+
+  if (keysResult.status === 'rejected') {
+    return fail(keysResult.reason instanceof Error ? keysResult.reason.message : 'Failed to snapshot keys')
   }
+  const keys = keysResult.value
+
+  if (localesResult.status === 'rejected') {
+    return fail(localesResult.reason instanceof Error ? localesResult.reason.message : 'Failed to snapshot locales')
+  }
+  const { data: locales, error: localesError } = localesResult.value
+  if (localesError) return fail(`Failed to snapshot locales: ${localesError.message}`)
+
+  if (translationsResult.status === 'rejected') {
+    return fail(translationsResult.reason instanceof Error ? translationsResult.reason.message : 'Failed to snapshot translations')
+  }
+  const translations = translationsResult.value
+
   if (!keys.length) {
     // No keys — still create empty version with zero stats
     const { error: statsError } = await admin.from('version_stats').insert({
       version_id: version.id,
       total_keys: 0,
-      total_locales: 0,
+      total_locales: locales?.length ?? 0,
       approved_count: 0,
       pending_count: 0,
       empty_count: 0,
     })
     if (statsError) return fail(`Failed to snapshot stats: ${statsError.message}`)
-    return { ...version, stats: { version_id: version.id, total_keys: 0, total_locales: 0, approved_count: 0, pending_count: 0, empty_count: 0 } }
+    return { ...version, stats: { version_id: version.id, total_keys: 0, total_locales: locales?.length ?? 0, approved_count: 0, pending_count: 0, empty_count: 0 } }
   }
 
   const keyNameById = Object.fromEntries(keys.map((k) => [k.id, k.key]))
-
-  // 3. Fetch all locales
-  const { data: locales, error: localesError } = await admin
-    .from('locales')
-    .select('id, code')
-    .eq('project_id', projectId)
-
   const localeCodeById = Object.fromEntries((locales ?? []).map((l) => [l.id, l.code]))
-  if (localesError) return fail(`Failed to snapshot locales: ${localesError.message}`)
-
-  // 4. Fetch all translations for the branch (paginated; scoped by branch_id
-  //    to avoid over-long .in(keyIds) URLs and the 1000-row cap)
-  let translations
-  try {
-    translations = meta.branchId
-      ? await fetchBranchTranslations(admin, meta.branchId, { throwOnError: true })
-      : []
-  } catch (error) {
-    return fail(error instanceof Error ? error.message : 'Failed to snapshot translations')
-  }
 
   if (!translations?.length) {
     const { error: statsError } = await admin.from('version_stats').insert({
@@ -119,12 +122,16 @@ export async function createSnapshot(
     status: t.status,
   }))
 
-  // Insert in chunks of 500 to avoid limits
-  for (let i = 0; i < snapshots.length; i += 500) {
-    const chunk = snapshots.slice(i, i + 500)
-    const { error } = await admin.from('version_snapshots').insert(chunk)
-    if (error) return fail(`Failed to store snapshot data: ${error.message}`)
-  }
+  // Insert in chunks of 500 (to avoid limits), concurrently — a large
+  // snapshot's chunks were previously inserted one at a time, each paying
+  // the full round-trip latency in sequence.
+  const chunkOutcomes = await Promise.all(
+    Array.from({ length: Math.ceil(snapshots.length / 500) }, (_, i) =>
+      admin.from('version_snapshots').insert(snapshots.slice(i * 500, i * 500 + 500))
+    )
+  )
+  const failedChunk = chunkOutcomes.find((outcome) => outcome.error)
+  if (failedChunk?.error) return fail(`Failed to store snapshot data: ${failedChunk.error.message}`)
 
   // 6. Compute stats
   const approved = translations.filter((t) => t.status === 'approved').length
